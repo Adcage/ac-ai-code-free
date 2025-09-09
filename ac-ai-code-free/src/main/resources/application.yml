@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: ac-ai-code-free-backend
+server:
+  port: 8700
+  servlet:
+    context-path: /api
+# springdoc-openapi
+springdoc:
+  group-configs:
+    - group: 'default'
+      packages-to-scan: com.adcage.acaicodefree.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
