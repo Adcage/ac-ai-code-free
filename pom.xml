@@ -9,7 +9,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.adcage</groupId>
-    <artifactId>ac-ai-code-free-backend</artifactId>
+    <artifactId>ac-ai-code-free</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>ac-ai-code-free</name>
     <description>ac-ai-code-free</description>
