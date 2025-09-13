@@ -30,42 +30,65 @@
         <java.version>21</java.version>
     </properties>
     <dependencies>
+        <!-- Spring Boot Web Starter: 提供Web开发所需的核心功能，包括Tomcat服务器和Spring MVC -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-
+        <!-- MySQL连接器: 用于连接和操作MySQL数据库 -->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- MyBatis_Flex, 是一个基于MyBatis的ORM框架，用于简化数据库操作。-->
+        <dependency>
+            <groupId>com.mybatis-flex</groupId>
+            <artifactId>mybatis-flex-spring-boot3-starter</artifactId>
+            <version>1.11.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.mybatis-flex</groupId>
+            <artifactId>mybatis-flex-codegen</artifactId>
+            <version>1.11.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>4.0.3</version>
+        </dependency>
+        <!-- Lombok: 简化Java代码的工具库，通过注解自动生成getter、setter、构造函数等 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <version>1.18.38</version>
             <optional>true</optional>
         </dependency>
+        <!-- Hutool工具库: 提供各种Java工具类，简化开发工作 -->
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>5.8.38</version>
         </dependency>
+        <!-- Spring Boot AOP Starter: 提供面向切面编程支持，用于处理日志、事务等横切关注点 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
+        <!-- Knife4j OpenAPI文档: 基于Swagger的增强API文档工具，提供更美观的接口文档界面 -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
             <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
             <version>4.4.0</version>
         </dependency>
+        <!-- Spring Boot Test Starter: 提供Spring Boot应用的测试支持 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
     <build>
         <plugins>
             <plugin>
