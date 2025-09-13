@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 全局异常处理器
  * @author adcage
  */
-@Hidden
+@Hidden //添加该注解避免与swagger-ui冲突
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
