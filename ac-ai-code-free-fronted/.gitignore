@@ -21,7 +21,9 @@ coverage
 .vscode/*
 !.vscode/extensions.json
 .idea
+.lingma
 .cursor
+.codebuddy
 .vscode
 *.suo
 *.ntvs*
