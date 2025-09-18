@@ -3,74 +3,106 @@
     <!-- 左侧：Logo 和标题 -->
 
     <div class="header-content">
-      <div class="header-left">
+      <a-col class="header-left">
         <div class="logo-container">
-          <img alt="AI Code Free" class="logo" src="/ai-free-logo.png" />
+          <img alt="AI Code Free" class="logo" src="/logo.png" />
           <span class="site-title">AI Code Free</span>
         </div>
-      </div>
+      </a-col>
 
       <!-- 中间：导航菜单 -->
-      <div class="header-center">
-        <a-menu
-          v-model:selectedKeys="selectedKeys"
-          :items="menuItems"
-          class="header-menu"
-          mode="horizontal"
-          @click="handleMenuClick"
-        />
-      </div>
+      <a-col flex="auto">
+        <a-menu v-model:selectedKeys="selectedKeys" mode="horizontal" :items="menuItems" @click="handleMenuClick" />
+      </a-col>
 
       <!-- 右侧：用户信息 -->
-      <div class="header-right">
-        <a-button type="primary" @click="handleLogin"> 登录</a-button>
-      </div>
+      <a-col class="header-right">
+        <div v-if="loginUserStore.loginUser.id">
+          <a-dropdown>
+            <a-space align="center">
+              <!-- <a-avatar :src="loginUserStore.loginUser.userAvatar" />-->
+              <div>
+                <UserOutlined class="avatarIcon" />
+              </div>
+              {{ loginUserStore?.loginUser?.userName }}
+            </a-space>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="logout">
+                  <a-menu-item @click="handleLogout">
+                    <LogoutOutlined />
+                    退出登录
+                  </a-menu-item>
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </div>
+        <div v-else>
+          <a-button href="/user/login" type="primary"> 登录</a-button>
+        </div>
+      </a-col>
     </div>
   </a-layout-header>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useLoginUserStore } from '@/stores/LoginUser.ts'
+import { UsergroupAddOutlined, HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons-vue'
+import type { MenuProps } from 'ant-design-vue'
 
 const router = useRouter()
 const selectedKeys = ref<string[]>(['home'])
 
-// 菜单配置
-const menuItems = [
+//TODO 后续删除这里的fetch,毕竟并不是测试代码
+const loginUserStore = useLoginUserStore()
+loginUserStore.fetchLoginUser()
+
+// 菜单配置项
+const originItems = [
   {
-    key: 'home',
-    label: '首页',
-    path: '/'
+    key: '/',
+    icon: () => h(HomeOutlined),
+    label: '主页',
+    title: '主页',
   },
   {
-    key: 'about',
-    label: '关于',
-    path: '/about'
+    key: '/admin/userManage',
+    icon: () => h(UsergroupAddOutlined),
+    label: '用户管理',
+    title: '用户管理',
   },
-  {
-    key: 'features',
-    label: '功能',
-    path: '/features'
-  },
-  {
-    key: 'contact',
-    label: '联系我们',
-    path: '/contact'
-  }
 ]
+
+// 过滤菜单项
+const filterMenus = (menus = [] as MenuProps['items']) => {
+  return menus?.filter((menu) => {
+    const menuKey = menu?.key as string
+    if (menuKey?.startsWith('/admin')) {
+      const loginUser = loginUserStore.loginUser
+      if (!loginUser || loginUser.userRole !== 'admin') {
+        return false
+      }
+    }
+    return true
+  })
+}
+
+// 展示在菜单的路由数组
+const menuItems = computed<MenuProps['items']>(() => filterMenus(originItems))
 
 // 处理菜单点击
 const handleMenuClick = ({ key }: { key: string }) => {
-  const item = menuItems.find((item) => item.key === key)
+  const item = originItems.find((item) => item.key === key)
   if (item) {
-    router.push(item.path)
+    router.push(item.key)
   }
 }
 
-// 处理登录
-const handleLogin = () => {
-  console.log('登录功能待实现')
+const handleLogout = () => {
+  loginUserStore.logout()
 }
 </script>
 
@@ -133,6 +165,14 @@ const handleLogin = () => {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+.avatarIcon {
+  font-size: 24px;
+  border: 2px solid black;
+  padding: 5px;
+  border-radius: 50%;
 }
 
 /* 响应式设计 */
