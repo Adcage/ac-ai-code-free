@@ -12,6 +12,8 @@ server:
   port: 8700
   servlet:
     context-path: /api
+    session:
+      timeout: 1d
 
 # springdoc-openapi
 springdoc:

@@ -17,6 +17,7 @@ import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/user")
+@Slf4j
 public class UserController {
 
     @Resource
@@ -144,6 +146,34 @@ public class UserController {
     }
 
     /**
+     * 批量删除用户
+     */
+    @PostMapping("/multi/delete")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> multiDeleteUser(@RequestBody List<DeleteRequest> deleteRequests) {
+        if (deleteRequests == null || deleteRequests.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        //检验是否存在非法的ID
+        boolean invalid = deleteRequests.stream()
+                .anyMatch(deleteRequest -> deleteRequest.getId() <= 0);
+        if (invalid) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "存在非法ID,该ID小于0");
+        }
+        // 执行批量删除
+        int totalSize = deleteRequests.size();
+        long count = deleteRequests.stream()
+                .filter(deleteRequest -> deleteRequest.getId() > 0)
+                .map(deleteRequest -> userService.removeById(deleteRequest.getId()))
+                .filter(res -> res)
+                .count();
+        if (count != totalSize) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "删除" + count + "/" + totalSize + ",更多问题请联系管理员");
+        }
+        return ResultUtils.success(true);
+    }
+
+    /**
      * 更新用户
      */
     @PostMapping("/update")
@@ -152,6 +182,7 @@ public class UserController {
         if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        log.info("更新用户{}", userUpdateRequest);
         User user = new User();
         BeanUtil.copyProperties(userUpdateRequest, user);
         boolean result = userService.updateById(user);

@@ -1,14 +1,17 @@
 package com.adcage.acaicodefree.aop;
 
 import com.adcage.acaicodefree.annotation.AuthCheck;
+import com.adcage.acaicodefree.common.BaseResponse;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.UserRoleEnum;
 import com.adcage.acaicodefree.service.UserService;
+import com.mybatisflex.core.paginate.Page;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.stereotype.Component;
@@ -54,5 +57,10 @@ public class AuthInterceptor {
         }
         // 通过权限校验，放行
         return joinPoint.proceed();
+    }
+
+    @AfterReturning(value = "@annotation(auth)",returning = "result")
+    public void afterReturning(ProceedingJoinPoint joinPoint, AuthCheck  auth, BaseResponse<?>  result) throws Throwable {
+        
     }
 }
