@@ -1,5 +1,7 @@
 package com.adcage.acaicodefree.aop;
 
+import cn.hutool.core.lang.UUID;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -14,16 +16,17 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * 请求响应日志 AOP
- **/
+ * @author adcage
+ */
 @Aspect
 @Component
 @Slf4j
 public class LogInterceptor {
 
-/*    *//**
+    /**
      * 执行拦截
-     *//*
-    @Around("execution(* com.springboot.controller.*.*(..))")
+     */
+    @Around("execution(* com.adcage.acaicodefree.controller.*.*(..))")
     public Object doInterceptor(ProceedingJoinPoint point) throws Throwable {
         // 计时
         StopWatch stopWatch = new StopWatch();
@@ -47,6 +50,6 @@ public class LogInterceptor {
         long totalTimeMillis = stopWatch.getTotalTimeMillis();
         log.info("request end, id: {}, cost: {}ms", requestId, totalTimeMillis);
         return result;
-    }*/
+    }
 }
 
