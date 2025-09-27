@@ -1,3 +1,7 @@
+### Spring Boot App ###
+src/main/resources/application-local.yml
+
+### Maven ###
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar

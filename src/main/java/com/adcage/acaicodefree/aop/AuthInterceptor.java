@@ -7,7 +7,6 @@ import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.UserRoleEnum;
 import com.adcage.acaicodefree.service.UserService;
-import com.mybatisflex.core.paginate.Page;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -59,8 +58,8 @@ public class AuthInterceptor {
         return joinPoint.proceed();
     }
 
-    @AfterReturning(value = "@annotation(auth)",returning = "result")
-    public void afterReturning(ProceedingJoinPoint joinPoint, AuthCheck  auth, BaseResponse<?>  result) throws Throwable {
-        
+    @AfterReturning(value = "@annotation(auth)", returning = "result")
+    public void afterReturning(ProceedingJoinPoint joinPoint, AuthCheck auth, BaseResponse<?> result) throws Throwable {
+
     }
 }
