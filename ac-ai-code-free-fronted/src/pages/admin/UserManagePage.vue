@@ -34,7 +34,11 @@
           </template>
         </template>
         <template v-if="column.key === 'userRole'">
-          <a-select v-if="editableData[record.id]" v-model:value="editableData[record.id].userRole" style="width: 105px">
+          <a-select
+            v-if="editableData[record.id]"
+            v-model:value="editableData[record.id].userRole"
+            style="width: 105px"
+          >
             <a-select-option value="admin">管理员</a-select-option>
             <a-select-option value="user">普通用户</a-select-option>
             <a-select-option value="vip"> VIP</a-select-option>

@@ -9,11 +9,3 @@ export async function check(options?: { [key: string]: any }) {
     ...(options || {}),
   })
 }
-
-/** 此处后端没有提供注释 GET /health/status */
-export async function status(options?: { [key: string]: any }) {
-  return request<string>('/health/status', {
-    method: 'GET',
-    ...(options || {}),
-  })
-}

@@ -39,7 +39,7 @@
           </a-dropdown>
         </div>
         <div v-else>
-          <a-button href="/user/login" type="primary"> 登录</a-button>
+          <a-button href="/user/login?redirect=/" type="primary"> 登录</a-button>
         </div>
       </a-col>
     </div>
