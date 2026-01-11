@@ -26,4 +26,3 @@ CREATE TABLE IF NOT EXISTS user
     UNIQUE KEY uk_userAccount (userAccount),
     INDEX idx_userName (userName)
 ) COMMENT '用户' COLLATE = utf8mb4_unicode_ci;
-
