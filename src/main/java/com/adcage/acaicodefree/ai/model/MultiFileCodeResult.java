@@ -6,7 +6,7 @@ import lombok.*;
 /**
  * 多文件代码结果
  * @author adcage
- * @description MutiFileCodeResult
+ * @description MultiFileCodeResult
  * @createDate 2025/9/25 16:22
  */
 @Data
@@ -15,7 +15,7 @@ import lombok.*;
 @Builder
 @ToString
 @Description("多文件前端网页代码结果")
-public class MutiFileCodeResult {
+public class MultiFileCodeResult {
 
     /**
      * HTML代码

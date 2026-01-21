@@ -6,7 +6,7 @@ import lombok.*;
 /**
  * 单文件HTML代码生成结果
  * @author adcage
- * @description HtmlCodeResult
+ * @description SingleCodeResult
  * @createDate 2025/9/25 16:20
  */
 @Data
@@ -15,7 +15,7 @@ import lombok.*;
 @Builder
 @ToString
 @Description("单文件HTML代码生成结果")
-public class HtmlCodeResult {
+public class SingleCodeResult {
 
     /**
      * HTML代码
