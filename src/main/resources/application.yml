@@ -8,7 +8,8 @@ spring:
     username: root
     password: 123456
   profiles:
-    active: local
+    active: local #使用local本地环境
+
 
 server:
   port: 8700
@@ -28,3 +29,22 @@ knife4j:
   setting:
     language: zh_cn
 
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <your-api-key>
+      model-name: deepseek-chat
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+      response-format: json
+      strict-json-schema: true
+    streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <your-api-key>
+      model-name: deepseek-chat
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+      response-format: json
