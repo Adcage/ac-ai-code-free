@@ -3,8 +3,8 @@ package com.adcage.acaicodefree.core;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
-import com.adcage.acaicodefree.ai.model.HtmlCodeResult;
-import com.adcage.acaicodefree.ai.model.MutiFileCodeResult;
+import com.adcage.acaicodefree.ai.model.SingleCodeResult;
+import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 
 import java.io.File;
@@ -22,12 +22,12 @@ public class CodeFileSaver {
     private static final String FILE_SAVE_ROOT_DIR = System.getProperty("user.dir") + File.separator + "temp" + File.separator + "code_output";
 
     /**
-     * 生成唯一文件保存的目录,并且保存 HTML 网页代码
+     * 生成唯一文件保存的目录,并且保存 SINGLE_FILE 网页代码
      *
      * @param htmlCode html代码
      */
-    public static File saveHtmlCode(HtmlCodeResult htmlCode) {
-        String uniqueFilePath = buildUniqueDirPath(CodeGenTypeEnum.HTML.getValue());
+    public static File saveHtmlCode(SingleCodeResult htmlCode) {
+        String uniqueFilePath = buildUniqueDirPath(CodeGenTypeEnum.SINGLE_FILE.getValue());
         saveFile(uniqueFilePath, "index.html", htmlCode.getHtmlCode());
         return new File(uniqueFilePath);
     }
@@ -38,7 +38,7 @@ public class CodeFileSaver {
      *
      * @param multiFileCode 多文件代码类对象
      */
-    public static File saveMutiFileCode(MutiFileCodeResult multiFileCode) {
+    public static File saveMutiFileCode(MultiFileCodeResult multiFileCode) {
         String uniqueFilePath = buildUniqueDirPath(CodeGenTypeEnum.MULTI_FILE.getValue());
         saveFile(uniqueFilePath, "index.html", multiFileCode.getHtmlCode());
         saveFile(uniqueFilePath, "style.css", multiFileCode.getCssCode());
