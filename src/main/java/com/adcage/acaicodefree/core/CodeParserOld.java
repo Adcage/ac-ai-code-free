@@ -12,9 +12,9 @@ import java.util.regex.Pattern;
  * 代码解析器
  *
  * @author adcage
- * @description CodeParser
+ * @description CodeParserOld
  */
-public class CodeParser {
+public class CodeParserOld {
 
     /**
      * SINGLE_FILE 代码块匹配模式 (```html ... ```)

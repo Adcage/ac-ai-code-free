@@ -1,4 +1,10 @@
 package com.adcage.acaicodefree.core.parser;
 
-public class CodePaser {
+public interface CodePaser<T> {
+    /**
+     *
+     * @param codeContent
+     * @return
+     */
+    T parseCode(String codeContent) ;
 }
