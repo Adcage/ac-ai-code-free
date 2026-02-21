@@ -27,3 +27,28 @@ CREATE TABLE IF NOT EXISTS user
     UNIQUE KEY uk_userAccount (userAccount),
     INDEX idx_userName (userName)
 ) COMMENT '用户' COLLATE = utf8mb4_unicode_ci;
+
+
+
+-- 应用表
+DROP TABLE IF EXISTS app;
+CREATE TABLE app
+(
+    id           BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appName      VARCHAR(256)                       NULL COMMENT '应用名称',
+    cover        VARCHAR(512)                       NULL COMMENT '应用封面',
+    initPrompt   TEXT                               NULL COMMENT '应用初始化的 prompt',
+    codeGenType  VARCHAR(64)                        NULL COMMENT '代码生成类型（枚举）',
+    deployKey    VARCHAR(64)                        NULL COMMENT '部署标识',
+    deployedTime DATETIME                           NULL COMMENT '部署时间',
+    -- 99为精选应用，用于主页展示高质量的应用，使用整型而不是用枚举利于拓展
+    priority     INT      DEFAULT 0                 NOT NULL COMMENT '优先级',
+    userId       BIGINT                             NOT NULL COMMENT '创建用户id',
+    editTime     DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '编辑时间',
+    createTime   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete     TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否删除',
+    UNIQUE KEY uk_deployKey (deployKey), -- 确保部署标识唯一
+    INDEX idx_appName (appName),         -- 提升基于应用名称的查询性能
+    INDEX idx_userId (userId)            -- 提升基于用户 ID 的查询性能
+) COMMENT '应用' COLLATE = utf8mb4_unicode_ci;
