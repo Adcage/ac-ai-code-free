@@ -20,10 +20,7 @@
         <div v-if="loginUserStore.loginUser.id">
           <a-dropdown>
             <a-space align="center">
-              <!-- <a-avatar :src="loginUserStore.loginUser.userAvatar" />-->
-              <div>
-                <UserOutlined class="avatarIcon" />
-              </div>
+              <UserAvatar :user="loginUserStore.loginUser" />
               {{ loginUserStore?.loginUser?.userName }}
             </a-space>
             <template #overlay>
@@ -50,7 +47,8 @@
 import { computed, h, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLoginUserStore } from '@/stores/LoginUser.ts'
-import { UsergroupAddOutlined, HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { UsergroupAddOutlined, HomeOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 import type { MenuProps } from 'ant-design-vue'
 
 const router = useRouter()
@@ -69,10 +67,22 @@ const originItems = [
     title: '主页',
   },
   {
+    key: '/app/my',
+    icon: () => h(HomeOutlined),
+    label: '我的作品',
+    title: '我的作品',
+  },
+  {
     key: '/admin/userManage',
     icon: () => h(UsergroupAddOutlined),
     label: '用户管理',
     title: '用户管理',
+  },
+  {
+    key: '/admin/appManage',
+    icon: () => h(UsergroupAddOutlined),
+    label: '应用管理',
+    title: '应用管理',
   },
 ]
 

@@ -7,21 +7,17 @@
     <a-layout-content class="layout-content">
       <RouterView />
     </a-layout-content>
-
-    <!-- 全局底部 -->
-    <GlobalFooter />
   </a-layout>
 </template>
 
 <script lang="ts" setup>
 import { RouterView } from 'vue-router'
 import GlobalHeader from '@/components/GlobalHeader.vue'
-import GlobalFooter from '@/components/GlobalFooter.vue'
 </script>
 
 <style scoped>
 .basic-layout {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -30,5 +26,6 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   flex: 1;
   /*padding: 24px;*/
   background: #fff;
+  overflow-y: auto;
 }
 </style>
