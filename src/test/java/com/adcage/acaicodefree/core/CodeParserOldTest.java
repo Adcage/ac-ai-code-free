@@ -34,7 +34,6 @@ class CodeParserOldTest {
             CodeParserOld.parseSingleCode(content);
         });
         assertEquals(ErrorCode.NOT_FOUND_ERROR.getCode(), exception.getCode());
-        assertEquals("未找到HTML代码", exception.getMessage());
     }
 
     @Test

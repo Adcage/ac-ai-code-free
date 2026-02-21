@@ -45,7 +45,7 @@ public class CodeParserOld {
         if (htmlCode != null) {
             result.setHtmlCode(htmlCode);
         } else {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "未找到HTML代码");
+            result.setDescription(content);
         }
         return result;
     }

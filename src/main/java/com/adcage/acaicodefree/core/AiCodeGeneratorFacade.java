@@ -1,8 +1,6 @@
 package com.adcage.acaicodefree.core;
 
 import com.adcage.acaicodefree.ai.AiCodeGeneratorService;
-import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
-import com.adcage.acaicodefree.ai.model.SingleCodeResult;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.core.saver.CodeFileSaverExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
@@ -34,7 +32,7 @@ public class AiCodeGeneratorFacade {
      * @param codeGenType
      * @return
      */
-    public File generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType) {
+    public File generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType,Long appId) {
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
@@ -46,7 +44,7 @@ public class AiCodeGeneratorFacade {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, message);
             }
         };
-        return CodeFileSaverExecutor.executeSaver(result, codeGenType);
+        return CodeFileSaverExecutor.executeSaver(result, codeGenType,appId);
     }
 
     /**
@@ -56,7 +54,7 @@ public class AiCodeGeneratorFacade {
      * @param codeGenType
      * @return
      */
-    public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType) {
+    public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType,Long appId) {
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
@@ -69,7 +67,7 @@ public class AiCodeGeneratorFacade {
             }
         };
         // 委托给 Executor 处理解析与保存逻辑
-        return CodeFileSaverExecutor.executeSaver(codeStream, codeGenType);
+        return CodeFileSaverExecutor.executeSaverStream(codeStream, codeGenType,appId);
     }
 
 }

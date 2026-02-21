@@ -23,11 +23,11 @@ public class CodeFileSaverExecutor {
      * @param codeGenTypeEnum
      * @return
      */
-    public static File executeSaver(Object codeResult, CodeGenTypeEnum codeGenTypeEnum) {
+    public static File executeSaver(Object codeResult, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
         return switch (codeGenTypeEnum) {
-            case SINGLE_FILE -> singleCodeFileSaver.saveCode((SingleCodeResult) codeResult);
-            case MULTI_FILE -> multiFileSaver.saveCode((MultiFileCodeResult) codeResult);
-            default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
+            case SINGLE_FILE -> singleCodeFileSaver.saveCode((SingleCodeResult) codeResult,appId);
+            case MULTI_FILE -> multiFileSaver.saveCode((MultiFileCodeResult) codeResult,appId);
+            default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型" + codeGenTypeEnum);
         };
     }
 
@@ -38,7 +38,7 @@ public class CodeFileSaverExecutor {
      * @param codeGenTypeEnum 生成类型
      * @return 原始流，以便 Facade 继续向前端推送
      */
-    public static Flux<String> executeSaver(Flux<String> codeStream, CodeGenTypeEnum codeGenTypeEnum) {
+    public static Flux<String> executeSaverStream(Flux<String> codeStream, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
         // 字符串拼接器,用于当流式返回所有的代码之后,再保存代码
         StringBuilder codeBuilder = new StringBuilder();
         return codeStream.doOnNext(codeBuilder::append)
@@ -49,7 +49,7 @@ public class CodeFileSaverExecutor {
                         // 解析代码
                         Object parseResult = CodeParserExcutor.excutePaser(fullCode, codeGenTypeEnum);
                         // 保存代码
-                        File saveDir = executeSaver(parseResult, codeGenTypeEnum);
+                        File saveDir = executeSaver(parseResult, codeGenTypeEnum,appId);
                         log.info("保存成功,路径:{}", saveDir.getAbsolutePath());
                     } catch (Exception e) {
                         log.error("文件保存失败,原因:{}", e.getMessage(), e);
