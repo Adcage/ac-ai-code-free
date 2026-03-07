@@ -51,6 +51,11 @@ public class AppQueryRequest extends PageRequest implements Serializable {
     private Long userId;
 
     /**
+     * 创建人
+     */
+    private String userName;
+
+    /**
      * 是否仅查询精选（优先级大于0）
      */
     private Boolean onlyFeatured;

@@ -47,6 +47,7 @@ declare namespace API {
     deployKey?: string
     priority?: number
     userId?: number
+    userName?: string
     onlyFeatured?: boolean
   }
 

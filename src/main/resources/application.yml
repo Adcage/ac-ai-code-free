@@ -9,8 +9,6 @@ spring:
     password: 123456
   profiles:
     active: local #使用local本地环境
-
-
 server:
   port: 8700
   servlet:

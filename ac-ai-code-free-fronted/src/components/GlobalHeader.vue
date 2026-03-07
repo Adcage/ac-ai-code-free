@@ -47,7 +47,7 @@
 import { computed, h, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLoginUserStore } from '@/stores/LoginUser.ts'
-import { UsergroupAddOutlined, HomeOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import { UsergroupAddOutlined, HomeOutlined, LogoutOutlined, AppstoreOutlined } from '@ant-design/icons-vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import type { MenuProps } from 'ant-design-vue'
 
@@ -80,7 +80,7 @@ const originItems = [
   },
   {
     key: '/admin/appManage',
-    icon: () => h(UsergroupAddOutlined),
+    icon: () => h(AppstoreOutlined),
     label: '应用管理',
     title: '应用管理',
   },

@@ -3,7 +3,6 @@ CREATE DATABASE IF NOT EXISTS ac_ai_code_free;
 USE ac_ai_code_free;
 
 -- 用户表
-DROP TABLE IF EXISTS user;
 CREATE TABLE IF NOT EXISTS user
 (
     id            BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
@@ -29,9 +28,7 @@ CREATE TABLE IF NOT EXISTS user
 ) COMMENT '用户' COLLATE = utf8mb4_unicode_ci;
 
 
-
 -- 应用表
-DROP TABLE IF EXISTS app;
 CREATE TABLE app
 (
     id           BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
@@ -52,3 +49,19 @@ CREATE TABLE app
     INDEX idx_appName (appName),         -- 提升基于应用名称的查询性能
     INDEX idx_userId (userId)            -- 提升基于用户 ID 的查询性能
 ) COMMENT '应用' COLLATE = utf8mb4_unicode_ci;
+
+-- 对话历史表
+CREATE TABLE chat_history
+(
+    id          BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    message     TEXT                               NOT NULL COMMENT '消息',
+    messageType VARCHAR(32)                        NOT NULL COMMENT 'user/ai',
+    appId       BIGINT                             NOT NULL COMMENT '应用id',
+    userId      BIGINT                             NOT NULL COMMENT '创建用户id',
+    createTime  DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime  DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete    TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否删除',
+    INDEX idx_appId (appId),                       -- 提升基于应用的查询性能
+    INDEX idx_createTime (createTime),             -- 提升基于时间的查询性能
+    INDEX idx_appId_createTime (appId, createTime) -- 游标查询核心索引
+) COMMENT '对话历史' COLLATE = utf8mb4_unicode_ci;

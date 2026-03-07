@@ -82,6 +82,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String deployKey = appQueryRequest.getDeployKey();
         Integer priority = appQueryRequest.getPriority();
         Long userId = appQueryRequest.getUserId();
+        String userName = appQueryRequest.getUserName();
         Boolean onlyFeatured = appQueryRequest.getOnlyFeatured();
         String sortField = appQueryRequest.getSortField();
         String sortOrder = appQueryRequest.getSortOrder();
@@ -94,6 +95,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq("priority", priority)
                 .like("appName", appName)
                 .like("initPrompt", initPrompt);
+
+        // 按用户名模糊搜索
+        if (StrUtil.isNotBlank(userName)) {
+            List<Long> userIds = userService.list(QueryWrapper.create().like("userName", userName))
+                    .stream().map(User::getId).collect(Collectors.toList());
+            if (CollUtil.isNotEmpty(userIds)) {
+                queryWrapper.in("userId", userIds);
+            } else {
+                // 未匹配到用户，强行使结果为空
+                queryWrapper.eq("id", -1L);
+            }
+        }
 
         // 精选应用查询（优先级大于0）
         if (onlyFeatured != null && onlyFeatured) {
