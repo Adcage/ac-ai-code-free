@@ -19,8 +19,12 @@ import com.adcage.acaicodefree.model.dto.app.AppAdminUpdateRequest;
 import com.adcage.acaicodefree.model.dto.app.AppDeployRequest;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatSessionCreateRequest;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -28,7 +32,6 @@ import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.catalina.Server;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -207,31 +210,94 @@ public class AppController {
     /**
      * 对话生成代码（流式返回SSE）
      * @param appId 应用 ID
+     * @param sessionId 会话 ID（不传则自动创建）
      * @param message  用户消息
      * @param request 请求
      * @return 生成结果流
      */
     @GetMapping(value = "/chat/gen/code/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId, @RequestParam String message, HttpServletRequest request) {
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
+                                                       @RequestParam(required = false) Long sessionId,
+                                                       @RequestParam String message,
+                                                       HttpServletRequest request) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 无效");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
+        Long finalSessionId = sessionId;
+        if (finalSessionId == null || finalSessionId <= 0) {
+            finalSessionId = appService.createChatSession(appId, loginUser);
+        }
         // 调用服务层方法(流式)
-        Flux<String> stringFlux = appService.chatToGenCode(appId, message, loginUser);
-        return stringFlux.map(chunk -> {
+        Flux<String> stringFlux = appService.chatToGenCode(appId, finalSessionId, message, loginUser);
+        Map<String, Object> metaData = Map.of("sessionId", finalSessionId);
+        String metaJson = JSONUtil.toJsonStr(metaData);
+        ServerSentEvent<String> metaEvent = ServerSentEvent.<String>builder()
+                .event("meta")
+                .data(metaJson)
+                .build();
+        return Flux.just(metaEvent).concatWith(stringFlux.map(chunk -> {
             Map<String, String> data = Map.of("d", chunk);
             String jsonData = JSONUtil.toJsonStr(data);
             return ServerSentEvent.<String>builder()
                     .data(jsonData)
                     .build();
-        }).concatWith(Mono.just(
+        })).concatWith(Mono.just(
                 // 发送结束事件
                 ServerSentEvent.<String>builder()
                         .event("done")
                         .data("")
                         .build()
         ));
+    }
+
+    /**
+     * 创建会话
+     *
+     * @param chatSessionCreateRequest 创建会话请求
+     * @param request 请求
+     * @return 会话 id
+     */
+    @PostMapping("/chat/session/create")
+    public BaseResponse<Long> createChatSession(@RequestBody ChatSessionCreateRequest chatSessionCreateRequest,
+                                                HttpServletRequest request) {
+        ThrowUtils.throwIf(chatSessionCreateRequest == null, ErrorCode.PARAMS_ERROR);
+        Long appId = chatSessionCreateRequest.getAppId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 无效");
+        User loginUser = userService.getLoginUser(request);
+        Long sessionId = appService.createChatSession(appId, loginUser);
+        return ResultUtils.success(sessionId);
+    }
+
+    /**
+     * 查询应用下会话列表
+     *
+     * @param appId 应用 id
+     * @param request 请求
+     * @return 会话列表
+     */
+    @GetMapping("/chat/session/list")
+    public BaseResponse<List<ChatSessionVO>> listChatSession(@RequestParam Long appId, HttpServletRequest request) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 无效");
+        User loginUser = userService.getLoginUser(request);
+        List<ChatSessionVO> chatSessionVOList = appService.listChatSession(appId, loginUser);
+        return ResultUtils.success(chatSessionVOList);
+    }
+
+    /**
+     * 分页查询会话消息
+     *
+     * @param chatHistoryQueryRequest 查询参数
+     * @param request 请求
+     * @return 消息分页数据
+     */
+    @PostMapping("/chat/history/page")
+    public BaseResponse<Page<ChatHistoryVO>> listChatHistoryByPage(@RequestBody ChatHistoryQueryRequest chatHistoryQueryRequest,
+                                                                    HttpServletRequest request) {
+        ThrowUtils.throwIf(chatHistoryQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        Page<ChatHistoryVO> chatHistoryVOPage = appService.listChatHistoryByPage(chatHistoryQueryRequest, loginUser);
+        return ResultUtils.success(chatHistoryVOPage);
     }
 
     /**

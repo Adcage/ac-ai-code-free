@@ -5,16 +5,25 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
+import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
+import com.adcage.acaicodefree.mapper.ChatSessionMapper;
+import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
+import com.adcage.acaicodefree.model.entity.ChatHistory;
+import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.model.vo.user.UserVO;
+import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -42,10 +51,17 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     private final UserService userService;
     private final AiCodeGeneratorFacade aiCodeGeneratorFacade;
+    private final ChatSessionMapper chatSessionMapper;
+    private final ChatHistoryMapper chatHistoryMapper;
 
-    public AppServiceImpl(UserService userService, AiCodeGeneratorFacade aiCodeGeneratorFacade) {
+    public AppServiceImpl(UserService userService,
+                          AiCodeGeneratorFacade aiCodeGeneratorFacade,
+                          ChatSessionMapper chatSessionMapper,
+                          ChatHistoryMapper chatHistoryMapper) {
         this.userService = userService;
         this.aiCodeGeneratorFacade = aiCodeGeneratorFacade;
+        this.chatSessionMapper = chatSessionMapper;
+        this.chatHistoryMapper = chatHistoryMapper;
     }
 
     @Override
@@ -157,25 +173,111 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
-    public Flux<String> chatToGenCode(Long appId, String message, User loginUser) {
+    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
-        // 2. 查询应用信息
-        App app = this.getById(appId);
-        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        // 3. 验证用户是否有权限访问该应用，仅本人可以生成代码
-        if (!app.getUserId().equals(loginUser.getId())) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
-        }
-        // 4. 获取应用的代码生成类型
+        // 2. 查询应用信息并校验权限
+        App app = getAndCheckApp(appId, loginUser);
+        // 3. 校验会话归属
+        getAndCheckChatSession(sessionId, appId, loginUser);
+        // 4. 保存用户消息
+        saveHistoryMessage(sessionId, appId, loginUser.getId(), message, "user", "success", app.getCodeGenType(), 0, null);
+        updateSessionSummary(sessionId);
+        // 5. 获取应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 5. 调用 AI 生成代码
-        return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 6. 调用 AI 生成代码并在流完成后落库 AI 消息
+        StringBuilder assistantMessageBuilder = new StringBuilder();
+        long startTime = System.currentTimeMillis();
+        return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId)
+                .doOnNext(assistantMessageBuilder::append)
+                .doOnComplete(() -> {
+                    int latencyMs = (int) (System.currentTimeMillis() - startTime);
+                    String aiMessage = assistantMessageBuilder.toString();
+                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "success", codeGenTypeStr, latencyMs, null);
+                    updateSessionSummary(sessionId);
+                })
+                .doOnError(error -> {
+                    int latencyMs = (int) (System.currentTimeMillis() - startTime);
+                    Map<String, String> extraInfo = Map.of("error", error.getMessage());
+                    String aiMessage = StrUtil.isBlank(assistantMessageBuilder.toString())
+                            ? "生成失败：" + error.getMessage()
+                            : assistantMessageBuilder.toString();
+                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, JSONUtil.toJsonStr(extraInfo));
+                    updateSessionSummary(sessionId);
+                });
+    }
+
+    @Override
+    public Long createChatSession(Long appId, User loginUser) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        App app = getAndCheckApp(appId, loginUser);
+        ChatSession chatSession = ChatSession.builder()
+                .appId(appId)
+                .userId(loginUser.getId())
+                .title(StrUtil.blankToDefault(app.getAppName(), "新会话"))
+                .messageCount(0)
+                .modelName(app.getCodeGenType())
+                .lastMessageTime(LocalDateTime.now())
+                .build();
+        int insertResult = chatSessionMapper.insert(chatSession);
+        ThrowUtils.throwIf(insertResult <= 0 || chatSession.getId() == null, ErrorCode.OPERATION_ERROR, "创建会话失败");
+        return chatSession.getId();
+    }
+
+    @Override
+    public List<ChatSessionVO> listChatSession(Long appId, User loginUser) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        getAndCheckApp(appId, loginUser);
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .eq("appId", appId)
+                .eq("userId", loginUser.getId())
+                .orderBy("updateTime", false);
+        return chatSessionMapper.selectListByQuery(queryWrapper).stream()
+                .map(session -> {
+                    ChatSessionVO chatSessionVO = new ChatSessionVO();
+                    BeanUtil.copyProperties(session, chatSessionVO);
+                    return chatSessionVO;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<ChatHistoryVO> listChatHistoryByPage(ChatHistoryQueryRequest chatHistoryQueryRequest, User loginUser) {
+        ThrowUtils.throwIf(chatHistoryQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        Long appId = chatHistoryQueryRequest.getAppId();
+        Long sessionId = chatHistoryQueryRequest.getSessionId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
+        int pageNum = Math.max(chatHistoryQueryRequest.getPageNum(), 1);
+        int pageSize = Math.min(Math.max(chatHistoryQueryRequest.getPageSize(), 1), 50);
+        getAndCheckApp(appId, loginUser);
+        getAndCheckChatSession(sessionId, appId, loginUser);
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .eq("sessionId", sessionId)
+                .eq("appId", appId)
+                .eq("userId", loginUser.getId())
+                .orderBy("seqNo", true);
+        List<ChatHistory> allHistoryList = chatHistoryMapper.selectListByQuery(queryWrapper);
+        int fromIndex = (pageNum - 1) * pageSize;
+        if (fromIndex >= allHistoryList.size()) {
+            return new Page<>(pageNum, pageSize, allHistoryList.size());
+        }
+        int toIndex = Math.min(fromIndex + pageSize, allHistoryList.size());
+        List<ChatHistory> pageHistoryList = allHistoryList.subList(fromIndex, toIndex);
+        List<ChatHistoryVO> records = pageHistoryList.stream().map(history -> {
+            ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
+            BeanUtil.copyProperties(history, chatHistoryVO);
+            return chatHistoryVO;
+        }).collect(Collectors.toList());
+        Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, allHistoryList.size());
+        resultPage.setRecords(records);
+        return resultPage;
     }
 
     @Override
@@ -221,6 +323,63 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
         // 9. 返回可访问的 URL
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+    }
+
+    private App getAndCheckApp(Long appId, User loginUser) {
+        ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        App app = this.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        if (!app.getUserId().equals(loginUser.getId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
+        }
+        return app;
+    }
+
+    private ChatSession getAndCheckChatSession(Long sessionId, Long appId, User loginUser) {
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .eq("id", sessionId)
+                .eq("appId", appId)
+                .eq("userId", loginUser.getId());
+        ChatSession chatSession = chatSessionMapper.selectOneByQuery(queryWrapper);
+        ThrowUtils.throwIf(chatSession == null, ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        return chatSession;
+    }
+
+    private void saveHistoryMessage(Long sessionId, Long appId, Long userId, String message,
+                                    String messageType, String status, String modelName,
+                                    Integer latencyMs, String extra) {
+        ChatHistory chatHistory = ChatHistory.builder()
+                .sessionId(sessionId)
+                .seqNo(getNextSeqNo(sessionId))
+                .message(StrUtil.blankToDefault(message, ""))
+                .messageType(messageType)
+                .status(status)
+                .appId(appId)
+                .userId(userId)
+                .modelName(modelName)
+                .inputTokens(0)
+                .outputTokens(0)
+                .latencyMs(latencyMs)
+                .extra(extra)
+                .build();
+        int insertResult = chatHistoryMapper.insert(chatHistory);
+        ThrowUtils.throwIf(insertResult <= 0, ErrorCode.OPERATION_ERROR, "保存聊天记录失败");
+    }
+
+    private Integer getNextSeqNo(Long sessionId) {
+        long count = chatHistoryMapper.selectCountByQuery(QueryWrapper.create().eq("sessionId", sessionId));
+        return (int) (count + 1);
+    }
+
+    private void updateSessionSummary(Long sessionId) {
+        ChatSession chatSession = chatSessionMapper.selectOneByQuery(QueryWrapper.create().eq("id", sessionId));
+        if (chatSession == null) {
+            return;
+        }
+        long count = chatHistoryMapper.selectCountByQuery(QueryWrapper.create().eq("sessionId", sessionId));
+        chatSession.setMessageCount((int) count);
+        chatSession.setLastMessageTime(LocalDateTime.now());
+        chatSessionMapper.update(chatSession);
     }
 
 }

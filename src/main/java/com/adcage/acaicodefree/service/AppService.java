@@ -1,7 +1,11 @@
 package com.adcage.acaicodefree.service;
 
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
+import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
@@ -53,11 +57,39 @@ public interface AppService extends IService<App> {
      * 对话生成代码（流式返回）
      *
      * @param appId     应用 ID
+     * @param sessionId 会话 ID（为空时由调用方先创建）
      * @param message   用户消息
      * @param loginUser 当前登录用户
      * @return 流式代码生成结果
      */
-    Flux<String> chatToGenCode(Long appId, String message, User loginUser);
+    Flux<String> chatToGenCode(Long appId, Long sessionId, String message, User loginUser);
+
+    /**
+     * 创建对话会话
+     *
+     * @param appId     应用 ID
+     * @param loginUser 当前登录用户
+     * @return 会话 ID
+     */
+    Long createChatSession(Long appId, User loginUser);
+
+    /**
+     * 查询应用下的会话列表
+     *
+     * @param appId     应用 ID
+     * @param loginUser 当前登录用户
+     * @return 会话列表
+     */
+    List<ChatSessionVO> listChatSession(Long appId, User loginUser);
+
+    /**
+     * 分页查询会话消息
+     *
+     * @param chatHistoryQueryRequest 查询参数
+     * @param loginUser               当前登录用户
+     * @return 消息分页数据
+     */
+    Page<ChatHistoryVO> listChatHistoryByPage(ChatHistoryQueryRequest chatHistoryQueryRequest, User loginUser);
 
     /**
      * 部署应用

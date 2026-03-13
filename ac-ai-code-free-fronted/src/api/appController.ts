@@ -56,6 +56,45 @@ export async function chatToGenCode(
   })
 }
 
+/** 此处后端没有提供注释 POST /app/chat/history/page */
+export async function listChatHistoryByPage(body: API.ChatHistoryQueryRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponsePageChatHistoryVO>('/app/chat/history/page', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 POST /app/chat/session/create */
+export async function createChatSession(body: API.ChatSessionCreateRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseLong>('/app/chat/session/create', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 GET /app/chat/session/list */
+export async function listChatSession(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listChatSessionParams,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseListChatSessionVO>('/app/chat/session/list', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /app/delete */
 export async function deleteApp(body: API.DeleteRequest, options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/app/delete', {

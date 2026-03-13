@@ -23,6 +23,23 @@
     <div class="main-content">
       <!-- 左侧对话区 -->
       <div class="chat-panel">
+        <div class="session-panel">
+          <div class="session-panel-header">
+            <span>会话记录</span>
+            <a-button type="link" size="small" :loading="sessionLoading" @click="handleCreateSession">新建会话</a-button>
+          </div>
+          <div class="session-list">
+            <div
+              v-for="(session, index) in sessions"
+              :key="session.id || index"
+              :class="['session-item', session.id === currentSessionId ? 'active' : '']"
+              @click="handleSwitchSession(session.id)"
+            >
+              <div class="session-title">{{ session.title || `会话 ${index + 1}` }}</div>
+              <div class="session-time">{{ formatSessionTime(session.lastMessageTime) }}</div>
+            </div>
+          </div>
+        </div>
         <div class="message-list" ref="messageListRef">
           <div
             v-for="(msg, index) in messages"
@@ -87,7 +104,7 @@
           ></iframe>
           <div v-else class="preview-empty">
             <div class="empty-content">
-              <div class="empty-icon">🎨</div>
+              <div class="empty-icon">预览</div>
               <p>应用生成中，完成后将在此展示效果</p>
             </div>
           </div>
@@ -110,7 +127,7 @@ import {
   ArrowUpOutlined,
   LoadingOutlined
 } from '@ant-design/icons-vue'
-import { getAppVoById, deployApp } from '@/api/appController'
+import { createChatSession, deployApp, getAppVoById, listChatHistoryByPage, listChatSession } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
 
 const route = useRoute()
@@ -120,50 +137,77 @@ const appId = route.params.id as string
 
 const app = ref<API.AppVO>()
 const messages = ref<{ role: 'user' | 'ai', content: string }[]>([])
+const sessions = ref<API.ChatSessionVO[]>([])
+const currentSessionId = ref<number>()
 const inputText = ref('')
 const generating = ref(false)
 const deployLoading = ref(false)
+const sessionLoading = ref(false)
 const previewType = ref('desktop')
 const iframeUrl = ref('')
 const messageListRef = ref<HTMLElement>()
 
-const CACHE_KEY_PREFIX = 'app_chat_history_'
-
-/**
- * 保存历史记录到本地
- */
-const saveHistory = () => {
-  localStorage.setItem(CACHE_KEY_PREFIX + appId, JSON.stringify(messages.value))
+const loadSessions = async () => {
+  sessionLoading.value = true
+  try {
+    const res = await listChatSession({ appId: Number(appId) })
+    if (res.data?.code === 0) {
+      sessions.value = res.data.data || []
+    }
+  } finally {
+    sessionLoading.value = false
+  }
 }
 
-/**
- * 加载历史记录
- */
-const loadHistory = () => {
-  const history = localStorage.getItem(CACHE_KEY_PREFIX + appId)
-  if (history) {
-    messages.value = JSON.parse(history)
-    // 如果有历史记录，直接刷新预览
-    updatePreview()
-    return true
+const createSession = async () => {
+  const res = await createChatSession({ appId: Number(appId) })
+  if (res.data?.code === 0 && res.data.data) {
+    await loadSessions()
+    return res.data.data
   }
-  return false
+  message.error('创建会话失败，' + (res.data?.message || '请稍后重试'))
+  return undefined
+}
+
+const loadRemoteHistory = async (sessionId: number) => {
+  const res = await listChatHistoryByPage({
+    appId: Number(appId),
+    sessionId,
+    pageNum: 1,
+    pageSize: 200,
+  })
+  if (res.data?.code === 0) {
+    const historyList = res.data.data?.records || []
+    messages.value = historyList.map((item) => ({
+      role: item.messageType === 'user' ? 'user' : 'ai',
+      content: item.message || '',
+    }))
+    scrollToBottom()
+  }
 }
 
 /**
  * 加载应用信息
  */
 const loadApp = async () => {
-  const res = await getAppVoById({ id: appId as any })
+  const res = await getAppVoById({ id: Number(appId) })
   if (res.data?.code === 0) {
     app.value = res.data.data
-    
-    const hasHistory = loadHistory()
-    // 如果没有历史记录且有初始提示词，触发首次生成
-    if (!hasHistory && app.value?.initPrompt) {
-      messages.value.push({ role: 'user', content: app.value.initPrompt })
-      saveHistory()
-      startSSE(app.value.initPrompt)
+
+    await loadSessions()
+    if (sessions.value.length > 0 && sessions.value[0].id) {
+      currentSessionId.value = sessions.value[0].id
+      await loadRemoteHistory(sessions.value[0].id)
+      updatePreview()
+    } else {
+      const newSessionId = await createSession()
+      if (newSessionId) {
+        currentSessionId.value = newSessionId
+      }
+      if (app.value?.initPrompt && currentSessionId.value) {
+        messages.value.push({ role: 'user', content: app.value.initPrompt })
+        startSSE(app.value.initPrompt, currentSessionId.value)
+      }
     }
   }
 }
@@ -171,22 +215,33 @@ const loadApp = async () => {
 /**
  * SSE 对话逻辑
  */
-const startSSE = (userMsg: string) => {
+const startSSE = (userMsg: string, sessionId: number) => {
   generating.value = true
   const aiMsgIndex = messages.value.length
   messages.value.push({ role: 'ai', content: '' })
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL
   const eventSource = new EventSource(
-    `${baseUrl}/app/chat/gen/code/stream?appId=${appId}&message=${encodeURIComponent(userMsg)}`,
+    `${baseUrl}/app/chat/gen/code/stream?appId=${appId}&sessionId=${sessionId}&message=${encodeURIComponent(userMsg)}`,
     { withCredentials: true }
   )
+
+  eventSource.addEventListener('meta', (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.sessionId) {
+        currentSessionId.value = Number(data.sessionId)
+      }
+    } catch (e) {
+      console.error('SSE Meta Parse Error', e)
+    }
+  })
 
   const stopGenerating = () => {
     eventSource.close()
     if (generating.value) {
       generating.value = false
-      saveHistory() // 对话结束后保存完整历史
+      loadSessions()
       updatePreview()
     }
   }
@@ -206,7 +261,7 @@ const startSSE = (userMsg: string) => {
       }
       messages.value[aiMsgIndex].content += (data.d || '')
       scrollToBottom()
-    } catch (e) {
+    } catch {
       if (rawData.includes('[DONE]')) {
         stopGenerating()
       }
@@ -221,11 +276,14 @@ const startSSE = (userMsg: string) => {
 
 const doChat = () => {
   if (generating.value || !inputText.value) return
+  if (!currentSessionId.value) {
+    message.warning('会话初始化中，请稍后再试')
+    return
+  }
   const msg = inputText.value
   messages.value.push({ role: 'user', content: msg })
   inputText.value = ''
-  saveHistory() // 发送后保存
-  startSSE(msg)
+  startSSE(msg, currentSessionId.value)
 }
 
 const handleEnter = (e: KeyboardEvent) => {
@@ -252,13 +310,46 @@ const refreshIframe = () => {
   }
 }
 
+const handleCreateSession = async () => {
+  if (generating.value) {
+    message.warning('正在生成代码，请稍后再新建会话')
+    return
+  }
+  const newSessionId = await createSession()
+  if (newSessionId) {
+    currentSessionId.value = newSessionId
+    messages.value = []
+    updatePreview()
+  }
+}
+
+const handleSwitchSession = async (sessionId?: number) => {
+  if (!sessionId || generating.value || sessionId === currentSessionId.value) {
+    return
+  }
+  currentSessionId.value = sessionId
+  await loadRemoteHistory(sessionId)
+  updatePreview()
+}
+
+const formatSessionTime = (time?: string) => {
+  if (!time) {
+    return '暂无消息'
+  }
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) {
+    return '暂无消息'
+  }
+  return date.toLocaleString()
+}
+
 /**
  * 部署应用
  */
 const doDeploy = async () => {
   deployLoading.value = true
   try {
-    const res = await deployApp({ appId: appId as any })
+    const res = await deployApp({ appId: Number(appId) })
     if (res.data?.code === 0) {
       message.success('部署成功！地址：' + res.data.data)
       loadApp()
@@ -327,6 +418,64 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   background: #fff;
+}
+
+.session-panel {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.session-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #595959;
+}
+
+.session-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.session-item {
+  min-width: 140px;
+  max-width: 180px;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.session-item:hover {
+  border-color: #d9d9d9;
+}
+
+.session-item.active {
+  border-color: #1a1a1a;
+  background: #fafafa;
+}
+
+.session-title {
+  font-size: 13px;
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-time {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .message-list {

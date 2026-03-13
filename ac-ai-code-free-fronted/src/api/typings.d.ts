@@ -96,6 +96,18 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseListChatSessionVO = {
+    code?: number
+    data?: ChatSessionVO[]
+    message?: string
+  }
+
+  type BaseResponsePageChatHistoryVO = {
+    code?: number
+    data?: PageChatHistoryVO
+    message?: string
+  }
+
   type BaseResponsePageApp = {
     code?: number
     data?: PageApp
@@ -140,7 +152,51 @@ declare namespace API {
 
   type chatToGenCodeParams = {
     appId: number
+    sessionId?: number
     message: string
+  }
+
+  type ChatHistoryQueryRequest = {
+    pageNum?: number
+    pageSize?: number
+    sortField?: string
+    sortOrder?: string
+    appId?: number
+    sessionId?: number
+  }
+
+  type ChatHistoryVO = {
+    id?: number
+    sessionId?: number
+    seqNo?: number
+    message?: string
+    messageType?: string
+    status?: string
+    appId?: number
+    userId?: number
+    modelName?: string
+    inputTokens?: number
+    outputTokens?: number
+    latencyMs?: number
+    requestId?: string
+    extra?: string
+    createTime?: string
+  }
+
+  type ChatSessionCreateRequest = {
+    appId?: number
+  }
+
+  type ChatSessionVO = {
+    id?: number
+    appId?: number
+    userId?: number
+    title?: string
+    messageCount?: number
+    modelName?: string
+    lastMessageTime?: string
+    createTime?: string
+    updateTime?: string
   }
 
   type DeleteRequest = {
@@ -165,6 +221,10 @@ declare namespace API {
 
   type getUserVOByIdParams = {
     id: number
+  }
+
+  type listChatSessionParams = {
+    appId: number
   }
 
   type LoginUserVO = {
@@ -198,6 +258,15 @@ declare namespace API {
 
   type PageUser = {
     records?: User[]
+    pageNumber?: number
+    pageSize?: number
+    totalPage?: number
+    totalRow?: number
+    optimizeCountQuery?: boolean
+  }
+
+  type PageChatHistoryVO = {
+    records?: ChatHistoryVO[]
     pageNumber?: number
     pageSize?: number
     totalPage?: number

@@ -10,9 +10,12 @@ import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.dto.app.AppAdminUpdateRequest;
 import com.adcage.acaicodefree.model.dto.app.AppEditRequest;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
+import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -370,5 +373,50 @@ class AppControllerTest {
                         .content(JSONUtil.toJsonStr(appQueryRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void createChatSession_Success() throws Exception {
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(appService.createChatSession(1L, loginUser)).thenReturn(100L);
+
+        mockMvc.perform(post("/app/chat/session/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").value(100L));
+    }
+
+    @Test
+    void listChatSession_Success() throws Exception {
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        ChatSessionVO chatSessionVO = new ChatSessionVO();
+        chatSessionVO.setId(1L);
+        List<ChatSessionVO> chatSessionVOList = List.of(chatSessionVO);
+        when(appService.listChatSession(1L, loginUser)).thenReturn(chatSessionVOList);
+
+        mockMvc.perform(get("/app/chat/session/list")
+                        .param("appId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].id").value(1L));
+    }
+
+    @Test
+    void listChatHistoryByPage_Success() throws Exception {
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
+        chatHistoryVO.setId(1L);
+        Page<ChatHistoryVO> page = new Page<>(1, 10, 1);
+        page.setRecords(List.of(chatHistoryVO));
+        when(appService.listChatHistoryByPage(any(ChatHistoryQueryRequest.class), any(User.class))).thenReturn(page);
+
+        mockMvc.perform(post("/app/chat/history/page")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":1,\"sessionId\":1,\"pageNum\":1,\"pageSize\":10}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.records[0].id").value(1L));
     }
 }

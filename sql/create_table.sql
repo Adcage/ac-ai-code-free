@@ -50,18 +50,45 @@ CREATE TABLE app
     INDEX idx_userId (userId)            -- 提升基于用户 ID 的查询性能
 ) COMMENT '应用' COLLATE = utf8mb4_unicode_ci;
 
--- 对话历史表
-CREATE TABLE chat_history
+-- 对话会话表
+CREATE TABLE IF NOT EXISTS chat_session
 (
-    id          BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
-    message     TEXT                               NOT NULL COMMENT '消息',
-    messageType VARCHAR(32)                        NOT NULL COMMENT 'user/ai',
-    appId       BIGINT                             NOT NULL COMMENT '应用id',
-    userId      BIGINT                             NOT NULL COMMENT '创建用户id',
-    createTime  DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
-    updateTime  DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    isDelete    TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否删除',
-    INDEX idx_appId (appId),                       -- 提升基于应用的查询性能
-    INDEX idx_createTime (createTime),             -- 提升基于时间的查询性能
-    INDEX idx_appId_createTime (appId, createTime) -- 游标查询核心索引
+    id              BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appId           BIGINT                               NOT NULL COMMENT '应用id',
+    userId          BIGINT                               NOT NULL COMMENT '创建用户id',
+    title           VARCHAR(256)                         NULL COMMENT '会话标题',
+    messageCount    INT        DEFAULT 0                 NOT NULL COMMENT '消息数',
+    modelName       VARCHAR(128)                         NULL COMMENT '模型名称',
+    lastMessageTime DATETIME                             NULL COMMENT '最后消息时间',
+    createTime      DATETIME   DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime      DATETIME   DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete        TINYINT    DEFAULT 0                 NOT NULL COMMENT '是否删除',
+    INDEX idx_userId_appId_updateTime (userId, appId, updateTime),
+    INDEX idx_appId_lastMessageTime (appId, lastMessageTime)
+) COMMENT '对话会话' COLLATE = utf8mb4_unicode_ci;
+
+-- 对话历史表
+CREATE TABLE IF NOT EXISTS chat_history
+(
+    id           BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    sessionId    BIGINT                               NOT NULL COMMENT '会话id',
+    seqNo        INT                                  NOT NULL COMMENT '会话内消息序号，从1开始',
+    message      MEDIUMTEXT                           NOT NULL COMMENT '消息',
+    messageType  VARCHAR(32)                          NOT NULL COMMENT 'user/ai/system/tool',
+    status       VARCHAR(16) DEFAULT 'success'        NOT NULL COMMENT '消息状态：success/failed',
+    appId        BIGINT                               NOT NULL COMMENT '应用id',
+    userId       BIGINT                               NOT NULL COMMENT '创建用户id',
+    modelName    VARCHAR(128)                         NULL COMMENT '模型名称',
+    inputTokens  INT        DEFAULT 0                 NOT NULL COMMENT '输入 token 数',
+    outputTokens INT        DEFAULT 0                 NOT NULL COMMENT '输出 token 数',
+    latencyMs    INT                                  NULL COMMENT '响应耗时（毫秒）',
+    requestId    VARCHAR(64)                          NULL COMMENT '请求追踪id',
+    extra        JSON                                 NULL COMMENT '扩展字段（错误信息、工具调用等）',
+    createTime   DATETIME   DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime   DATETIME   DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete     TINYINT    DEFAULT 0                 NOT NULL COMMENT '是否删除',
+    UNIQUE KEY uk_sessionId_seqNo (sessionId, seqNo), -- 确保同一会话内消息顺序唯一
+    INDEX idx_sessionId_createTime (sessionId, createTime),
+    INDEX idx_userId_appId_createTime (userId, appId, createTime),
+    INDEX idx_appId_createTime (appId, createTime)
 ) COMMENT '对话历史' COLLATE = utf8mb4_unicode_ci;
