@@ -1,0 +1,1270 @@
+<mxfile host="65bd71144e">
+    <diagram id="create-app-flow" name="1-创建应用流程">
+        <mxGraphModel dx="2600" dy="2000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="2200" math="0" shadow="1">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+
+                <!-- ==================== 参与者对象 ==================== -->
+
+                <mxCell id="actor1" value="&lt;font color=&quot;#0f0f0f&quot;&gt;用户&lt;/font&gt;" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#FFFFFF;fontSize=16;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="40" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="vue1" value="前端页面&#xa;(Vue3)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#3366CC;strokeColor=#3366CC;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="80" width="100" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ctrl1" value="AppController&#xa;(控制层)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#27BC9F;strokeColor=#27BC9F;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="80" width="120" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="svc1" value="AppServiceImpl&#xa;(服务层)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#22D3EE;strokeColor=#22D3EE;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="80" width="120" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_user1" value="user表&#xa;(用户表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1360" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_app1" value="app表&#xa;(应用表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1680" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 生命线 ==================== -->
+
+                <mxCell id="ll1" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="actor1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="60" y="140" as="sourcePoint"/>
+                        <mxPoint x="60" y="2100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="vue1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="250" y="120" as="sourcePoint"/>
+                        <mxPoint x="250" y="2100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="ctrl1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="440" y="120" as="sourcePoint"/>
+                        <mxPoint x="440" y="2100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll4" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="svc1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="120" as="sourcePoint"/>
+                        <mxPoint x="640" y="2100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll5" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_user1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1420" y="130" as="sourcePoint"/>
+                        <mxPoint x="1420" y="2100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll6" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_app1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1740" y="130" as="sourcePoint"/>
+                        <mxPoint x="1740" y="2100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- ==================== 激活条 ==================== -->
+
+                <mxCell id="act1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="180" width="10" height="1780" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#3366CC;strokeColor=#3366CC;" parent="1" vertex="1">
+                    <mxGeometry x="245" y="195" width="10" height="1740" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#27BC9F;strokeColor=#27BC9F;" parent="1" vertex="1">
+                    <mxGeometry x="435" y="220" width="10" height="1640" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act4" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#22D3EE;strokeColor=#22D3EE;" parent="1" vertex="1">
+                    <mxGeometry x="635" y="280" width="10" height="1460" as="geometry"/>
+                </mxCell>
+
+                <!-- user表激活条 -->
+                <mxCell id="act5" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1415" y="430" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- app表激活条1 (插入) -->
+                <mxCell id="act6" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1735" y="780" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- app表激活条2 (回查) -->
+                <mxCell id="act7" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1735" y="1060" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 消息序列（含目的说明） ==================== -->
+
+                <!-- ===== 1: 用户点击创建应用按钮 ===== -->
+                <mxCell id="m1" value="1: 点击【创建应用】按钮" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="65" y="200" as="sourcePoint"/>
+                        <mxPoint x="250" y="200" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m1_note" value="目的: 用户在页面上发起创建&#xa;应用的请求，携带initPrompt" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="210" width="170" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 2: 前端发送POST /app/add请求 ===== -->
+                <mxCell id="m2" value="2: POST /app/add {initPrompt: &quot;...&quot;}" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="255" y="260" as="sourcePoint"/>
+                        <mxPoint x="440" y="260" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_note" value="目的: 前端将用户输入的初始化Prompt&#xa;封装为请求体，调用后端创建应用接口" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="270" width="200" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 3: Controller参数校验 ===== -->
+                <mxCell id="m3" value="3: 校验参数(initPrompt不能为空)" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="440" y="320" as="sourcePoint"/>
+                        <mxPoint x="640" y="320" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_note" value="目的: Controller层参数校验，&#xa;确保initPrompt必填参数不为空，&#xa;防止无效请求进入业务层" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="310" width="280" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 4: Service获取当前登录用户 ===== -->
+                <mxCell id="m4" value="4: getLoginUser(request)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="380" as="sourcePoint"/>
+                        <mxPoint x="1420" y="380" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m4_note" value="目的: 从请求上下文中获取当前登录用户&#xa;信息，用于后续设置应用创建者userId" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="370" width="280" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 5: user表查询 ===== -->
+                <mxCell id="m5" value="5: SELECT * FROM user&#xa;WHERE id=? AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="440" as="sourcePoint"/>
+                        <mxPoint x="1420" y="440" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m5_note" value="目的: 根据会话中的userId查询用户表，&#xa;验证用户身份有效性，确保用户存在且未删除" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="430" width="280" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 6: 返回User对象 ===== -->
+                <mxCell id="m6" value="6: 返回 loginUser (用户对象)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1420" y="490" as="sourcePoint"/>
+                        <mxPoint x="640" y="490" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- ===== 7: Service构造App对象 ===== -->
+                <mxCell id="m7_note" value="7: 构造App对象&#xa;● appName = initPrompt前12字符&#xa;● codeGenType = &quot;multi-file&quot;(默认多文件)&#xa;● userId = loginUser.id&#xa;● id = 雪花算法自动生成&#xa;功能: 将前端请求参数转换为实体对象，&#xa;设置默认值后准备持久化" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF4E6;strokeColor=#FF9800;fontColor=#333333;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="520" width="320" height="100" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 8: Service调用insert保存 ===== -->
+                <mxCell id="m8" value="8: appMapper.insert(app)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="660" as="sourcePoint"/>
+                        <mxPoint x="1740" y="660" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m8_note" value="目的: 将构造好的App实体对象&#xa;持久化到数据库app表中" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="650" width="260" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 9: app表INSERT ===== -->
+                <mxCell id="m9" value="9: INSERT INTO app&#xa;(appName, initPrompt, codeGenType,&#xa;userId, createTime, updateTime, ...)&#xa;VALUES (?, ?, ?, ?, NOW(), NOW(), ...)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="730" as="sourcePoint"/>
+                        <mxPoint x="1740" y="730" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m9_note" value="目的: 向app表插入一条新的应用记录，&#xa;包含appName/initPrompt/codeGenType/userId等字段，&#xa;id由雪花算法生成，createTime/updateTime由数据库自动填充" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="750" width="340" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 10: 返回插入结果 ===== -->
+                <mxCell id="m10" value="10: 返回插入结果 (1 row affected)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1740" y="810" as="sourcePoint"/>
+                        <mxPoint x="640" y="810" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- ===== 11: 回查完整App对象 ===== -->
+                <mxCell id="m11" value="11: appService.getById(appId)&#xa;根据插入后的ID查询完整应用信息" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="880" as="sourcePoint"/>
+                        <mxPoint x="1740" y="880" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m11_note" value="目的: 插入后ID已生成，需要回查app表获取&#xa;包含id/createTime/updateTime等&#xa;数据库自动填充字段的完整App对象，&#xa;用于后续组装VO返回给前端" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="900" width="320" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 12: SELECT app ===== -->
+                <mxCell id="m12" value="12: SELECT * FROM app&#xa;WHERE id=? AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="990" as="sourcePoint"/>
+                        <mxPoint x="1740" y="990" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m12_note" value="目的: 根据雪花ID精确查找刚插入的app记录，&#xa;同时过滤已删除记录(isDelete=0)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="1010" width="320" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 13: 返回完整App对象 ===== -->
+                <mxCell id="m13" value="13: 返回完整App对象&#xa;(含id, createTime, updateTime等自动填充字段)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1740" y="1070" as="sourcePoint"/>
+                        <mxPoint x="640" y="1070" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- ===== 14: 返回appId给Controller ===== -->
+                <mxCell id="m14" value="14: 返回 app.getId() (appId)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="1140" as="sourcePoint"/>
+                        <mxPoint x="440" y="1140" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m14_note" value="目的: Service层将新创建的应用ID&#xa;返回给Controller，作为创建成功的标识" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="1150" width="260" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 15: Controller返回统一响应 ===== -->
+                <mxCell id="m15" value="15: 返回 BaseResponse&lt;Long&gt;&#xa;{code:0, data: appId, message:&quot;ok&quot;}" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="440" y="1210" as="sourcePoint"/>
+                        <mxPoint x="255" y="1210" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m15_note" value="目的: Controller将appId封装为统一响应&#xa;格式BaseResponse返回，code=0表示成功" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="1220" width="270" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 16: 前端跳转到对话页 ===== -->
+                <mxCell id="m16" value="16: 收到appId，跳转到应用对话页" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="255" y="1280" as="sourcePoint"/>
+                        <mxPoint x="65" y="1280" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m16_note" value="目的: 前端收到创建成功响应后，&#xa;使用appId路由到该应用的对话界面" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1290" width="230" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 17: 显示新应用对话页面 ===== -->
+                <mxCell id="m17" value="17: 显示新建应用的对话页面&#xa;(包含initPrompt作为对话上下文)" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="255" y="1350" as="sourcePoint"/>
+                        <mxPoint x="65" y="1350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m17_note" value="目的: 用户进入对话界面，可以看到应用名称，&#xa;应用的initPrompt将作为AI对话的系统提示词" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1360" width="290" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 数据库表字段说明注释 ===== -->
+                <mxCell id="db_note_user" value="user表字段:&#xa;id(雪花ID), userAccount,&#xa;userPassword, userName, userAvatar,&#xa;userProfile, userRole,&#xa;vipExpireTime, vipCode, ...&#xa;功能: 存储用户账号信息与权限角色" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="160" width="240" height="110" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_note_app" value="app表字段:&#xa;id(雪花ID), appName, cover,&#xa;initPrompt(初始化提示词),&#xa;codeGenType(代码生成类型),&#xa;deployKey, deployedTime,&#xa;priority, userId(创建者), ...&#xa;功能: 存储AI编程应用的配置信息" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1620" y="160" width="280" height="120" as="geometry"/>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+
+    <diagram id="create-session-flow" name="2-创建会话流程">
+        <mxGraphModel dx="2600" dy="2200" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="2400" math="0" shadow="1">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+
+                <!-- ==================== 参与者对象 ==================== -->
+
+                <mxCell id="actor2" value="&lt;font color=&quot;#0f0f0f&quot;&gt;用户&lt;/font&gt;" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#FFFFFF;fontSize=16;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="40" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="vue2" value="前端页面&#xa;(Vue3)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#3366CC;strokeColor=#3366CC;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="80" width="100" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ctrl2" value="AppController&#xa;(控制层)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#27BC9F;strokeColor=#27BC9F;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="80" width="120" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="svc2" value="AppServiceImpl&#xa;(服务层)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#22D3EE;strokeColor=#22D3EE;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="80" width="120" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_user2" value="user表&#xa;(用户表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1360" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_app2" value="app表&#xa;(应用表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1680" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_session2" value="chat_session表&#xa;(会话表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="2000" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 生命线 ==================== -->
+
+                <mxCell id="ll2_1" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="actor2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="60" y="140" as="sourcePoint"/>
+                        <mxPoint x="60" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2_2" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="vue2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="250" y="120" as="sourcePoint"/>
+                        <mxPoint x="250" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2_3" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="ctrl2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="440" y="120" as="sourcePoint"/>
+                        <mxPoint x="440" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2_4" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="svc2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="120" as="sourcePoint"/>
+                        <mxPoint x="640" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2_5" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_user2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1420" y="130" as="sourcePoint"/>
+                        <mxPoint x="1420" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2_6" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_app2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1740" y="130" as="sourcePoint"/>
+                        <mxPoint x="1740" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll2_7" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_session2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="2060" y="130" as="sourcePoint"/>
+                        <mxPoint x="2060" y="2300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- ==================== 激活条 ==================== -->
+
+                <mxCell id="act2_1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="180" width="10" height="1980" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act2_2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#3366CC;strokeColor=#3366CC;" parent="1" vertex="1">
+                    <mxGeometry x="245" y="195" width="10" height="1940" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act2_3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#27BC9F;strokeColor=#27BC9F;" parent="1" vertex="1">
+                    <mxGeometry x="435" y="220" width="10" height="1860" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act2_4" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#22D3EE;strokeColor=#22D3EE;" parent="1" vertex="1">
+                    <mxGeometry x="635" y="260" width="10" height="1720" as="geometry"/>
+                </mxCell>
+
+                <!-- user表激活条 -->
+                <mxCell id="act2_5" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1415" y="390" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- app表激活条 -->
+                <mxCell id="act2_6" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1735" y="590" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- chat_session表激活条1 (统计) -->
+                <mxCell id="act2_7" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="2055" y="750" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- chat_session表激活条2 (插入) -->
+                <mxCell id="act2_8" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="2055" y="1000" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 数据库表字段说明 ==================== -->
+
+                <mxCell id="db_note_user2" value="user表字段:&#xa;id(雪花ID), userAccount,&#xa;userPassword, userName, userAvatar,&#xa;userProfile, userRole,&#xa;vipExpireTime, vipCode, ...&#xa;功能: 存储用户账号信息与权限角色" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="160" width="240" height="110" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_note_app2" value="app表字段:&#xa;id(雪花ID), appName, cover,&#xa;initPrompt(初始化提示词),&#xa;codeGenType(代码生成类型),&#xa;deployKey, priority, userId, ...&#xa;功能: 存储AI编程应用配置信息" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1620" y="160" width="260" height="110" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_note_session2" value="chat_session表字段:&#xa;id(雪花ID), appId(应用ID),&#xa;userId(创建者ID), title(会话标题),&#xa;messageCount(消息数),&#xa;modelName(模型名称),&#xa;lastMessageTime(最后消息时间)&#xa;功能: 存储用户与AI的会话元信息" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1940" y="160" width="250" height="120" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 消息序列（含目的说明） ==================== -->
+
+                <!-- 方式A标注 -->
+                <mxCell id="branch_a" value="【方式A: 手动创建会话】 POST /app/chat/session/create" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF4E6;strokeColor=#FF9800;fontColor=#666666;fontSize=13;fontStyle=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="190" width="400" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 1: 用户点击新建会话 -->
+                <mxCell id="m2_1" value="1: 点击【新建会话】按钮" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="65" y="250" as="sourcePoint"/>
+                        <mxPoint x="250" y="250" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_1_note" value="目的: 在某应用下发起一个新会话，&#xa;会话是用户与AI对话的基本单元" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="260" width="230" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 2: 前端发送POST -->
+                <mxCell id="m2_2" value="2: POST /app/chat/session/create&#xa;{appId: 123}" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="255" y="310" as="sourcePoint"/>
+                        <mxPoint x="440" y="310" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_2_note" value="目的: 将应用ID发送到后端，&#xa;请求在该应用下创建新会话" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="320" width="220" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 3: Controller调用Service -->
+                <mxCell id="m2_3" value="3: appService.createChatSession&#xa;(appId, loginUser)" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="440" y="370" as="sourcePoint"/>
+                        <mxPoint x="640" y="370" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_3_note" value="目的: Controller将请求委派给Service层&#xa;执行创建会话的业务逻辑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="380" width="230" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 4: 获取登录用户 -->
+                <mxCell id="m2_4" value="4: getLoginUser(request)&#xa;查询当前登录用户信息" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="430" as="sourcePoint"/>
+                        <mxPoint x="1420" y="430" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_4_note" value="目的: 从请求上下文获取当前登录用户，&#xa;验证身份并用于后续会话归属（userId）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="420" width="280" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 5: user表查询 -->
+                <mxCell id="m2_5" value="5: SELECT * FROM user&#xa;WHERE id=? AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="470" as="sourcePoint"/>
+                        <mxPoint x="1420" y="470" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_5_note" value="目的: 从user表查询登录用户完整信息，&#xa;确保用户存在且未被逻辑删除" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="480" width="260" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 6: 返回User对象 -->
+                <mxCell id="m2_6" value="6: 返回 loginUser (用户对象)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1420" y="520" as="sourcePoint"/>
+                        <mxPoint x="640" y="520" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 7: 校验应用存在性和权限 -->
+                <mxCell id="m2_7" value="7: getAndCheckApp(appId, loginUser)&#xa;校验应用存在且属于当前用户" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="570" as="sourcePoint"/>
+                        <mxPoint x="1740" y="570" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_7_note" value="目的: 校验appId指向的应用确实存在、&#xa;且创建者就是当前登录用户(或管理员)，&#xa;防止越权操作他人应用下的会话" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="530" width="280" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- 8: app表查询 -->
+                <mxCell id="m2_8" value="8: SELECT * FROM app&#xa;WHERE id=? AND userId=&#xa;AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="630" as="sourcePoint"/>
+                        <mxPoint x="1740" y="630" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_8_note" value="目的: 查询app表验证应用存在性，&#xa;同时检查userId确保权限归属" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="640" width="260" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 9: 返回App对象 -->
+                <mxCell id="m2_9" value="9: 返回App对象 (校验通过)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1740" y="690" as="sourcePoint"/>
+                        <mxPoint x="640" y="690" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 10: 统计会话数 -->
+                <mxCell id="m2_10" value="10: chatSessionMapper.selectCountByQuery&#xa;统计该应用下已有会话数" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="740" as="sourcePoint"/>
+                        <mxPoint x="2060" y="740" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_10_note" value="目的: 统计当前用户在该应用下已有多少会话，&#xa;用于自动生成会话标题序号(&quot;新会话 N&quot;)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="750" width="320" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 11: chat_session表统计查询 -->
+                <mxCell id="m2_11" value="11: SELECT COUNT(*) FROM chat_session&#xa;WHERE userId=? AND appId=?&#xa;AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="800" as="sourcePoint"/>
+                        <mxPoint x="2060" y="800" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_11_note" value="目的: 从chat_session表统计该用户在该应用下&#xa;的有效会话(未删除)数量，返回数值如3" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="810" width="300" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 12: 返回会话数量 -->
+                <mxCell id="m2_12" value="12: 返回 count (如: 3)&#xa;表示该用户此应用已有3个会话" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="2060" y="860" as="sourcePoint"/>
+                        <mxPoint x="640" y="860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 13: 构造ChatSession对象 -->
+                <mxCell id="m2_13_note" value="13: 构造ChatSession对象并设置属性&#xa;● id = 雪花算法生成&#xa;● title = &quot;新会话 N&quot; (N=count+1=4)&#xa;● appId = 当前应用ID&#xa;● userId = 当前用户ID&#xa;● messageCount = 0 (初始消息数为0)&#xa;● modelName = 应用配置的模型名&#xa;功能: 将上述属性组装成ChatSession实体&#xa;准备持久化到数据库" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF4E6;strokeColor=#FF9800;fontColor=#333333;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="890" width="320" height="130" as="geometry"/>
+                </mxCell>
+
+                <!-- 14: 插入ChatSession -->
+                <mxCell id="m2_14" value="14: chatSessionMapper.insert(session)&#xa;插入新会话记录到数据库" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="1060" as="sourcePoint"/>
+                        <mxPoint x="2060" y="1060" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_14_note" value="目的: 将构造好的ChatSession对象&#xa;持久化到chat_session表中" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="1070" width="230" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 15: chat_session表插入 -->
+                <mxCell id="m2_15" value="15: INSERT INTO chat_session&#xa;(id, appId, userId, title,&#xa;messageCount, modelName, ...)&#xa;VALUES (雪花ID, ?, ?, &quot;新会话4&quot;,&#xa;0, ?, NOW(), NOW(), 0)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="1120" as="sourcePoint"/>
+                        <mxPoint x="2060" y="1120" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_15_note" value="目的: 向chat_session表写入一条新会话记录，&#xa;messageCount初始为0(尚无消息)，&#xa;createTime/updateTime由数据库自动填充，&#xa;isDelete默认为0(未删除)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="1130" width="320" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 16: 返回插入成功 -->
+                <mxCell id="m2_16" value="16: 返回插入成功 (1 row affected)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="2060" y="1210" as="sourcePoint"/>
+                        <mxPoint x="640" y="1210" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 17: 返回sessionId -->
+                <mxCell id="m2_17" value="17: 返回 session.getId() (sessionId)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="640" y="1270" as="sourcePoint"/>
+                        <mxPoint x="440" y="1270" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_17_note" value="目的: Service层返回新创建会话的雪花ID，&#xa;供前端后续对话时使用" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="1280" width="250" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 18: Controller返回统一响应 -->
+                <mxCell id="m2_18" value="18: 返回 BaseResponse&lt;Long&gt;&#xa;{code:0, data: sessionId}" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="440" y="1340" as="sourcePoint"/>
+                        <mxPoint x="255" y="1340" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_18_note" value="目的: Controller将sessionId封装为统一响应&#xa;格式BaseResponse返回，code=0表示成功" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="1350" width="270" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 19: 前端跳转到对话页面 -->
+                <mxCell id="m2_19" value="19: 收到sessionId，跳转到对话页面" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="255" y="1420" as="sourcePoint"/>
+                        <mxPoint x="65" y="1420" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_19_note" value="目的: 前端使用返回的sessionId和appId&#xa;导航到该应用下的对话界面" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1430" width="250" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 20: 显示新会话对话页面 -->
+                <mxCell id="m2_20" value="20: 显示新会话对话页面&#xa;(标题=&quot;新会话4&quot;, 消息数为0)" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="255" y="1490" as="sourcePoint"/>
+                        <mxPoint x="65" y="1490" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2_20_note" value="目的: 用户看到新建的空白对话界面，&#xa;可开始输入消息与AI对话" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1500" width="250" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- ===== 方式B说明 ===== -->
+                <mxCell id="branch_b" value="【方式B: 流式对话时自动创建会话】GET /app/chat/gen/code/stream" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF4E6;strokeColor=#8B5CF6;fontColor=#666666;fontSize=13;fontStyle=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1580" width="480" height="30" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="m2_auto" value="21: 当sessionId为空或无效时，&#xa;自动调用上述 createChatSession 流程创建新会话，&#xa;并在SSE响应中首先发送 meta 事件 {sessionId: xxx}&#xa;告知前端新创建的会话ID，&#xa;后续对话消息在此会话中进行。&#xa;&#xa;功能: 减少用户手动创建会话的操作，&#xa;首次对话时自动建立会话上下文" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#8B5CF6;fontColor=#333333;fontSize=12;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1620" width="480" height="130" as="geometry"/>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+
+    <diagram id="chat-history-flow" name="3-对话历史管理流程">
+        <mxGraphModel dx="2800" dy="2600" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3200" pageHeight="3000" math="0" shadow="1">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+
+                <!-- ==================== 参与者对象 ==================== -->
+
+                <mxCell id="actor3" value="&lt;font color=&quot;#0f0f0f&quot;&gt;用户&lt;/font&gt;" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#FFFFFF;fontSize=16;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="40" height="80" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="vue3" value="前端页面&#xa;(Vue3)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#3366CC;strokeColor=#3366CC;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="80" width="100" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="ctrl3" value="AppController&#xa;(控制层)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#27BC9F;strokeColor=#27BC9F;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="80" width="120" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="svc3" value="AppServiceImpl&#xa;(服务层)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#22D3EE;strokeColor=#22D3EE;fontColor=#FFFFFF;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="80" width="120" height="40" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="aifacade3" value="AiCodeGenerator&#xa;Facade (AI门面)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#8B5CF6;strokeColor=#8B5CF6;fontColor=#FFFFFF;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="760" y="75" width="120" height="50" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_user3" value="user表&#xa;(用户表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_app3" value="app表&#xa;(应用表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1520" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_session3" value="chat_session表&#xa;(会话表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1760" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db_history3" value="chat_history表&#xa;(消息历史表)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#6FA3FF;strokeColor=#6FA3FF;fontColor=#FFFFFF;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="2000" y="70" width="120" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 数据库表字段说明 ==================== -->
+
+                <mxCell id="db3_note_user" value="user表: 存储用户账号信息与权限角色&#xa;id(雪花ID), userAccount, userPassword,&#xa;userName, userRole, vipExpireTime, ..." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1220" y="140" width="240" height="50" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db3_note_app" value="app表: 存储AI编程应用配置信息&#xa;id, appName, initPrompt,&#xa;codeGenType, deployKey, userId, ..." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1460" y="140" width="240" height="50" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db3_note_session" value="chat_session表: 存储会话元信息&#xa;id, appId, userId, title,&#xa;messageCount, lastMessageTime, ..." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1700" y="140" width="240" height="50" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="db3_note_history" value="chat_history表: 存储每条聊天消息&#xa;id, sessionId, seqNo, message,&#xa;messageType(user/ai/system/tool),&#xa;status, inputTokens, outputTokens, ..." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#6FA3FF;fontColor=#333333;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1940" y="140" width="260" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 生命线 ==================== -->
+
+                <mxCell id="ll3_1" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="actor3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="60" y="140" as="sourcePoint"/>
+                        <mxPoint x="60" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_2" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="vue3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="230" y="120" as="sourcePoint"/>
+                        <mxPoint x="230" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_3" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="ctrl3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="420" y="120" as="sourcePoint"/>
+                        <mxPoint x="420" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_4" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="svc3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="120" as="sourcePoint"/>
+                        <mxPoint x="620" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_5" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="aifacade3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="820" y="125" as="sourcePoint"/>
+                        <mxPoint x="820" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_6" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_user3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1340" y="130" as="sourcePoint"/>
+                        <mxPoint x="1340" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_7" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_app3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1580" y="130" as="sourcePoint"/>
+                        <mxPoint x="1580" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_8" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_session3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1820" y="130" as="sourcePoint"/>
+                        <mxPoint x="1820" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <mxCell id="ll3_9" value="" style="endArrow=none;dashed=1;html=1;strokeColor=#666666;strokeWidth=2;" parent="1" source="db_history3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="2060" y="130" as="sourcePoint"/>
+                        <mxPoint x="2060" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- ==================== 激活条 ==================== -->
+
+                <mxCell id="act3_1" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="220" width="10" height="2580" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act3_2" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#3366CC;strokeColor=#3366CC;" parent="1" vertex="1">
+                    <mxGeometry x="225" y="230" width="10" height="2550" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act3_3" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#27BC9F;strokeColor=#27BC9F;" parent="1" vertex="1">
+                    <mxGeometry x="415" y="250" width="10" height="2460" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="act3_4" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#22D3EE;strokeColor=#22D3EE;" parent="1" vertex="1">
+                    <mxGeometry x="615" y="290" width="10" height="2070" as="geometry"/>
+                </mxCell>
+
+                <!-- AiFacade激活条 -->
+                <mxCell id="act3_5" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#8B5CF6;strokeColor=#8B5CF6;" parent="1" vertex="1">
+                    <mxGeometry x="815" y="830" width="10" height="200" as="geometry"/>
+                </mxCell>
+
+                <!-- user表 -->
+                <mxCell id="act3_6" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1335" y="400" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- app表 -->
+                <mxCell id="act3_7" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1575" y="560" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- chat_session表激活条(校验) -->
+                <mxCell id="act3_8" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1815" y="660" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- chat_history表激活条(保存用户消息) -->
+                <mxCell id="act3_9" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="2055" y="800" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- chat_session表激活条(更新摘要) -->
+                <mxCell id="act3_10" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="1815" y="910" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- chat_history表激活条(保存AI消息) -->
+                <mxCell id="act3_11" value="" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=#6FA3FF;strokeColor=#6FA3FF;" parent="1" vertex="1">
+                    <mxGeometry x="2055" y="1100" width="10" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 流程1: 发送消息/流式对话 ==================== -->
+
+                <mxCell id="section1" value="【流程1: 发送消息 / 流式对话生成代码】" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontColor=#333333;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="210" width="400" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 1 -->
+                <mxCell id="m3_1" value="1: 用户输入消息，点击发送" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="65" y="260" as="sourcePoint"/>
+                        <mxPoint x="230" y="260" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_1_note" value="目的: 用户向AI发送编程需求消息，&#xa;触发流式代码生成" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="270" width="230" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 2 -->
+                <mxCell id="m3_2" value="2: GET /app/chat/gen/code/stream&#xa;?appId=1&amp;sessionId=2&amp;message=xxx" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="235" y="320" as="sourcePoint"/>
+                        <mxPoint x="420" y="320" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_2_note" value="目的: 通过SSE(Server-Sent Events)方式建立&#xa;流式连接，逐步接收AI生成的代码片段，&#xa;避免长时间等待整个响应完成" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="330" width="310" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 3 -->
+                <mxCell id="m3_3" value="3: userService.getLoginUser(request)" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="420" y="400" as="sourcePoint"/>
+                        <mxPoint x="620" y="400" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_3_note" value="目的: Controller验证用户登录状态，&#xa;获取用户身份用于权限校验" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="410" width="260" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 4 -->
+                <mxCell id="m3_4" value="4: 查询登录用户信息" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="460" as="sourcePoint"/>
+                        <mxPoint x="1340" y="460" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 5 -->
+                <mxCell id="m3_5" value="5: SELECT * FROM user&#xa;WHERE id=? AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="490" as="sourcePoint"/>
+                        <mxPoint x="1340" y="490" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_5_note" value="目的: 验证用户身份有效性，确保请求来自合法用户" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="500" width="280" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 6 -->
+                <mxCell id="m3_6" value="6: 返回 loginUser" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1340" y="540" as="sourcePoint"/>
+                        <mxPoint x="620" y="540" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 7 -->
+                <mxCell id="m3_7" value="7: getAndCheckApp(appId, loginUser)&#xa;校验应用存在且属于当前用户" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="590" as="sourcePoint"/>
+                        <mxPoint x="1580" y="590" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_7_note" value="目的: 验证appId对应的应用确实存在、&#xa;且该应用属于当前登录用户，防止越权操作" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="600" width="320" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 8 -->
+                <mxCell id="m3_8" value="8: SELECT * FROM app&#xa;WHERE id=? AND userId=&#xa;AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="640" as="sourcePoint"/>
+                        <mxPoint x="1580" y="640" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_8_note" value="目的: 从app表查询应用记录，同时校验&#xa;userId确保归属关系正确" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="650" width="280" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 9 -->
+                <mxCell id="m3_9" value="9: 返回App对象 (校验通过)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1580" y="690" as="sourcePoint"/>
+                        <mxPoint x="620" y="690" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 10 -->
+                <mxCell id="m3_10" value="10: getAndCheckChatSession&#xa;(sessionId, appId, loginUser)&#xa;校验会话归属" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="730" as="sourcePoint"/>
+                        <mxPoint x="1820" y="730" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_10_note" value="目的: 校验sessionId对应的会话确实属于&#xa;当前用户和当前应用，防止跨会话越权访问" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="740" width="320" height="40" as="geometry"/>
+                </mxCell>
+
+                <!-- 11 -->
+                <mxCell id="m3_11" value="11: SELECT * FROM chat_session&#xa;WHERE id=? AND appId=?&#xa;AND userId=? AND isDelete=0" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="780" as="sourcePoint"/>
+                        <mxPoint x="1820" y="780" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_11_note" value="目的: 三重条件校验——确保会话ID、应用ID、&#xa;用户ID全部匹配，任何不匹配则抛出异常" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="790" width="340" height="40" as="geometry"/>
+                </mxCell>
+
+                <!-- 12 -->
+                <mxCell id="m3_12" value="12: 返回ChatSession对象 (校验通过)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1820" y="840" as="sourcePoint"/>
+                        <mxPoint x="620" y="840" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 13 -->
+                <mxCell id="m3_13" value="13: saveHistoryMessage&#xa;(type=&quot;user&quot;, status=&quot;success&quot;)&#xa;保存用户消息" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="880" as="sourcePoint"/>
+                        <mxPoint x="2060" y="880" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_13_note" value="目的: 在调用AI之前先将用户输入的消息&#xa;持久化到chat_history表，确保消息不丢失，&#xa;同时用于对话上下文的构建" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="870" width="310" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 14 -->
+                <mxCell id="m3_14" value="14: INSERT INTO chat_history&#xa;(sessionId, seqNo, message,&#xa;messageType=&quot;user&quot;,&#xa;status=&quot;success&quot;, appId, userId, ...)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="940" as="sourcePoint"/>
+                        <mxPoint x="2060" y="940" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_14_note" value="目的: 向chat_history表写入用户消息记录，&#xa;seqNo通过getNextSeqNo方法自增，&#xa;messageType=&quot;user&quot;标识消息来源，&#xa;status=&quot;success&quot;表示用户消息直接成功" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="950" width="340" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 15 -->
+                <mxCell id="m3_15" value="15: 返回插入成功 (1 row affected)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="2060" y="1000" as="sourcePoint"/>
+                        <mxPoint x="620" y="1000" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 16 -->
+                <mxCell id="m3_16" value="16: updateSessionSummary(sessionId)&#xa;更新messageCount和lastMessageTime" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="1040" as="sourcePoint"/>
+                        <mxPoint x="1820" y="1040" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_16_note" value="目的: 保存用户消息后同步更新chat_session表，&#xa;将messageCount+1并更新lastMessageTime，&#xa;便于会话列表展示最新状态和消息数" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="1050" width="340" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 17 -->
+                <mxCell id="m3_17" value="17: UPDATE chat_session&#xa;SET messageCount=messageCount+1,&#xa;lastMessageTime=NOW()&#xa;WHERE id=?" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="1100" as="sourcePoint"/>
+                        <mxPoint x="1820" y="1100" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_17_note" value="目的: 更新chat_session的消息计数和最后消息时间，&#xa;使会话列表能按最近活动时间排序" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="1110" width="300" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 18 -->
+                <mxCell id="m3_18" value="18: 更新成功" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1820" y="1150" as="sourcePoint"/>
+                        <mxPoint x="620" y="1150" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 19 -->
+                <mxCell id="m3_19" value="19: aiCodeGeneratorFacade&#xa;.generateAndSaveCodeStream&#xa;(message, codeGenTypeEnum, appId)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="1200" as="sourcePoint"/>
+                        <mxPoint x="820" y="1200" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_19_note" value="目的: 调用AI代码生成门面服务，&#xa;基于应用的initPrompt和用户消息，&#xa;使用LangChain4j调用大模型流式生成代码，&#xa;返回Flux&lt;String&gt;流式响应" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#8B5CF6;fontColor=#333333;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="1180" width="280" height="55" as="geometry"/>
+                </mxCell>
+
+                <!-- 20 -->
+                <mxCell id="m3_20" value="20: 返回 Flux&lt;String&gt;&#xa;流式代码片段(逐个chunk)" style="endArrow=classic;html=1;strokeColor=#8B5CF6;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="820" y="1270" as="sourcePoint"/>
+                        <mxPoint x="620" y="1270" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_20_note" value="目的: AI门面返回流式响应，&#xa;每个chunk是一小段生成的代码，&#xa;会在流完成后整体汇总保存" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#8B5CF6;fontColor=#333333;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="1280" width="280" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- 21 -->
+                <mxCell id="m3_21" value="21: [流完成] saveHistoryMessage&#xa;(type=&quot;ai&quot;, status=&quot;success&quot;,&#xa;记录latencyMs)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="1360" as="sourcePoint"/>
+                        <mxPoint x="2060" y="1360" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_21_note" value="目的: AI流式生成完成后(doOnComplete回调)，&#xa;将AI生成的完整响应内容保存到chat_history，&#xa;同时记录响应耗时latencyMs和token消耗量" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="1370" width="340" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 22 -->
+                <mxCell id="m3_22" value="22: INSERT INTO chat_history&#xa;(sessionId, seqNo, message,&#xa;messageType=&quot;ai&quot;, status=&quot;success&quot;,&#xa;latencyMs=耗时, inputTokens, outputTokens, ...)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="1430" as="sourcePoint"/>
+                        <mxPoint x="2060" y="1430" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_22_note" value="目的: 将AI的完整响应内容写入chat_history表，&#xa;messageType=&quot;ai&quot;区分AI消息，latencyMs记录性能数据，&#xa;inputTokens/outputTokens记录token消耗用于计费统计" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="1440" width="340" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 23 -->
+                <mxCell id="m3_23" value="23: SSE流式返回给前端&#xa;meta事件: {sessionId: xxx}&#xa;data事件: {d: chunk1}&#xa;data事件: {d: chunk2}&#xa;... (循环)&#xa;done事件: [DONE]" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="420" y="1520" as="sourcePoint"/>
+                        <mxPoint x="235" y="1520" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_23_note" value="目的: Controller将Flux流逐步包装为SSE事件推送到前端:&#xa;● meta事件: 携带sessionId，前端可用于会话绑定&#xa;● data事件: 每个chunk是一小段生成的代码&#xa;● done事件: 标识流式生成完成&#xa;前端逐步拼接chunks实现打字机效果展示" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1540" width="380" height="90" as="geometry"/>
+                </mxCell>
+
+                <!-- 24 -->
+                <mxCell id="m3_24" value="24: 逐步渲染AI生成代码&#xa;(打字机效果，流式显示)" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="235" y="1660" as="sourcePoint"/>
+                        <mxPoint x="65" y="1660" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_24_note" value="目的: 前端通过EventSource接收SSE事件，&#xa;将每个chunk追加到代码显示区域，&#xa;实现AI逐行生成代码的视觉体验" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1670" width="280" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 流程2: 查询会话列表 ==================== -->
+
+                <mxCell id="section2" value="【流程2: 查询会话列表】" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontColor=#333333;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1760" width="300" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 25 -->
+                <mxCell id="m3_25" value="25: 点击查看会话列表" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="65" y="1810" as="sourcePoint"/>
+                        <mxPoint x="230" y="1810" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_25_note" value="目的: 用户查看某应用下的所有对话会话" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1820" width="260" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 26 -->
+                <mxCell id="m3_26" value="26: GET /app/chat/session/list&#xa;?appId=1" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="235" y="1870" as="sourcePoint"/>
+                        <mxPoint x="420" y="1870" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_26_note" value="目的: 请求指定应用下的所有会话列表，&#xa;按更新时间降序排列，用于侧边栏展示" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1880" width="280" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 27 -->
+                <mxCell id="m3_27" value="27: appService.listChatSession&#xa;(appId, loginUser)" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="420" y="1930" as="sourcePoint"/>
+                        <mxPoint x="620" y="1930" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_27_note" value="目的: Controller将请求委派给Service层，&#xa;执行会话列表查询业务逻辑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="1940" width="250" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 28 -->
+                <mxCell id="m3_28" value="28: chatSessionMapper&#xa;.selectListByQuery(query)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="1990" as="sourcePoint"/>
+                        <mxPoint x="1820" y="1990" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_28_note" value="目的: Service层构建查询条件，&#xa;查询指定应用下属于当前用户的会话列表" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="2000" width="290" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 29 -->
+                <mxCell id="m3_29" value="29: SELECT * FROM chat_session&#xa;WHERE userId=? AND appId=?&#xa;AND isDelete=0&#xa;ORDER BY updateTime DESC" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="2050" as="sourcePoint"/>
+                        <mxPoint x="1820" y="2050" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_29_note" value="目的: 从chat_session表查询当前用户在指定应用下的&#xa;所有未删除会话，按updateTime降序排列，&#xa;确保最近活跃的会话排在前面" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="2060" width="300" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- 30 -->
+                <mxCell id="m3_30" value="30: 返回 List&lt;ChatSession&gt;&#xa;(包含会话标题、消息数、最后消息时间等)" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1820" y="2120" as="sourcePoint"/>
+                        <mxPoint x="620" y="2120" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+                <!-- 31 -->
+                <mxCell id="m3_31" value="31: 转换为List&lt;ChatSessionVO&gt;&#xa;[{id, appId, title, messageCount,&#xa;lastMessageTime, ...}]" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="2180" as="sourcePoint"/>
+                        <mxPoint x="420" y="2180" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_31_note" value="目的: Service将实体列表转换为VO列表，&#xa;ChatSessionVO包含前端所需的展示字段，&#xa;隐藏敏感的内部字段如isDelete等" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="2190" width="310" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- 32 -->
+                <mxCell id="m3_32" value="32: 返回 BaseResponse&lt;List&lt;ChatSessionVO&gt;&gt;" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=13;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="420" y="2250" as="sourcePoint"/>
+                        <mxPoint x="235" y="2250" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_32_note" value="目的: Controller将VO列表封装为统一响应格式返回" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="2260" width="300" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 33 -->
+                <mxCell id="m3_33" value="33: 渲染会话列表&#xa;(按updateTime降序，最近活跃的排最前)" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="235" y="2310" as="sourcePoint"/>
+                        <mxPoint x="65" y="2310" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_33_note" value="目的: 前端将会话列表渲染到侧边栏，&#xa;每个会话显示标题、消息数和最后活动时间，&#xa;用户可点击切换到不同会话" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="2320" width="280" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- ==================== 流程3: 查询聊天历史 ==================== -->
+
+                <mxCell id="section3" value="【流程3: 分页查询聊天历史】" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontColor=#333333;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="2400" width="300" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 34 -->
+                <mxCell id="m3_34" value="34: 点击某会话查看历史消息" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=13;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="65" y="2450" as="sourcePoint"/>
+                        <mxPoint x="230" y="2450" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_34_note" value="目的: 用户切换到某个会话时，加载该会话的历史消息记录" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="2460" width="300" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 35 -->
+                <mxCell id="m3_35" value="35: POST /app/chat/history/page&#xa;{appId, sessionId, pageNum, pageSize}" style="endArrow=classic;html=1;strokeColor=#3366CC;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="235" y="2510" as="sourcePoint"/>
+                        <mxPoint x="420" y="2510" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_35_note" value="目的: 分页请求某个会话的聊天消息记录，&#xa;支持按页码加载，避免一次性加载大量数据" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="2520" width="300" height="35" as="geometry"/>
+                </mxCell>
+
+                <!-- 36 -->
+                <mxCell id="m3_36" value="36: appService&#xa;.listChatHistoryByPage&#xa;(queryRequest, loginUser)" style="endArrow=classic;html=1;strokeColor=#27BC9F;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="420" y="2570" as="sourcePoint"/>
+                        <mxPoint x="620" y="2570" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_36_note" value="目的: Controller委派Service层执行分页查询业务逻辑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="2580" width="280" height="30" as="geometry"/>
+                </mxCell>
+
+                <!-- 37 -->
+                <mxCell id="m3_37_note" value="37: 校验应用存在+权限(同步骤7-9)&#xa;校验会话归属(同步骤10-12)&#xa;目的: 确保请求参数合法，用户有权访问该会话的历史消息,&#xa;复用之前的校验逻辑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="2620" width="380" height="70" as="geometry"/>
+                </mxCell>
+
+                <!-- 38 -->
+                <mxCell id="m3_38" value="38: chatHistoryMapper&#xa;.selectListByQuery(query)" style="endArrow=classic;html=1;strokeColor=#22D3EE;strokeWidth=2;fontSize=12;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="2720" as="sourcePoint"/>
+                        <mxPoint x="2060" y="2720" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_38_note" value="目的: Service层构建查询条件，&#xa;按sessionId+appId+userId查询聊天消息，&#xa;并按消息序号seqNo升序排列保证对话顺序" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="2730" width="340" height="45" as="geometry"/>
+                </mxCell>
+
+                <!-- 39 -->
+                <mxCell id="m3_39" value="39: SELECT * FROM chat_history&#xa;WHERE sessionId=? AND appId=?&#xa;AND userId=? AND isDelete=0&#xa;ORDER BY seqNo ASC" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=11;fontColor=#333333;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="620" y="2780" as="sourcePoint"/>
+                        <mxPoint x="2060" y="2780" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3_39_note" value="目的: 从chat_history表查询指定会话的所有聊天消息，&#xa;三重条件(sessionId+appId+userId)保证数据安全，&#xa;按seqNo升序确保消息按发送顺序排列，&#xa;然后内存分页返回指定页码的数据" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFCC;strokeColor=#999999;fontColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="2790" width="340" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- 40 -->
+                <mxCell id="m3_40" value="40: 返回List&lt;ChatHistory&gt;消息列表&#xa;包含user/ai/system/tool类型消息" style="endArrow=classic;html=1;strokeColor=#6FA3FF;strokeWidth=2;fontSize=12;fontColor=#333333;dashed=1;" parent="1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="2060" y="2860" as="sourcePoint"/>
+                        <mxPoint x="620" y="2860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
