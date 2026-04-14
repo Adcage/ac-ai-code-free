@@ -217,10 +217,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     public Long createChatSession(Long appId, User loginUser) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         App app = getAndCheckApp(appId, loginUser);
+        long sessionCount = chatSessionMapper.selectCountByQuery(QueryWrapper.create()
+                .eq("appId", appId)
+                .eq("userId", loginUser.getId()));
+        String sessionTitle = "新会话 " + (sessionCount + 1);
         ChatSession chatSession = ChatSession.builder()
                 .appId(appId)
                 .userId(loginUser.getId())
-                .title(StrUtil.blankToDefault(app.getAppName(), "新会话"))
+                .title(sessionTitle)
                 .messageCount(0)
                 .modelName(app.getCodeGenType())
                 .lastMessageTime(LocalDateTime.now())

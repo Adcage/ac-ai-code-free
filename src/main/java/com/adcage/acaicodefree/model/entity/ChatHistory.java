@@ -66,10 +66,10 @@ public class ChatHistory implements Serializable {
 
     private String extra;
 
-    @Column("createTime")
+    @Column(value = "createTime", onInsertValue = "now()")
     private LocalDateTime createTime;
 
-    @Column("updateTime")
+    @Column(value = "updateTime", onInsertValue = "now()", onUpdateValue = "now()")
     private LocalDateTime updateTime;
 
     @Column(value = "isDelete", isLogicDelete = true)

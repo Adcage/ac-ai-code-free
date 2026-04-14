@@ -47,10 +47,10 @@ public class ChatSession implements Serializable {
     @Column("lastMessageTime")
     private LocalDateTime lastMessageTime;
 
-    @Column("createTime")
+    @Column(value = "createTime", onInsertValue = "now()")
     private LocalDateTime createTime;
 
-    @Column("updateTime")
+    @Column(value = "updateTime", onInsertValue = "now()", onUpdateValue = "now()")
     private LocalDateTime updateTime;
 
     @Column(value = "isDelete", isLogicDelete = true)
