@@ -46,6 +46,22 @@ class CodeParserOldTest {
     }
 
     @Test
+    void testParseSingleCode_WithDoctypeFallback() {
+        String content = "这是说明文字\n<!DOCTYPE html>\n<html><body>fallback</body></html>";
+        SingleCodeResult result = CodeParserOld.parseSingleCode(content);
+        assertNotNull(result);
+        assertTrue(result.getHtmlCode().startsWith("<!DOCTYPE html>"));
+    }
+
+    @Test
+    void testParseSingleCode_WithUnclosedFenceFallback() {
+        String content = "```html\n<html><body>unclosed fence";
+        SingleCodeResult result = CodeParserOld.parseSingleCode(content);
+        assertNotNull(result);
+        assertTrue(result.getHtmlCode().contains("<html>"));
+    }
+
+    @Test
     void testExtractMutiFileCode_WithAllCodeTypes() {
         String content = "```html\n<div>Test</div>\n```\n```css\nbody { color: red; }\n```\n```js\nconsole.log('test');\n```";
         MultiFileCodeResult result = CodeParserOld.extractMutiFileCode(content);

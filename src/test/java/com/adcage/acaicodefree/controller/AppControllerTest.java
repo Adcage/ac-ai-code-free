@@ -22,6 +22,7 @@ import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -34,13 +35,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
 class AppControllerTest {
 
     private MockMvc mockMvc;
@@ -71,6 +73,7 @@ class AppControllerTest {
     void addApp_Success() throws Exception {
         AppAddRequest appAddRequest = new AppAddRequest();
         appAddRequest.setInitPrompt("Test Prompt for App Creation");
+        appAddRequest.setCodeGenType("multi-file");
 
         when(userService.getLoginUser(any())).thenReturn(loginUser);
         when(appService.save(any(App.class))).thenReturn(true);
@@ -84,9 +87,47 @@ class AppControllerTest {
     }
 
     @Test
+    void addAppShouldAcceptVueProjectCodeGenType() throws Exception {
+        AppAddRequest appAddRequest = new AppAddRequest();
+        appAddRequest.setInitPrompt("Vue Project Prompt");
+        appAddRequest.setCodeGenType("vue_project");
+
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(appService.save(any(App.class))).thenReturn(true);
+
+        mockMvc.perform(post("/app/add")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSONUtil.toJsonStr(appAddRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        ArgumentCaptor<App> appCaptor = ArgumentCaptor.forClass(App.class);
+        verify(appService).save(appCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("vue_project", appCaptor.getValue().getCodeGenType());
+    }
+
+    @Test
+    void addAppShouldRejectUnknownCodeGenType() throws Exception {
+        AppAddRequest appAddRequest = new AppAddRequest();
+        appAddRequest.setInitPrompt("Invalid Code Gen Type");
+        appAddRequest.setCodeGenType("abc");
+
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+
+        mockMvc.perform(post("/app/add")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSONUtil.toJsonStr(appAddRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAMS_ERROR.getCode()));
+
+        verify(appService, never()).save(any(App.class));
+    }
+
+    @Test
     void addApp_Fail_EmptyPrompt() throws Exception {
         AppAddRequest appAddRequest = new AppAddRequest();
         appAddRequest.setInitPrompt("");
+        appAddRequest.setCodeGenType("multi-file");
 
         mockMvc.perform(post("/app/add")
                         .contentType(MediaType.APPLICATION_JSON)

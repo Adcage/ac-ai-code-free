@@ -1,6 +1,7 @@
 package com.adcage.acaicodefree.controller;
 
 import cn.hutool.json.JSONUtil;
+import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.model.entity.App;
@@ -28,6 +29,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -269,5 +273,85 @@ class AppChatE2ETest {
         Assertions.assertEquals(1, historyList.get(0).getSeqNo());
         Assertions.assertEquals(2, historyList.get(1).getSeqNo());
         Assertions.assertEquals("success", historyList.get(1).getStatus());
+    }
+
+    @Test
+    void chatFullChain_vueProject_shouldUseJsonSseAndPersistReadableHistory() throws Exception {
+        testApp.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
+        appMapper.update(testApp);
+
+        String toolArguments = "{\"relativeFilePath\":\"src/main.js\"}";
+        when(aiCodeGeneratorFacade.generateAndSaveCodeStream(anyString(), any(), anyLong()))
+                .thenReturn(Flux.just(
+                        "{\"type\":\"ai_response\",\"data\":\"开始生成 Vue 工程\"}",
+                        "{\"type\":\"tool_request\",\"id\":\"t1\",\"name\":\"FileWriteTool\",\"arguments\":" + JSONUtil.quote(toolArguments) + "}",
+                        "{\"type\":\"tool_executed\",\"id\":\"t1\",\"name\":\"FileWriteTool\",\"arguments\":" + JSONUtil.quote(toolArguments) + ",\"result\":\"文件写入成功：src/main.js\"}"
+                ));
+
+        MvcResult createSessionResult = mockMvc.perform(post("/app/chat/session/create")
+                        .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":" + testApp.getId() + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn();
+        Long sessionId = JSONUtil.parseObj(createSessionResult.getResponse().getContentAsString()).getLong("data");
+        Assertions.assertNotNull(sessionId);
+
+        MvcResult streamResult = mockMvc.perform(get("/app/chat/gen/code/stream")
+                        .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser)
+                        .param("appId", String.valueOf(testApp.getId()))
+                        .param("sessionId", String.valueOf(sessionId))
+                        .param("message", "请生成一个 Vue 首页"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(streamResult))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    String sse = result.getResponse().getContentAsString();
+                    Assertions.assertTrue(sse.contains("event:meta"));
+                    Assertions.assertTrue(sse.contains("event:done"));
+                    Assertions.assertTrue(sse.contains("\\\"type\\\":\\\"ai_response\\\""));
+                    Assertions.assertTrue(sse.contains("\\\"type\\\":\\\"tool_request\\\""));
+                    Assertions.assertTrue(sse.contains("\\\"type\\\":\\\"tool_executed\\\""));
+                });
+
+        mockMvc.perform(post("/app/chat/history/page")
+                        .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":" + testApp.getId() + ",\"sessionId\":" + sessionId + ",\"pageNum\":1,\"pageSize\":10}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.totalRow").value(2))
+                .andExpect(jsonPath("$.data.records[0].messageType").value("user"))
+                .andExpect(jsonPath("$.data.records[1].messageType").value("ai"));
+
+        List<ChatHistory> historyList = chatHistoryMapper.selectListByQuery(QueryWrapper.create()
+                .eq("sessionId", sessionId)
+                .orderBy("seqNo", true));
+        Assertions.assertEquals(2, historyList.size());
+        ChatHistory aiHistory = historyList.get(1);
+        Assertions.assertEquals("failed", aiHistory.getStatus(), "未生成真实 dist 时应标记为构建失败");
+        Assertions.assertTrue(aiHistory.getMessage().contains("开始生成 Vue 工程"));
+        Assertions.assertTrue(aiHistory.getMessage().contains("准备写入文件 src/main.js"));
+        Assertions.assertTrue(aiHistory.getMessage().contains("已写入文件 src/main.js"));
+        Assertions.assertFalse(aiHistory.getMessage().contains("{\"type\":\"tool_request\""), "落库应为可读文本，不应保存原始 JSON");
+    }
+
+    @Test
+    void deploy_shouldReturnStaticUrlWithPortAndContextPath() throws Exception {
+        Path outputDir = Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR)
+                .resolve(CodeGenTypeEnum.SINGLE_FILE.getValue() + "_" + testApp.getId());
+        Files.createDirectories(outputDir);
+        Files.writeString(outputDir.resolve("index.html"), "<html><body>ok</body></html>", StandardCharsets.UTF_8);
+
+        mockMvc.perform(post("/app/deploy")
+                        .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":" + testApp.getId() + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.startsWith("http://localhost:8700/api/static/")));
     }
 }

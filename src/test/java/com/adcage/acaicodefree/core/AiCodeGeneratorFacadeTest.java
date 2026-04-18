@@ -1,56 +1,113 @@
 package com.adcage.acaicodefree.core;
 
-import cn.hutool.core.util.IdUtil;
+import com.adcage.acaicodefree.ai.AiCodeGenServiceFactory;
+import com.adcage.acaicodefree.ai.AiCodeGeneratorService;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
-import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
+import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.tool.ToolExecution;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import reactor.core.publisher.Flux;
 
-import java.io.File;
 import java.util.List;
+import java.util.function.Consumer;
 
-@Slf4j
-@SpringBootTest
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 class AiCodeGeneratorFacadeTest {
-    @Resource
+
+    @Mock
+    private AiCodeGenServiceFactory aiCodeGenServiceFactory;
+
+    @Mock
+    private AiCodeGeneratorService aiCodeGeneratorService;
+
+    @InjectMocks
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
 
-    @Test
-    void generateAndSaveCode() {
-        long snowflakeNextId = IdUtil.getSnowflakeNextId();
-        log.info("snowflakeNextId: {}", snowflakeNextId);
-        File file = aiCodeGeneratorFacade.generateAndSaveCode("生成一个HTML网页,不超过100行", CodeGenTypeEnum.SINGLE_FILE, snowflakeNextId);
-        Assertions.assertNotNull(file);
+    AiCodeGeneratorFacadeTest() {
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    public void generateAndSaveCodeStream() {
-        long snowflakeNextId = IdUtil.getSnowflakeNextId();
-        log.info("snowflakeNextId: {}", snowflakeNextId);
-        Flux<String> stringFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成一个HTML登录网页", CodeGenTypeEnum.SINGLE_FILE, snowflakeNextId);
-        List<String> result = stringFlux.collectList().block();
+    void shouldRouteSingleFileStreamToLegacyService() {
+        when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.SINGLE_FILE))).thenReturn(aiCodeGeneratorService);
+        when(aiCodeGeneratorService.generateSingleFileCodeStream("生成页面")).thenReturn(Flux.just("<html>", "ok</html>"));
+
+        List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成页面", CodeGenTypeEnum.SINGLE_FILE, 1L)
+                .collectList()
+                .block();
 
         Assertions.assertNotNull(result);
-
-        String compileContent = String.join("", result);
-        System.out.println(compileContent);
-
+        verify(aiCodeGeneratorService).generateSingleFileCodeStream("生成页面");
     }
 
     @Test
-    public void generateAndSaveMultiCodeStream() {
-        long snowflakeNextId = IdUtil.getSnowflakeNextId();
-        log.info("snowflakeNextId: {}", snowflakeNextId);
-        Flux<String> stringFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成一个HTML登录网页", CodeGenTypeEnum.MULTI_FILE, snowflakeNextId);
-        List<String> result = stringFlux.collectList().block();
+    void shouldRouteVueProjectStreamToJsonMessageFlow() {
+        TokenStream tokenStream = new EmptyTokenStream();
+        when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.VUE_PROJECT))).thenReturn(aiCodeGeneratorService);
+        when(aiCodeGeneratorService.generateVueProjectCodeStream(1L, "生成工程")).thenReturn(tokenStream);
+
+        List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成工程", CodeGenTypeEnum.VUE_PROJECT, 1L)
+                .collectList()
+                .block();
 
         Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.stream().anyMatch(item -> item.contains("ai_response")));
+        verify(aiCodeGeneratorService).generateVueProjectCodeStream(1L, "生成工程");
+    }
 
-        String compileContent = String.join("", result);
-        System.out.println(compileContent);
+    private static class EmptyTokenStream implements TokenStream {
 
+        private Consumer<String> onNext;
+        private Consumer<dev.langchain4j.model.output.Response<dev.langchain4j.data.message.AiMessage>> onComplete;
+
+        @Override
+        public TokenStream onNext(Consumer<String> consumer) {
+            this.onNext = consumer;
+            return this;
+        }
+
+        @Override
+        public TokenStream onRetrieved(Consumer<List<dev.langchain4j.rag.content.Content>> consumer) {
+            return this;
+        }
+
+        @Override
+        public TokenStream onToolExecuted(Consumer<ToolExecution> consumer) {
+            return this;
+        }
+
+        @Override
+        public TokenStream onComplete(Consumer<dev.langchain4j.model.output.Response<dev.langchain4j.data.message.AiMessage>> consumer) {
+            this.onComplete = consumer;
+            return this;
+        }
+
+        @Override
+        public TokenStream onError(Consumer<Throwable> consumer) {
+            return this;
+        }
+
+        @Override
+        public TokenStream ignoreErrors() {
+            return this;
+        }
+
+        @Override
+        public void start() {
+            if (onNext != null) {
+                onNext.accept("hello");
+            }
+            if (onComplete != null) {
+                onComplete.accept(null);
+            }
+        }
     }
 }

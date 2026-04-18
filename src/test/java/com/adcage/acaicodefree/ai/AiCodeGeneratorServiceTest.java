@@ -3,11 +3,13 @@ package com.adcage.acaicodefree.ai;
 import com.adcage.acaicodefree.ai.model.SingleCodeResult;
 import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
 import jakarta.annotation.Resource;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
 
 @SpringBootTest
+@Disabled("依赖真实模型与网络环境，默认回归中跳过")
 class AiCodeGeneratorServiceTest {
 
     @Resource
