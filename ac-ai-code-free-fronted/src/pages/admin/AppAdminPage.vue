@@ -151,9 +151,10 @@ const loadData = async () => {
   loading.value = true
   try {
     const res = await listAppVoByPageByAdmin(searchParams)
-    if (res.data?.code === 0) {
-      dataList.value = res.data.data.records || []
-      pagination.total = Number(res.data.data.totalRow) || 0
+    const pageData = res.data?.data
+    if (res.data?.code === 0 && pageData) {
+      dataList.value = pageData.records || []
+      pagination.total = Number(pageData.totalRow) || 0
     } else {
       message.error('加载失败，' + res.data?.message)
     }
@@ -197,8 +198,12 @@ const doEdit = (record: API.AppVO) => {
 }
 
 const doSetFeatured = async (record: API.AppVO) => {
+  if (!record.id) {
+    message.error('应用 ID 不存在，无法设置精选')
+    return
+  }
   const res = await updateApp({
-    id: record.id,
+    id: String(record.id),
     priority: 99,
   })
   if (res.data?.code === 0) {

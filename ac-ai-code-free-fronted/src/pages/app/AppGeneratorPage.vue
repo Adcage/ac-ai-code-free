@@ -48,12 +48,42 @@
           >
             <a-avatar :src="msg.role === 'user' ? loginUserStore.loginUser.userAvatar : '/ai-avatar.png'" />
             <div class="message-body">
-              <div class="message-content" v-html="renderMarkdown(msg.content)"></div>
+              <div class="message-content">
+                <template v-if="msg.role === 'ai'">
+                  <template v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]" :key="`parsed-${index}`">
+                    <div v-if="parsed.aiText" class="message-text" v-html="renderMarkdown(parsed.aiText)"></div>
+                    <details v-if="parsed.toolEvents.length" class="tool-call-card">
+                      <summary class="tool-call-summary">
+                        <span class="tool-call-title">工具调用（{{ parsed.toolEvents.length }}）</span>
+                        <span class="tool-call-hint">点击查看执行详情</span>
+                      </summary>
+                      <div class="tool-call-list">
+                        <div
+                          v-for="(eventItem, toolIndex) in parsed.toolEvents"
+                          :key="`tool-${index}-${toolIndex}`"
+                          class="tool-call-item"
+                        >
+                          <span :class="['tool-call-tag', eventItem.type]">
+                            {{ eventItem.type === 'request' ? '调用中' : '已完成' }}
+                          </span>
+                          <span class="tool-call-text">{{ eventItem.text }}</span>
+                        </div>
+                      </div>
+                    </details>
+                  </template>
+                </template>
+                <div v-else class="message-text" v-html="renderMarkdown(msg.content)"></div>
+              </div>
             </div>
           </div>
           <div v-if="generating" class="generating-indicator">
             <loading-outlined /> AI 正在思考并生成代码...
           </div>
+        </div>
+
+        <div v-if="streamWarning" class="stream-warning">
+          <a-alert type="warning" show-icon :message="streamWarning" />
+          <a-button type="link" size="small" @click="handleReloadCurrentSession">重新加载当前会话</a-button>
         </div>
 
         <div class="input-area">
@@ -96,6 +126,13 @@
             <template #icon><reload-outlined /></template>
           </a-button>
         </div>
+        <a-alert
+          v-if="previewWarning"
+          class="preview-warning"
+          type="warning"
+          show-icon
+          :message="previewWarning"
+        />
         <div :class="['preview-body', previewType]">
           <iframe 
             v-if="iframeUrl" 
@@ -103,6 +140,7 @@
             frameborder="0" 
             class="preview-iframe"
             ref="iframeRef"
+            @load="handleIframeLoad"
           ></iframe>
           <div v-else class="preview-empty">
             <div class="empty-content">
@@ -138,7 +176,7 @@ const loginUserStore = useLoginUserStore()
 const appId = String(route.params.id ?? '')
 
 const app = ref<API.AppVO>()
-const messages = ref<{ role: 'user' | 'ai', content: string }[]>([])
+const messages = ref<{ role: 'user' | 'ai', content: string, toolEvents?: ToolEvent[] }[]>([])
 const sessions = ref<API.ChatSessionVO[]>([])
 const currentSessionId = ref<string>()
 const inputText = ref('')
@@ -148,12 +186,20 @@ const sessionLoading = ref(false)
 const sessionInitializing = ref(false)
 const previewType = ref('desktop')
 const iframeUrl = ref('')
+const iframeRef = ref<HTMLIFrameElement>()
 const messageListRef = ref<HTMLElement>()
+const streamWarning = ref('')
+const previewWarning = ref('')
 const entryPathStorageKey = `app_generate_entry_${appId}`
 const chatPanelWidth = ref(450)
 const resizing = ref(false)
 const resizeStartX = ref(0)
 const resizeStartWidth = ref(450)
+
+type ToolEvent = {
+  type: 'request' | 'executed'
+  text: string
+}
 
 const normalizeId = (id?: string | number | null) => {
   if (id === undefined || id === null) {
@@ -216,9 +262,22 @@ const loadRemoteHistory = async (sessionId: string) => {
     messages.value = historyList.map((item) => ({
       role: item.messageType === 'user' ? 'user' : 'ai',
       content: item.message || '',
+      toolEvents: normalizeToolEvents(item.toolEvents || []),
     }))
     scrollToBottom()
   }
+}
+
+const normalizeToolEvents = (events?: API.ToolEventVO[]) => {
+  if (!events || events.length === 0) {
+    return []
+  }
+  return events
+    .filter((item) => (item.type === 'request' || item.type === 'executed') && !!item.text)
+    .map((item) => ({
+      type: item.type as 'request' | 'executed',
+      text: item.text as string,
+    }))
 }
 
 /**
@@ -243,7 +302,7 @@ const loadApp = async () => {
         currentSessionId.value = newSessionId
       }
       if (app.value?.initPrompt && currentSessionId.value) {
-        messages.value.push({ role: 'user', content: app.value.initPrompt })
+        messages.value.push({ role: 'user', content: app.value.initPrompt, toolEvents: [] })
         startSSE(app.value.initPrompt, currentSessionId.value)
       }
     }
@@ -257,8 +316,11 @@ const loadApp = async () => {
  */
 const startSSE = (userMsg: string, sessionId: string) => {
   generating.value = true
+  streamWarning.value = ''
+  let streamCompleted = false
   const aiMsgIndex = messages.value.length
   messages.value.push({ role: 'ai', content: '' })
+  const isVueProjectMode = app.value?.codeGenType === 'vue_project'
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL
   const eventSource = new EventSource(
@@ -279,6 +341,9 @@ const startSSE = (userMsg: string, sessionId: string) => {
 
   const stopGenerating = () => {
     eventSource.close()
+    if (streamCompleted) {
+      streamWarning.value = ''
+    }
     if (generating.value) {
       generating.value = false
       loadSessions()
@@ -286,9 +351,15 @@ const startSSE = (userMsg: string, sessionId: string) => {
     }
   }
 
+  eventSource.addEventListener('done', () => {
+    streamCompleted = true
+    stopGenerating()
+  })
+
   eventSource.onmessage = (event) => {
     const rawData = event.data
     if (rawData === '[DONE]') {
+      streamCompleted = true
       stopGenerating()
       return
     }
@@ -296,13 +367,20 @@ const startSSE = (userMsg: string, sessionId: string) => {
     try {
       const data = JSON.parse(rawData)
       if (data.d === '[DONE]') {
+        streamCompleted = true
         stopGenerating()
         return
       }
-      messages.value[aiMsgIndex].content += (data.d || '')
+      const chunk = data.d || ''
+      if (!isVueProjectMode) {
+        messages.value[aiMsgIndex].content += chunk
+      } else {
+        appendVueProjectChunk(aiMsgIndex, chunk)
+      }
       scrollToBottom()
     } catch {
       if (rawData.includes('[DONE]')) {
+        streamCompleted = true
         stopGenerating()
       }
     }
@@ -310,7 +388,57 @@ const startSSE = (userMsg: string, sessionId: string) => {
 
   eventSource.onerror = (err) => {
     console.error('SSE Error', err)
+    if (!streamCompleted) {
+      streamWarning.value = '连接中断，本次 AI 输出可能未完整保存。可重新加载当前会话查看已落库内容。'
+      message.warning('连接中断，已停止本次生成')
+    }
     stopGenerating()
+  }
+}
+
+const handleReloadCurrentSession = async () => {
+  if (!currentSessionId.value) {
+    return
+  }
+  await loadRemoteHistory(currentSessionId.value)
+  streamWarning.value = ''
+}
+
+const appendVueProjectChunk = (aiMsgIndex: number, chunk: string) => {
+  try {
+    const messageObj = JSON.parse(chunk)
+    const type = messageObj.type
+    if (type === 'ai_response') {
+      messages.value[aiMsgIndex].content += messageObj.data || ''
+      return
+    }
+    if (type === 'tool_request') {
+      const path = parsePathFromArguments(messageObj.arguments)
+      const text = path ? `\n[工具调用] 准备写入文件 ${path}` : '\n[工具调用] 正在执行文件写入'
+      messages.value[aiMsgIndex].content += text
+      return
+    }
+    if (type === 'tool_executed') {
+      const path = parsePathFromArguments(messageObj.arguments)
+      const text = path ? `\n[工具完成] 已写入文件 ${path}` : `\n[工具完成] ${messageObj.result || '执行成功'}`
+      messages.value[aiMsgIndex].content += text
+      return
+    }
+    messages.value[aiMsgIndex].content += chunk
+  } catch {
+    messages.value[aiMsgIndex].content += chunk
+  }
+}
+
+const parsePathFromArguments = (argumentsText?: string) => {
+  if (!argumentsText) {
+    return ''
+  }
+  try {
+    const argsObj = JSON.parse(argumentsText)
+    return argsObj.relativeFilePath || ''
+  } catch {
+    return ''
   }
 }
 
@@ -341,7 +469,7 @@ const doChat = async () => {
     return
   }
   const msg = inputText.value
-  messages.value.push({ role: 'user', content: msg })
+  messages.value.push({ role: 'user', content: msg, toolEvents: [] })
   inputText.value = ''
   startSSE(msg, sessionId)
 }
@@ -357,9 +485,30 @@ const handleEnter = (e: KeyboardEvent) => {
  * 更新预览
  */
 const updatePreview = () => {
-  const codeGenType = app.value?.codeGenType || 'REACT'
+  const codeGenType = app.value?.codeGenType || 'single_file'
   const deployUrlPrefix = import.meta.env.VITE_APP_DEPLOY_URL_PREFIX
+  previewWarning.value = ''
+  if (codeGenType === 'vue_project') {
+    iframeUrl.value = `${deployUrlPrefix}/vue_project_${appId}/dist/index.html?t=${Date.now()}`
+    return
+  }
   iframeUrl.value = `${deployUrlPrefix}/${codeGenType}_${appId}/index.html?t=${Date.now()}`
+}
+
+const handleIframeLoad = () => {
+  if (!iframeRef.value) {
+    return
+  }
+  try {
+    const text = iframeRef.value.contentDocument?.body?.innerText || ''
+    if (text.includes('Whitelabel Error Page') || text.includes('No static resource')) {
+      previewWarning.value = '预览资源不存在，通常是构建失败导致 dist 未生成。请先查看最新 AI 消息中的构建结果。'
+      return
+    }
+    previewWarning.value = ''
+  } catch {
+    previewWarning.value = ''
+  }
 }
 
 const refreshIframe = () => {
@@ -426,6 +575,71 @@ const renderMarkdown = (text: string) => {
     .replace(/\n/g, '<br/>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
+}
+
+const parseAiMessage = (content: string, presetToolEvents: ToolEvent[] = []): { aiText: string; toolEvents: ToolEvent[] } => {
+  if (presetToolEvents.length > 0) {
+    return {
+      aiText: stripToolEventLines(content).trim(),
+      toolEvents: presetToolEvents,
+    }
+  }
+  const lines = content.split('\n')
+  const aiTextLines: string[] = []
+  const toolEvents: ToolEvent[] = []
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim()
+    if (trimmedLine.startsWith('[工具调用]')) {
+      toolEvents.push({
+        type: 'request',
+        text: trimmedLine.replace('[工具调用]', '').trim() || '执行工具调用',
+      })
+      return
+    }
+    if (trimmedLine.startsWith('[工具完成]')) {
+      toolEvents.push({
+        type: 'executed',
+        text: trimmedLine.replace('[工具完成]', '').trim() || '工具执行成功',
+      })
+      return
+    }
+    if (trimmedLine.startsWith('准备写入文件')) {
+      toolEvents.push({
+        type: 'request',
+        text: trimmedLine,
+      })
+      return
+    }
+    if (trimmedLine.startsWith('已写入文件')) {
+      toolEvents.push({
+        type: 'executed',
+        text: trimmedLine,
+      })
+      return
+    }
+    aiTextLines.push(line)
+  })
+
+  return {
+    aiText: aiTextLines.join('\n').trim(),
+    toolEvents,
+  }
+}
+
+const stripToolEventLines = (content: string) => {
+  return content
+    .split('\n')
+    .filter((line) => {
+      const trimmedLine = line.trim()
+      return !(
+        trimmedLine.startsWith('[工具调用]') ||
+        trimmedLine.startsWith('[工具完成]') ||
+        trimmedLine.startsWith('准备写入文件') ||
+        trimmedLine.startsWith('已写入文件')
+      )
+    })
+    .join('\n')
 }
 
 const scrollToBottom = () => {
@@ -630,6 +844,10 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
+.message-text {
+  white-space: normal;
+}
+
 .user-msg .message-content {
   background: #f5f5f5;
   color: #1a1a1a;
@@ -641,11 +859,97 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
 
+.tool-call-card {
+  margin-top: 10px;
+  border: 1px solid #e7e9ee;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.tool-call-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-call-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-call-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.tool-call-hint {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tool-call-list {
+  border-top: 1px solid #e7e9ee;
+  background: #fff;
+}
+
+.tool-call-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.tool-call-item:last-child {
+  border-bottom: none;
+}
+
+.tool-call-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 7px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+}
+
+.tool-call-tag.request {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.tool-call-tag.executed {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+
+.tool-call-text {
+  font-size: 13px;
+  color: #374151;
+  word-break: break-all;
+}
+
 .generating-indicator {
   font-size: 12px;
   color: #8c8c8c;
   margin-top: -12px;
   margin-left: 44px;
+}
+
+.stream-warning {
+  padding: 0 20px 12px;
+}
+
+.stream-warning :deep(.ant-alert) {
+  border-radius: 10px;
 }
 
 .input-area {
@@ -694,6 +998,11 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 16px;
   flex-shrink: 0;
+}
+
+.preview-warning {
+  margin-bottom: 12px;
+  border-radius: 10px;
 }
 
 .preview-body {

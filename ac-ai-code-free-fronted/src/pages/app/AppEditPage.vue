@@ -54,8 +54,8 @@ const form = ref<any>({
 
 const loadData = async () => {
   const res = await getAppVoById({ id: appId as any })
-  if (res.data?.code === 0) {
-    const data = res.data.data
+  const data = res.data?.data
+  if (res.data?.code === 0 && data) {
     form.value = {
       appName: data.appName,
       cover: data.cover,

@@ -55,13 +55,14 @@ const loadData = async (append = false) => {
   loading.value = true
   try {
     const res = await listMyAppVoByPage(searchParams.value)
-    if (res.data?.code === 0) {
+    const pageData = res.data?.data
+    if (res.data?.code === 0 && pageData) {
       if (append) {
-        dataList.value.push(...(res.data.data.records || []))
+        dataList.value.push(...(pageData.records || []))
       } else {
-        dataList.value = res.data.data.records || []
+        dataList.value = pageData.records || []
       }
-      total.value = res.data.data.totalRow || 0
+      total.value = pageData.totalRow || 0
     }
   } finally {
     loading.value = false
@@ -69,7 +70,7 @@ const loadData = async (append = false) => {
 }
 
 const loadMore = () => {
-  searchParams.value.pageNum++
+  searchParams.value.pageNum = (searchParams.value.pageNum ?? 1) + 1
   loadData(true)
 }
 

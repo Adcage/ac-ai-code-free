@@ -17,6 +17,7 @@ declare namespace API {
 
   type AppAddRequest = {
     initPrompt?: string
+    codeGenType?: string
   }
 
   type AppAdminUpdateRequest = {
@@ -180,7 +181,13 @@ declare namespace API {
     latencyMs?: number
     requestId?: string
     extra?: string
+    toolEvents?: ToolEventVO[]
     createTime?: string
+  }
+
+  type ToolEventVO = {
+    type?: string
+    text?: string
   }
 
   type ChatSessionCreateRequest = {

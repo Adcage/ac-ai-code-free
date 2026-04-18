@@ -116,13 +116,14 @@ const loadGoodApps = async (append = false) => {
   goodLoading.value = true
   try {
     const res = await listGoodAppVoByPage(goodSearchParams.value)
-    if (res.data?.code === 0) {
+    const pageData = res.data?.data
+    if (res.data?.code === 0 && pageData) {
       if (append) {
-        goodAppList.value.push(...(res.data.data.records || []))
+        goodAppList.value.push(...(pageData.records || []))
       } else {
-        goodAppList.value = res.data.data.records || []
+        goodAppList.value = pageData.records || []
       }
-      goodTotal.value = res.data.data.totalRow || 0
+      goodTotal.value = pageData.totalRow || 0
     }
   } finally {
     goodLoading.value = false
@@ -130,7 +131,7 @@ const loadGoodApps = async (append = false) => {
 }
 
 const loadMoreGood = () => {
-  goodSearchParams.value.pageNum++
+  goodSearchParams.value.pageNum = (goodSearchParams.value.pageNum ?? 1) + 1
   loadGoodApps(true)
 }
 
@@ -144,7 +145,10 @@ const doGenerate = async () => {
   }
   loading.value = true
   try {
-    const res = await addApp({ initPrompt: searchText.value })
+    const res = await addApp({
+      initPrompt: searchText.value,
+      codeGenType: 'vue_project',
+    })
     if (res.data?.code === 0) {
       router.push(`/app/generate/${res.data.data}`)
     } else {
