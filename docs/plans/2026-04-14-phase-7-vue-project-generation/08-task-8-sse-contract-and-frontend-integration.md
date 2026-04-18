@@ -144,3 +144,10 @@ git commit -m "feat: support vue project stream messages in frontend"
 
 - 如果前端直接无条件二次 JSON 解析，会破坏老模式。
 - 如果预览地址不分模式处理，Vite 工程资源会加载失败。
+
+## 执行记录（2026-04-15）
+
+- 状态：已完成
+- 实际实现：`HomePage.vue` 创建应用时显式传 `codeGenType: 'vue_project'`；`AppGeneratorPage.vue` 增加 SSE 外层 `{"d":"..."}` 与内层 JSON 双层解析，并对 `ai_response / tool_request / tool_executed` 分类型展示；`updatePreview()` 按模式分流到 `dist/index.html`；同步更新 `typings.d.ts` 与 `docs/learn/AI-CodeGen-Frontend-Implementation.md`。
+- 关键差异：修改前前端把所有 `data.d` 当纯文本处理且预览路径固定，`vue_project` 工具进度与构建产物都无法正确展示；修改后兼容老模式的同时，`vue_project` 链路具备结构化进度可视化和正确预览路径。
+- 验证结果：`npm run type-check` 与 `npm run build` 已通过。

@@ -160,3 +160,10 @@ mvn -Dtest=AiCodeGeneratorFacadeTest test
 - 最大风险是 LangChain4j 升级后现有 API 接口有小幅变动。
 - 次要风险是 Redis 自动配置引入后影响本地启动。
 - 如果依赖升级引入连锁问题，优先回退到同一主版本线中更保守的小版本，而不是继续混搭版本。
+
+## 完成记录
+
+- 日期：2026-04-14
+- 状态：已完成
+- 结果：`pom.xml` 已具备 LangChain4j 同版本线、`caffeine` 与 Redis 依赖；`application.yml` / `application-local.yml` 移除了与新版本不兼容的 `response-format: json` 与 `strict-json-schema`，并保留 `app.ai.vue-project.*` 配置组。
+- 验证：`mvn clean "-Dtest=AcAICodeFreeApplicationTests" test` 通过。

@@ -154,3 +154,10 @@ git commit -m "feat: isolate ai services by app and mode"
 
 - 如果服务缓存和记忆加载耦合过深，后续会很难定位“是缓存问题还是上下文问题”。
 - 如果把数据库查询逻辑继续塞在业务服务类里，后续第六阶段之后的逻辑会越来越难维护。
+
+## 执行记录（2026-04-15）
+
+- 状态：已完成
+- 实际实现：`AiCodeGenServiceFactory` 从“统一单例 Service”调整为“按 `appId + codeGenType` 缓存 Service”；`vue_project` 分支挂载 `reasoningStreamingChatModel`、`FileWriteTool` 和 `ChatMemory`；新增 `ChatMemoryLoader` 从 `chat_history` 回放用户与 AI 历史消息构建窗口记忆。
+- 关键差异：修改前不同应用和模式共享同一服务实例，容易导致上下文污染；修改后缓存键隔离明确，`vue_project` 多轮对话具备可延续上下文能力，老模式保留轻量链路。
+- 验证结果：`mvn -Dtest=AiCodeGenServiceFactoryTest test` 通过；已纳入全量 `mvn test` 回归通过。

@@ -143,3 +143,10 @@ git commit -m "feat: build and deploy generated vue projects"
 
 - 如果把构建动作塞到 AI 工具里，平台控制权会丢失。
 - 如果继续部署源码目录，用户看到的“已部署”其实是无效结果。
+
+## 执行记录（2026-04-15）
+
+- 状态：已完成
+- 实际实现：新增 `VueProjectBuildService`，在 `vue_project_{appId}` 目录固定执行 `npm install` 与 `npm run build`（Windows 用 `npm.cmd`）；`AppServiceImpl` 在生成结束后自动触发构建并记录可读错误摘要；`deployApp` 在 `vue_project` 模式优先复制 `dist`，缺失时自动补构建。
+- 关键差异：修改前平台直接面向源码目录预览/部署，生成结果不可直接上线；修改后平台统一面向 `dist` 产物，提高预览与部署一致性。
+- 验证结果：`mvn -Dtest=VueProjectBuildServiceTest test` 通过；已纳入全量 `mvn test` 回归通过。

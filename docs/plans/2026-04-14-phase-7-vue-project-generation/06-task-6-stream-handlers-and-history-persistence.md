@@ -130,3 +130,10 @@ git commit -m "refactor: separate stream handling by generation mode"
 
 - 如果工具请求事件和执行完成事件处理混乱，前端会出现重复提示或错误提示。
 - 如果服务层和处理器职责没切清，后续排查落库问题会非常困难。
+
+## 执行记录（2026-04-15）
+
+- 状态：已完成
+- 实际实现：新增 `SimpleTextStreamHandler`、`JsonMessageStreamHandler`、`StreamHandlerExecutor`，并在 `AppServiceImpl#chatToGenCode` 中按 `codeGenType` 路由流处理；`vue_project` 模式将结构化消息转为可读文本再落库，工具请求按 id 去重展示。
+- 关键差异：修改前 `AppServiceImpl` 直接拼接原始流并落库，`vue_project` 会污染聊天记录；修改后老模式行为保持，`vue_project` 聊天历史不再保存 JSON 原文。
+- 验证结果：`mvn -Dtest=JsonMessageStreamHandlerTest,StreamHandlerExecutorTest test` 通过；已纳入全量 `mvn test` 回归通过。

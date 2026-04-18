@@ -153,3 +153,10 @@ git commit -m "feat: add vue project file writing tool"
 
 - 如果路径归一化没做好，后面所有安全假设都会失效。
 - 如果工具返回绝对路径，前端和模型都可能看到服务器真实目录结构。
+
+## 完成记录
+
+- 日期：2026-04-14
+- 状态：已完成
+- 结果：已新增 `ReasoningStreamingChatModelConfig`、`FileWriteTool`、`FileWriteToolTest`，并在 `AppConstant` 中固化 `vue_project_` 目录规则、`dist` 目录名和路径辅助方法；`AiCodeGenServiceFactory` 已显式绑定旧流式模型，避免双 Bean 注入冲突。
+- 验证：`mvn clean "-Dtest=FileWriteToolTest" test` 通过，且 `mvn clean "-Dtest=AcAICodeFreeApplicationTests,AppControllerTest,FileWriteToolTest" test` 通过。

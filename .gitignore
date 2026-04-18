@@ -42,4 +42,5 @@ build/
 
 ### Local ###
 docs/Projection/image
+.worktrees/
 docs/diagrams/exports/

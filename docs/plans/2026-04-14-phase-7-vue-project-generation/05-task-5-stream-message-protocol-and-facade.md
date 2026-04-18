@@ -162,3 +162,10 @@ git commit -m "feat: add vue project stream message protocol"
 
 - 如果这一层没切干净，后续处理器、前端和落库都会被迫继续解析脆弱字符串。
 - 如果过早往协议里塞更多消息类型，会把范围扩大到第八阶段之后。
+
+## 执行记录（2026-04-15）
+
+- 状态：已完成
+- 实际实现：新增 `StreamMessage`、`AiResponseMessage`、`ToolRequestMessage`、`ToolExecutedMessage` 与 `StreamMessageTypeEnum`；`AiCodeGeneratorFacade` 对 `VUE_PROJECT` 分支改走 TokenStream 事件适配，产出统一 JSON 消息流。
+- 关键差异：修改前 Facade 仅输出纯文本 chunk，消息语义丢失；修改后流内显式区分 `ai_response`、`tool_request`、`tool_executed`，为后续前端展示与落库处理提供稳定协议。
+- 验证结果：`mvn -Dtest=AiCodeGeneratorFacadeStreamMessageTest test` 通过；已纳入全量 `mvn test` 回归通过。

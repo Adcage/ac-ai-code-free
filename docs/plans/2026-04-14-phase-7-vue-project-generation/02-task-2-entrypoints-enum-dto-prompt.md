@@ -144,3 +144,10 @@ git commit -m "feat: add vue project generation entrypoint"
 
 - 如果控制层直接给了默认值，会让前端状态和后端实际模式不一致。
 - 如果 Prompt 资源写得过于松散，后续模型会更容易产生多余文件、错误路由模式和错误依赖。
+
+## 完成记录
+
+- 日期：2026-04-14
+- 状态：已完成
+- 结果：已新增 `CodeGenTypeEnum.VUE_PROJECT` 与 `AppAddRequest.codeGenType`，`AppController#addApp` 已切换为按请求参数校验并保存，不再硬编码 `multi-file`；已新增 `prompt/codegen-vue-project-system-prompt.txt`。
+- 验证：`mvn clean "-Dtest=AppControllerTest#addAppShouldAcceptVueProjectCodeGenType,AppControllerTest#addAppShouldRejectUnknownCodeGenType" test` 通过。

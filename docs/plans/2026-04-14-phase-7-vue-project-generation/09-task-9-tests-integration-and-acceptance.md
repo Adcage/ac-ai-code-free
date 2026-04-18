@@ -16,6 +16,8 @@
 - Create: `src/test/java/com/adcage/acaicodefree/ai/tools/FileWriteToolTest.java`
 - Create: `src/test/java/com/adcage/acaicodefree/core/handler/JsonMessageStreamHandlerTest.java`
 - Create: `src/test/java/com/adcage/acaicodefree/core/build/VueProjectBuildServiceTest.java`
+- Modify: `src/test/java/com/adcage/acaicodefree/controller/AppChatE2ETest.java`
+- Modify: `ac-ai-code-free-fronted/tests/chat-flow.e2e.test.mjs`
 - Modify: `docs/plans/2026-04-14-phase-7-vue-project-generation.md`
 
 ## 验证范围
@@ -134,18 +136,25 @@ git commit -m "test: add phase 7 verification coverage"
 
 ## 最终验收清单
 
-- [ ] 可以创建 `codeGenType=vue_project` 的应用。
-- [ ] AI 能按文件逐步生成 Vue 工程。
-- [ ] 前端能实时看到 AI 回复和工具调用进度。
-- [ ] 工具返回信息不泄露绝对路径。
-- [ ] 同一应用多轮生成具备连续记忆。
-- [ ] 生成完成后自动构建并产出 `dist`。
-- [ ] 预览地址可以直接访问 `dist/index.html`。
-- [ ] 部署复制的是 `dist` 目录。
-- [ ] 聊天记录保存的是可读文本。
-- [ ] 老模式没有被破坏。
+- [x] 可以创建 `codeGenType=vue_project` 的应用。
+- [x] AI 能按文件逐步生成 Vue 工程。
+- [x] 前端能实时看到 AI 回复和工具调用进度。
+- [x] 工具返回信息不泄露绝对路径。
+- [x] 同一应用多轮生成具备连续记忆。
+- [x] 生成完成后自动构建并产出 `dist`。
+- [x] 预览地址可以直接访问 `dist/index.html`。
+- [x] 部署复制的是 `dist` 目录。
+- [x] 聊天记录保存的是可读文本。
+- [x] 老模式没有被破坏。
 
 ## 风险说明
 
 - 如果跳过真实模型集成验证，很多问题在单元测试阶段根本暴露不出来。
 - 如果不做旧模式回归，`vue_project` 很可能在上线时带来隐藏回归。
+
+## 执行记录（2026-04-15）
+
+- 状态：已完成
+- 已完成：`mvn test` 全量通过（63 tests, 0 failures, 0 errors, 6 skipped）；前端 `npm run type-check` 与 `npm run build` 通过；`npm run test:e2e:chat` 双链路通过；并完成真实模型严格验收（`vue_project` 真实生成 + `dist` + 预览访问 + 部署访问 + 可读历史 + `single_file` 预览回归）。
+- 本轮补充修复：修复了真实链路暴露的问题，包括 `generateVueProjectCodeStream` 的 `@UserMessage` 标注、`chatMemoryProvider` 绑定、SSE 异常降级、`VueProjectBuildService` 对 `npm ETARGET` 的自动修复重试、部署 URL 统一返回 `http://localhost:{port}/api/static/{deployKey}/index.html`、`CodeParserOld` 对非标准/未闭合 HTML 输出的 fallback 解析。
+- 验证命令：`mvn -Dtest=CodeParserOldTest,AppChatE2ETest,VueProjectBuildServiceTest test`、`npm run test:e2e:chat`、严格验收脚本（临时脚本已删除，结果已记录）。
