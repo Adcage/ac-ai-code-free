@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 聊天消息视图
@@ -38,6 +39,8 @@ public class ChatHistoryVO implements Serializable {
     private String requestId;
 
     private String extra;
+
+    private List<ToolEventVO> toolEvents;
 
     private LocalDateTime createTime;
 

@@ -31,18 +31,43 @@ langchain4j:
   open-ai:
     chat-model:
       base-url: https://api.deepseek.com
-      api-key: <your-api-key>
+      api-key: ${DEEPSEEK_API_KEY:}
       model-name: deepseek-chat
       log-requests: true
       log-responses: true
       max-tokens: 8192
-      response-format: json
-      strict-json-schema: true
     streaming-chat-model:
       base-url: https://api.deepseek.com
-      api-key: <your-api-key>
+      api-key: ${DEEPSEEK_API_KEY:}
       model-name: deepseek-chat
       log-requests: true
       log-responses: true
       max-tokens: 8192
-      response-format: json
+
+app:
+  ai:
+    vue-project:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      dev-model-name: deepseek-chat
+      prod-model-name: deepseek-reasoner
+      dev-max-tokens: 8192
+      prod-max-tokens: 32768
+      memory-window-size: 20
+      install-timeout-seconds: 300
+      build-timeout-seconds: 180
+  screenshot:
+    temp-dir: ${user.dir}/temp/screenshots
+    width: 1600
+    height: 900
+    wait-after-load-millis: 2000
+    compression-quality: 0.3
+    upload-prefix: /screenshots
+
+cos:
+  client:
+    host: ${COS_HOST:https://your-cdn-or-cos-domain.com}
+    secret-id: ${COS_SECRET_ID:}
+    secret-key: ${COS_SECRET_KEY:}
+    region: ${COS_REGION:ap-shanghai}
+    bucket: ${COS_BUCKET:}

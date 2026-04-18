@@ -1,14 +1,22 @@
 package com.adcage.acaicodefree.core;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
+import com.adcage.acaicodefree.ai.AiCodeGenServiceFactory;
 import com.adcage.acaicodefree.ai.AiCodeGeneratorService;
+import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
+import com.adcage.acaicodefree.ai.model.message.ToolExecutedMessage;
+import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.core.saver.CodeFileSaverExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import dev.langchain4j.service.tool.ToolExecution;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 
 import java.io.File;
 
@@ -23,7 +31,7 @@ import java.io.File;
 public class AiCodeGeneratorFacade {
 
     @Resource
-    private AiCodeGeneratorService aiCodeGeneratorService;
+    private AiCodeGenServiceFactory aiCodeGenServiceFactory;
 
     /**
      * 统一入口,生成并保存代码
@@ -36,6 +44,7 @@ public class AiCodeGeneratorFacade {
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGenServiceFactory.getService(appId, codeGenType);
         Object result = switch (codeGenType) {
             case SINGLE_FILE -> aiCodeGeneratorService.generateSingleFileCode(userMessage);
             case MULTI_FILE -> aiCodeGeneratorService.generateMultiFileCode(userMessage);
@@ -58,16 +67,54 @@ public class AiCodeGeneratorFacade {
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGenServiceFactory.getService(appId, codeGenType);
         Flux<String> codeStream = switch (codeGenType) {
             case SINGLE_FILE -> aiCodeGeneratorService.generateSingleFileCodeStream(userMessage);
             case MULTI_FILE -> aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+            case VUE_PROJECT -> buildVueProjectMessageStream(aiCodeGeneratorService, appId, userMessage);
             default -> {
                 String message = "不支持的生成代码类型" + codeGenType.getValue();
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, message);
             }
         };
+        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT) {
+            return codeStream;
+        }
         // 委托给 Executor 处理解析与保存逻辑
         return CodeFileSaverExecutor.executeSaverStream(codeStream, codeGenType,appId);
+    }
+
+    private Flux<String> buildVueProjectMessageStream(AiCodeGeneratorService service, Long appId, String userMessage) {
+        return Flux.create(sink -> {
+            try {
+                service.generateVueProjectCodeStream(appId, userMessage)
+                        .onNext(token -> handleToken(sink, token))
+                        .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
+                        .onError(sink::error)
+                        .onComplete(response -> sink.complete())
+                        .start();
+            } catch (Exception e) {
+                sink.error(e);
+            }
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    private void handleToken(FluxSink<String> sink, String token) {
+        if (sink.isCancelled() || StrUtil.isBlank(token)) {
+            return;
+        }
+        sink.next(JSONUtil.toJsonStr(new AiResponseMessage(token)));
+    }
+
+    private void handleToolExecution(FluxSink<String> sink, ToolExecution toolExecution) {
+        if (sink.isCancelled() || toolExecution == null || toolExecution.request() == null) {
+            return;
+        }
+        String id = toolExecution.request().id();
+        String name = toolExecution.request().name();
+        String arguments = toolExecution.request().arguments();
+        sink.next(JSONUtil.toJsonStr(new ToolRequestMessage(id, name, arguments)));
+        sink.next(JSONUtil.toJsonStr(new ToolExecutedMessage(id, name, arguments, toolExecution.result())));
     }
 
 }

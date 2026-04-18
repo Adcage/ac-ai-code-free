@@ -17,5 +17,10 @@ public class AppAddRequest implements Serializable {
      */
     private String initPrompt;
 
+    /**
+     * 代码生成模式
+     */
+    private String codeGenType;
+
     private static final long serialVersionUID = 1L;
 }

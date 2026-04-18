@@ -13,7 +13,8 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum CodeGenTypeEnum {
     SINGLE_FILE("单文件代码模式", "single_file"),
-    MULTI_FILE("多文件代码模式", "multi-file");
+    MULTI_FILE("多文件代码模式", "multi-file"),
+    VUE_PROJECT("Vue 工程模式", "vue_project");
 
     private final String text;
     private final String value;

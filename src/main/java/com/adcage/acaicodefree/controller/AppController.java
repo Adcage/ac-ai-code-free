@@ -69,7 +69,10 @@ public class AppController {
         ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
         // 参数校验
         String initPrompt = appAddRequest.getInitPrompt();
+        String codeGenType = appAddRequest.getCodeGenType();
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "代码生成类型错误");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
         // 构造入库对象
@@ -78,8 +81,7 @@ public class AppController {
         app.setUserId(loginUser.getId());
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // 暂时设置为多文件生成
-        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        app.setCodeGenType(codeGenTypeEnum.getValue());
         // 插入数据库
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
@@ -229,7 +231,8 @@ public class AppController {
             finalSessionId = appService.createChatSession(appId, loginUser);
         }
         // 调用服务层方法(流式)
-        Flux<String> stringFlux = appService.chatToGenCode(appId, finalSessionId, message, loginUser);
+        Flux<String> stringFlux = appService.chatToGenCode(appId, finalSessionId, message, loginUser)
+                .onErrorResume(error -> Flux.just("生成失败：" + StrUtil.nullToDefault(error.getMessage(), "未知错误")));
         Map<String, Object> metaData = Map.of("sessionId", finalSessionId);
         String metaJson = JSONUtil.toJsonStr(metaData);
         ServerSentEvent<String> metaEvent = ServerSentEvent.<String>builder()

@@ -1,8 +1,13 @@
 package com.adcage.acaicodefree.constant;
 
 import java.io.File;
+import java.nio.file.Path;
 
 public interface AppConstant {
+
+    String VUE_PROJECT_OUTPUT_PREFIX = "vue_project_";
+
+    String DIST_DIR_NAME = "dist";
 
     /**
      * 精选应用的优先级
@@ -28,5 +33,17 @@ public interface AppConstant {
      * 应用部署域名
      */
     String CODE_DEPLOY_HOST = "http://localhost";
+
+    static Path getCodeOutputRootPath() {
+        return Path.of(CODE_OUTPUT_ROOT_DIR);
+    }
+
+    static Path getCodeDeployRootPath() {
+        return Path.of(CODE_DEPLOY_ROOT_DIR);
+    }
+
+    static Path getVueProjectOutputDir(Long appId) {
+        return getCodeOutputRootPath().resolve(VUE_PROJECT_OUTPUT_PREFIX + appId);
+    }
 
 }

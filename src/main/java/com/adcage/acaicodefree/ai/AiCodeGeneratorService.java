@@ -2,7 +2,10 @@ package com.adcage.acaicodefree.ai;
 
 import com.adcage.acaicodefree.ai.model.SingleCodeResult;
 import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 
 /**
@@ -46,6 +49,16 @@ public interface AiCodeGeneratorService {
     Flux<String> generateMultiFileCodeStream(String userMessage);
 
     /**
+     * 生成 Vue 工程代码流（带工具调用事件）
+     *
+     * @param appId       应用 ID（记忆隔离）
+     * @param userMessage 用户输入
+     * @return TokenStream
+     */
+    @SystemMessage(fromResource = "prompt/codegen-vue-project-system-prompt.txt")
+    TokenStream generateVueProjectCodeStream(@MemoryId Long appId, @UserMessage String userMessage);
+
+    /**··
      * 聊天
      * @param userMessage 用户输入
      * @return 聊天结果

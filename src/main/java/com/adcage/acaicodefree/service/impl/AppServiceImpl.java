@@ -5,10 +5,14 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
+import com.adcage.acaicodefree.core.build.VueProjectBuildService;
+import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
@@ -22,6 +26,7 @@ import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
+import com.adcage.acaicodefree.model.vo.chat.ToolEventVO;
 import com.adcage.acaicodefree.model.vo.user.UserVO;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
@@ -30,12 +35,17 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.service.AppService;
+import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,20 +59,29 @@ import java.util.stream.Collectors;
 @Service
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
-    private final UserService userService;
-    private final AiCodeGeneratorFacade aiCodeGeneratorFacade;
-    private final ChatSessionMapper chatSessionMapper;
-    private final ChatHistoryMapper chatHistoryMapper;
+    @Resource
+    private UserService userService;
 
-    public AppServiceImpl(UserService userService,
-                          AiCodeGeneratorFacade aiCodeGeneratorFacade,
-                          ChatSessionMapper chatSessionMapper,
-                          ChatHistoryMapper chatHistoryMapper) {
-        this.userService = userService;
-        this.aiCodeGeneratorFacade = aiCodeGeneratorFacade;
-        this.chatSessionMapper = chatSessionMapper;
-        this.chatHistoryMapper = chatHistoryMapper;
-    }
+    @Resource
+    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+
+    @Resource
+    private ChatSessionMapper chatSessionMapper;
+
+    @Resource
+    private ChatHistoryMapper chatHistoryMapper;
+
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
+
+    @Resource
+    private VueProjectBuildService vueProjectBuildService;
+
+    @Value("${server.port:8700}")
+    private String serverPort;
+
+    @Value("${server.servlet.context-path:/api}")
+    private String contextPath;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -192,22 +211,36 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
         // 6. 调用 AI 生成代码并在流完成后落库 AI 消息
-        StringBuilder assistantMessageBuilder = new StringBuilder();
+        StringBuilder readableAssistantMessageBuilder = new StringBuilder();
         long startTime = System.currentTimeMillis();
-        return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId)
-                .doOnNext(assistantMessageBuilder::append)
+        Flux<String> sourceStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        Flux<String> handledStream = streamHandlerExecutor.handle(codeGenTypeEnum, sourceStream, readableAssistantMessageBuilder);
+        return handledStream
                 .doOnComplete(() -> {
                     int latencyMs = (int) (System.currentTimeMillis() - startTime);
-                    String aiMessage = assistantMessageBuilder.toString();
-                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "success", codeGenTypeStr, latencyMs, null);
+                    String aiMessage = readableAssistantMessageBuilder.toString();
+                    String status = "success";
+                    String extra = null;
+                    if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
+                        try {
+                            vueProjectBuildService.buildVueProject(appId);
+                            aiMessage = aiMessage + "\n构建完成：已生成 dist 产物";
+                        } catch (Exception e) {
+                            status = "failed";
+                            aiMessage = aiMessage + "\n构建失败：" + e.getMessage();
+                            extra = JSONUtil.toJsonStr(Map.of("buildError", e.getMessage()));
+                        }
+                    }
+                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, codeGenTypeStr, latencyMs, extra);
                     updateSessionSummary(sessionId);
                 })
                 .doOnError(error -> {
                     int latencyMs = (int) (System.currentTimeMillis() - startTime);
-                    Map<String, String> extraInfo = Map.of("error", error.getMessage());
-                    String aiMessage = StrUtil.isBlank(assistantMessageBuilder.toString())
+                    Map<String, String> extraInfo = new HashMap<>();
+                    extraInfo.put("error", error.getMessage());
+                    String aiMessage = StrUtil.isBlank(readableAssistantMessageBuilder.toString())
                             ? "生成失败：" + error.getMessage()
-                            : assistantMessageBuilder.toString();
+                            : readableAssistantMessageBuilder.toString();
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, JSONUtil.toJsonStr(extraInfo));
                     updateSessionSummary(sessionId);
                 });
@@ -277,6 +310,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         List<ChatHistoryVO> records = pageHistoryList.stream().map(history -> {
             ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
             BeanUtil.copyProperties(history, chatHistoryVO);
+            chatHistoryVO.setToolEvents(extractToolEvents(history));
             return chatHistoryVO;
         }).collect(Collectors.toList());
         Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, allHistoryList.size());
@@ -304,10 +338,20 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         // 5. 获取代码生成类型，构建源目录路径
         String codeGenType = app.getCodeGenType();
-        String sourceDirName = codeGenType + "_" + appId;
-        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        File sourceDir;
+        if (CodeGenTypeEnum.VUE_PROJECT.getValue().equals(codeGenType)) {
+            Path vueProjectPath = AppConstant.getVueProjectOutputDir(appId);
+            Path distPath = vueProjectPath.resolve(AppConstant.DIST_DIR_NAME);
+            if (!Files.exists(distPath) || !Files.isDirectory(distPath)) {
+                distPath = vueProjectBuildService.buildVueProject(appId).distPath();
+            }
+            sourceDir = distPath.toFile();
+        } else {
+            String sourceDirName = codeGenType + "_" + appId;
+            String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+            sourceDir = new File(sourceDirPath);
+        }
         // 6. 检查源目录是否存在
-        File sourceDir = new File(sourceDirPath);
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
         }
@@ -326,7 +370,25 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
         // 9. 返回可访问的 URL
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        return buildDeployUrl(deployKey);
+    }
+
+    private String buildDeployUrl(String deployKey) {
+        String baseHost = AppConstant.CODE_DEPLOY_HOST;
+        if (!baseHost.matches("^https?://[^/:]+(:\\d+)?$")) {
+            return String.format("%s/%s/index.html", baseHost, deployKey);
+        }
+        String normalizedContextPath = contextPath == null || contextPath.isBlank() ? "" : contextPath;
+        if (!normalizedContextPath.startsWith("/")) {
+            normalizedContextPath = "/" + normalizedContextPath;
+        }
+        if (normalizedContextPath.endsWith("/")) {
+            normalizedContextPath = normalizedContextPath.substring(0, normalizedContextPath.length() - 1);
+        }
+        String hostWithPort = baseHost.contains("://") && baseHost.matches("^https?://[^/:]+:\\d+$")
+                ? baseHost
+                : baseHost + ":" + serverPort;
+        return String.format("%s%s/static/%s/index.html", hostWithPort, normalizedContextPath, deployKey);
     }
 
     private App getAndCheckApp(Long appId, User loginUser) {
@@ -384,6 +446,90 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         chatSession.setMessageCount((int) count);
         chatSession.setLastMessageTime(LocalDateTime.now());
         chatSessionMapper.update(chatSession);
+    }
+
+    private List<ToolEventVO> extractToolEvents(ChatHistory history) {
+        if (history == null) {
+            return new ArrayList<>();
+        }
+        List<ToolEventVO> toolEvents = extractToolEventsFromExtra(history.getExtra());
+        if (CollUtil.isNotEmpty(toolEvents)) {
+            return toolEvents;
+        }
+        return extractToolEventsFromMessage(history.getMessage());
+    }
+
+    private List<ToolEventVO> extractToolEventsFromExtra(String extra) {
+        if (StrUtil.isBlank(extra)) {
+            return new ArrayList<>();
+        }
+        try {
+            JSONObject extraJson = JSONUtil.parseObj(extra);
+            JSONArray toolEventArray = extraJson.getJSONArray("toolEvents");
+            if (toolEventArray == null || toolEventArray.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<ToolEventVO> toolEvents = new ArrayList<>();
+            for (Object item : toolEventArray) {
+                if (!(item instanceof JSONObject eventObj)) {
+                    continue;
+                }
+                String type = normalizeToolEventType(eventObj.getStr("type"));
+                String text = eventObj.getStr("text", "");
+                if (StrUtil.isNotBlank(type) && StrUtil.isNotBlank(text)) {
+                    toolEvents.add(new ToolEventVO(type, text));
+                }
+            }
+            return toolEvents;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private List<ToolEventVO> extractToolEventsFromMessage(String message) {
+        if (StrUtil.isBlank(message)) {
+            return new ArrayList<>();
+        }
+        List<ToolEventVO> toolEvents = new ArrayList<>();
+        String[] lines = message.split("\\n");
+        for (String line : lines) {
+            String trimmedLine = StrUtil.trim(line);
+            if (StrUtil.isBlank(trimmedLine)) {
+                continue;
+            }
+            if (trimmedLine.startsWith("[工具调用]")) {
+                String text = StrUtil.trim(trimmedLine.substring("[工具调用]".length()));
+                if (StrUtil.isNotBlank(text)) {
+                    toolEvents.add(new ToolEventVO("request", text));
+                }
+                continue;
+            }
+            if (trimmedLine.startsWith("[工具完成]")) {
+                String text = StrUtil.trim(trimmedLine.substring("[工具完成]".length()));
+                if (StrUtil.isNotBlank(text)) {
+                    toolEvents.add(new ToolEventVO("executed", text));
+                }
+                continue;
+            }
+            if (trimmedLine.startsWith("准备写入文件")) {
+                toolEvents.add(new ToolEventVO("request", trimmedLine));
+                continue;
+            }
+            if (trimmedLine.startsWith("已写入文件")) {
+                toolEvents.add(new ToolEventVO("executed", trimmedLine));
+            }
+        }
+        return toolEvents;
+    }
+
+    private String normalizeToolEventType(String type) {
+        if (StrUtil.isBlank(type)) {
+            return "";
+        }
+        if ("request".equals(type) || "executed".equals(type)) {
+            return type;
+        }
+        return "";
     }
 
 }
