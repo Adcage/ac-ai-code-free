@@ -86,6 +86,22 @@ class AiCodeGeneratorFacadeStreamMessageTest {
         verify(aiCodeGeneratorService).generateVueProjectCodeStream(1L, "生成按钮");
     }
 
+    @Test
+    void facadeShouldRouteVisualEditPromptToVueModifyStream() {
+        FakeTokenStream fakeTokenStream = new FakeTokenStream();
+        String visualEditPrompt = "选中元素信息：\n- 标签：button\n\n修改需求：改成主按钮";
+        when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.VUE_PROJECT))).thenReturn(aiCodeGeneratorService);
+        when(aiCodeGeneratorService.modifyVueProjectCodeStream(1L, visualEditPrompt)).thenReturn(fakeTokenStream);
+
+        List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream(visualEditPrompt, CodeGenTypeEnum.VUE_PROJECT, 1L)
+                .collectList()
+                .block();
+
+        Assertions.assertNotNull(result);
+        Assertions.assertTrue(result.stream().anyMatch(item -> item.contains("\"type\":\"tool_executed\"")));
+        verify(aiCodeGeneratorService).modifyVueProjectCodeStream(1L, visualEditPrompt);
+    }
+
     private static class FakeTokenStream implements TokenStream {
 
         private Consumer<String> onNext;

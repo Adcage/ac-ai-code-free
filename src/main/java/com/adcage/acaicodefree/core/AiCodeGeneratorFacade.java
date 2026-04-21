@@ -68,10 +68,15 @@ public class AiCodeGeneratorFacade {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGenServiceFactory.getService(appId, codeGenType);
+        boolean modifyRequest = VisualEditPromptHelper.isVisualEditRequest(userMessage);
         Flux<String> codeStream = switch (codeGenType) {
-            case SINGLE_FILE -> aiCodeGeneratorService.generateSingleFileCodeStream(userMessage);
-            case MULTI_FILE -> aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
-            case VUE_PROJECT -> buildVueProjectMessageStream(aiCodeGeneratorService, appId, userMessage);
+            case SINGLE_FILE -> modifyRequest
+                    ? aiCodeGeneratorService.modifySingleFileCodeStream(userMessage)
+                    : aiCodeGeneratorService.generateSingleFileCodeStream(userMessage);
+            case MULTI_FILE -> modifyRequest
+                    ? aiCodeGeneratorService.modifyMultiFileCodeStream(userMessage)
+                    : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+            case VUE_PROJECT -> buildVueProjectMessageStream(aiCodeGeneratorService, appId, userMessage, modifyRequest);
             default -> {
                 String message = "不支持的生成代码类型" + codeGenType.getValue();
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, message);
@@ -84,9 +89,21 @@ public class AiCodeGeneratorFacade {
         return CodeFileSaverExecutor.executeSaverStream(codeStream, codeGenType,appId);
     }
 
-    private Flux<String> buildVueProjectMessageStream(AiCodeGeneratorService service, Long appId, String userMessage) {
+    private Flux<String> buildVueProjectMessageStream(AiCodeGeneratorService service,
+                                                      Long appId,
+                                                      String userMessage,
+                                                      boolean modifyRequest) {
         return Flux.create(sink -> {
             try {
+                if (modifyRequest) {
+                    service.modifyVueProjectCodeStream(appId, userMessage)
+                            .onNext(token -> handleToken(sink, token))
+                            .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
+                            .onError(sink::error)
+                            .onComplete(response -> sink.complete())
+                            .start();
+                    return;
+                }
                 service.generateVueProjectCodeStream(appId, userMessage)
                         .onNext(token -> handleToken(sink, token))
                         .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))

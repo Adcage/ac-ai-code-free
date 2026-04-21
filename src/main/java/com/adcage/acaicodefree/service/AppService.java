@@ -1,5 +1,6 @@
 package com.adcage.acaicodefree.service;
 
+import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.entity.User;
@@ -20,6 +21,15 @@ import java.util.List;
  * @author adcage
  */
 public interface AppService extends IService<App> {
+
+    /**
+     * 创建应用
+     *
+     * @param appAddRequest 创建参数
+     * @param loginUser 登录用户
+     * @return 应用 id
+     */
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 
     /**
      * 校验应用参数

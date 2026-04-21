@@ -49,6 +49,20 @@ class AiCodeGeneratorFacadeTest {
     }
 
     @Test
+    void shouldRouteSingleFileModifyStreamWhenVisualEditPromptProvided() {
+        String visualEditPrompt = "选中元素信息：\n- 标签：h1\n\n修改需求：改标题";
+        when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.SINGLE_FILE))).thenReturn(aiCodeGeneratorService);
+        when(aiCodeGeneratorService.modifySingleFileCodeStream(visualEditPrompt)).thenReturn(Flux.just("<html>modify</html>"));
+
+        List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream(visualEditPrompt, CodeGenTypeEnum.SINGLE_FILE, 1L)
+                .collectList()
+                .block();
+
+        Assertions.assertNotNull(result);
+        verify(aiCodeGeneratorService).modifySingleFileCodeStream(visualEditPrompt);
+    }
+
+    @Test
     void shouldRouteVueProjectStreamToJsonMessageFlow() {
         TokenStream tokenStream = new EmptyTokenStream();
         when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.VUE_PROJECT))).thenReturn(aiCodeGeneratorService);
@@ -61,6 +75,21 @@ class AiCodeGeneratorFacadeTest {
         Assertions.assertNotNull(result);
         Assertions.assertTrue(result.stream().anyMatch(item -> item.contains("ai_response")));
         verify(aiCodeGeneratorService).generateVueProjectCodeStream(1L, "生成工程");
+    }
+
+    @Test
+    void shouldRouteVueProjectModifyStreamWhenVisualEditPromptProvided() {
+        TokenStream tokenStream = new EmptyTokenStream();
+        String visualEditPrompt = "选中元素信息：\n- 页面路径：/\n\n修改需求：改按钮圆角";
+        when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.VUE_PROJECT))).thenReturn(aiCodeGeneratorService);
+        when(aiCodeGeneratorService.modifyVueProjectCodeStream(1L, visualEditPrompt)).thenReturn(tokenStream);
+
+        List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream(visualEditPrompt, CodeGenTypeEnum.VUE_PROJECT, 1L)
+                .collectList()
+                .block();
+
+        Assertions.assertNotNull(result);
+        verify(aiCodeGeneratorService).modifyVueProjectCodeStream(1L, visualEditPrompt);
     }
 
     private static class EmptyTokenStream implements TokenStream {

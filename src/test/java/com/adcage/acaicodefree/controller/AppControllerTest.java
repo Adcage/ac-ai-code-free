@@ -17,6 +17,7 @@ import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.service.AppService;
+import com.adcage.acaicodefree.service.ProjectDownloadService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,6 +54,9 @@ class AppControllerTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private ProjectDownloadService projectDownloadService;
 
     @InjectMocks
     private AppController appController;
@@ -76,14 +81,15 @@ class AppControllerTest {
         appAddRequest.setCodeGenType("multi-file");
 
         when(userService.getLoginUser(any())).thenReturn(loginUser);
-        when(appService.save(any(App.class))).thenReturn(true);
+        when(appService.createApp(any(AppAddRequest.class), any(User.class))).thenReturn(1001L);
 
         // ResultUtils.success returns code 0
         mockMvc.perform(post("/app/add")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(JSONUtil.toJsonStr(appAddRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").value(1001L));
     }
 
     @Test
@@ -93,7 +99,7 @@ class AppControllerTest {
         appAddRequest.setCodeGenType("vue_project");
 
         when(userService.getLoginUser(any())).thenReturn(loginUser);
-        when(appService.save(any(App.class))).thenReturn(true);
+        when(appService.createApp(any(AppAddRequest.class), any(User.class))).thenReturn(1002L);
 
         mockMvc.perform(post("/app/add")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,26 +107,27 @@ class AppControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
 
-        ArgumentCaptor<App> appCaptor = ArgumentCaptor.forClass(App.class);
-        verify(appService).save(appCaptor.capture());
-        org.junit.jupiter.api.Assertions.assertEquals("vue_project", appCaptor.getValue().getCodeGenType());
+        ArgumentCaptor<AppAddRequest> requestCaptor = ArgumentCaptor.forClass(AppAddRequest.class);
+        verify(appService).createApp(requestCaptor.capture(), any(User.class));
+        org.junit.jupiter.api.Assertions.assertEquals("vue_project", requestCaptor.getValue().getCodeGenType());
     }
 
     @Test
-    void addAppShouldRejectUnknownCodeGenType() throws Exception {
+    void addAppShouldPassThroughExplicitCodeGenType() throws Exception {
         AppAddRequest appAddRequest = new AppAddRequest();
-        appAddRequest.setInitPrompt("Invalid Code Gen Type");
+        appAddRequest.setInitPrompt("Explicit Code Gen Type");
         appAddRequest.setCodeGenType("abc");
 
         when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(appService.createApp(any(AppAddRequest.class), any(User.class))).thenReturn(1003L);
 
         mockMvc.perform(post("/app/add")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(JSONUtil.toJsonStr(appAddRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(ErrorCode.PARAMS_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(0));
 
-        verify(appService, never()).save(any(App.class));
+        verify(appService).createApp(any(AppAddRequest.class), any(User.class));
     }
 
     @Test
@@ -131,9 +138,26 @@ class AppControllerTest {
 
         mockMvc.perform(post("/app/add")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(JSONUtil.toJsonStr(appAddRequest)))
+                .content(JSONUtil.toJsonStr(appAddRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(ErrorCode.PARAMS_ERROR.getCode()));
+
+        verify(appService, never()).createApp(any(AppAddRequest.class), any(User.class));
+    }
+
+    @Test
+    void downloadAppProject_Success() throws Exception {
+        App app = new App();
+        app.setId(1L);
+        app.setUserId(loginUser.getId());
+        app.setCodeGenType("single_file");
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(appService.getById(1L)).thenReturn(app);
+
+        mockMvc.perform(get("/app/download/1"))
+                .andExpect(status().isOk());
+
+        verify(projectDownloadService).writeProjectZipToResponse(any(), eq("app-1.zip"), any());
     }
 
     @Test

@@ -3,12 +3,16 @@ package com.adcage.acaicodefree.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.common.ErrorCode;
+import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingService;
+import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingServiceFactory;
+import com.adcage.acaicodefree.config.properties.ScreenshotProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
@@ -17,6 +21,7 @@ import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
+import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
@@ -30,12 +35,16 @@ import com.adcage.acaicodefree.model.vo.chat.ToolEventVO;
 import com.adcage.acaicodefree.model.vo.user.UserVO;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
+import com.adcage.acaicodefree.service.ScreenshotService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.service.AppService;
 import jakarta.annotation.Resource;
+import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -49,6 +58,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -58,6 +70,13 @@ import java.util.stream.Collectors;
  */
 @Service
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
+
+    private static final Logger log = LoggerFactory.getLogger(AppServiceImpl.class);
+
+    private final ExecutorService screenshotTaskExecutor = Executors.newSingleThreadExecutor(
+            Thread.ofVirtual().name("screenshot-task-", 0).factory());
+
+    private final Map<Long, Map<String, Object>> coverTaskStateMap = new ConcurrentHashMap<>();
 
     @Resource
     private UserService userService;
@@ -77,11 +96,38 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private VueProjectBuildService vueProjectBuildService;
 
+    @Resource
+    private AiCodeGenTypeRoutingServiceFactory aiCodeGenTypeRoutingServiceFactory;
+
+    @Resource
+    private ScreenshotService screenshotService;
+
+    @Resource
+    private ScreenshotProperties screenshotProperties;
+
     @Value("${server.port:8700}")
     private String serverPort;
 
     @Value("${server.servlet.context-path:/api}")
     private String contextPath;
+
+    @Override
+    public Long createApp(AppAddRequest appAddRequest, User loginUser) {
+        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR, "请求参数不能为空");
+        ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        String initPrompt = StrUtil.trim(appAddRequest.getInitPrompt());
+        ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        CodeGenTypeEnum codeGenTypeEnum = resolveCodeGenType(appAddRequest.getCodeGenType(), initPrompt);
+        App app = new App();
+        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));//TODO 后续优化成AI生成应用名称
+        app.setInitPrompt(initPrompt);
+        app.setCodeGenType(codeGenTypeEnum.getValue());
+        app.setUserId(loginUser.getId());
+        app.setPriority(AppConstant.DEFAULT_APP_PRIORITY);
+        boolean saveResult = this.save(app);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "创建应用失败");
+        return app.getId();
+    }
 
     @Override
     public void validApp(App app, boolean add) {
@@ -169,6 +215,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             UserVO userVO = userService.getUserVO(user);
             appVO.setUser(userVO);
         }
+        appendCoverTaskState(appVO, app.getId());
         return appVO;
     }
 
@@ -369,8 +416,115 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
+        triggerCoverGenerationAsync(appId, deployKey, app.getCover());
         // 9. 返回可访问的 URL
         return buildDeployUrl(deployKey);
+    }
+
+    @PreDestroy
+    public void destroyScreenshotExecutor() {
+        screenshotTaskExecutor.shutdown();
+    }
+
+    private void triggerCoverGenerationAsync(Long appId, String deployKey, String existingCover) {
+        if (StrUtil.isNotBlank(existingCover)) {
+            updateCoverTaskState(appId, "SKIPPED", 0, null);
+            log.info("应用已有封面，跳过自动截图, appId={}", appId);
+            return;
+        }
+        updateCoverTaskState(appId, "PENDING", 0, null);
+        screenshotTaskExecutor.submit(() -> {
+            int maxRetries = screenshotProperties.getMaxRetries() == null ? 3 : Math.max(screenshotProperties.getMaxRetries(), 1);
+            long retryDelayMillis = screenshotProperties.getRetryDelayMillis() == null ? 3000L : Math.max(screenshotProperties.getRetryDelayMillis(), 0L);
+            String deployUrl = buildDeployUrl(deployKey);
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                updateCoverTaskState(appId, "RUNNING", attempt, null);
+                try {
+                    String coverUrl = screenshotService.generateAndUploadCover(appId, deployUrl);
+                    if (StrUtil.isBlank(coverUrl)) {
+                        updateCoverTaskState(appId, "FAILED", attempt, "封面地址为空");
+                        continue;
+                    }
+                    App updateApp = new App();
+                    updateApp.setId(appId);
+                    updateApp.setCover(coverUrl);
+                    boolean updated = this.updateById(updateApp);
+                    if (!updated) {
+                        updateCoverTaskState(appId, "FAILED", attempt, "封面地址回写失败");
+                        log.warn("封面地址回写失败, appId={}, coverUrl={}", appId, coverUrl);
+                        continue;
+                    }
+                    updateCoverTaskState(appId, "SUCCESS", attempt, null);
+                    return;
+                } catch (Exception e) {
+                    updateCoverTaskState(appId, "FAILED", attempt, e.getMessage());
+                    log.error("异步生成封面失败, appId={}, attempt={}", appId, attempt, e);
+                    if (attempt < maxRetries && retryDelayMillis > 0) {
+                        try {
+                            Thread.sleep(retryDelayMillis);
+                        } catch (InterruptedException interruptedException) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private void appendCoverTaskState(AppVO appVO, Long appId) {
+        if (appId == null) {
+            return;
+        }
+        Map<String, Object> state = coverTaskStateMap.get(appId);
+        if (state == null || state.isEmpty()) {
+            return;
+        }
+        appVO.setCoverTaskStatus((String) state.getOrDefault("status", ""));
+        appVO.setCoverRetryCount((Integer) state.getOrDefault("retryCount", 0));
+        appVO.setCoverErrorMessage((String) state.getOrDefault("errorMessage", ""));
+    }
+
+    private void updateCoverTaskState(Long appId, String status, Integer retryCount, String errorMessage) {
+        Map<String, Object> state = new HashMap<>();
+        state.put("status", status);
+        state.put("retryCount", retryCount == null ? 0 : retryCount);
+        state.put("errorMessage", StrUtil.blankToDefault(errorMessage, ""));
+        state.put("updatedTime", LocalDateTime.now());
+        coverTaskStateMap.put(appId, state);
+    }
+
+    private CodeGenTypeEnum resolveCodeGenType(String requestCodeGenType, String initPrompt) {
+        if (StrUtil.isNotBlank(requestCodeGenType)) {
+            CodeGenTypeEnum codeGenTypeEnum = parseCodeGenType(requestCodeGenType);
+            ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "代码生成类型错误");
+            return codeGenTypeEnum;
+        }
+        try {
+            AiCodeGenTypeRoutingService routingService = aiCodeGenTypeRoutingServiceFactory.createService();
+            CodeGenTypeEnum routed = routingService.routeCodeGenType(initPrompt);
+            if (routed != null) {
+                return routed;
+            }
+        } catch (Exception e) {
+            log.warn("AI 路由失败，将使用兜底模式, prompt={}", initPrompt, e);
+        }
+        return CodeGenTypeEnum.MULTI_FILE;
+    }
+
+    private CodeGenTypeEnum parseCodeGenType(String valueOrName) {
+        CodeGenTypeEnum byValue = CodeGenTypeEnum.getEnumByValue(valueOrName);
+        if (byValue != null) {
+            return byValue;
+        }
+        if (ObjUtil.isEmpty(valueOrName)) {
+            return null;
+        }
+        try {
+            return CodeGenTypeEnum.valueOf(valueOrName.trim().toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private String buildDeployUrl(String deployKey) {

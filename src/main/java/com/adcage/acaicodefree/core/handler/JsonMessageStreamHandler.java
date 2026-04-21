@@ -3,7 +3,10 @@ package com.adcage.acaicodefree.core.handler;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.adcage.acaicodefree.ai.tools.BaseTool;
+import com.adcage.acaicodefree.ai.tools.ToolManager;
 import com.adcage.acaicodefree.ai.model.message.StreamMessageTypeEnum;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -12,6 +15,9 @@ import java.util.Set;
 
 @Component
 public class JsonMessageStreamHandler {
+
+    @Resource
+    private ToolManager toolManager;
 
     public Flux<String> handle(Flux<String> stream, StringBuilder readableOutput) {
         Set<String> printedToolRequestIds = new HashSet<>();
@@ -37,22 +43,21 @@ public class JsonMessageStreamHandler {
                 if (!printedToolRequestIds.add(id)) {
                     return Flux.empty();
                 }
-                String path = extractPath(jsonObject.getStr("arguments", ""));
-                if (StrUtil.isNotBlank(path)) {
-                    readableOutput.append("\n准备写入文件 ").append(path);
+                String toolName = jsonObject.getStr("name", "");
+                JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
+                String requestText = buildToolRequestText(toolName, arguments);
+                if (StrUtil.isNotBlank(requestText)) {
+                    readableOutput.append("\n[工具调用] ").append(requestText);
                 }
                 return Flux.just(chunk);
             }
             if (StreamMessageTypeEnum.TOOL_EXECUTED.getValue().equals(type)) {
+                String toolName = jsonObject.getStr("name", "");
                 String result = jsonObject.getStr("result", "");
-                String path = extractPath(jsonObject.getStr("arguments", ""));
-                if (StrUtil.isBlank(path)) {
-                    path = extractPath(result);
-                }
-                if (StrUtil.isNotBlank(path)) {
-                    readableOutput.append("\n已写入文件 ").append(path);
-                } else if (StrUtil.isNotBlank(result)) {
-                    readableOutput.append("\n").append(result);
+                JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
+                String executedText = buildToolExecutedText(toolName, arguments, result);
+                if (StrUtil.isNotBlank(executedText)) {
+                    readableOutput.append("\n[工具完成] ").append(executedText);
                 }
                 return Flux.just(chunk);
             }
@@ -61,20 +66,53 @@ public class JsonMessageStreamHandler {
         });
     }
 
-    private String extractPath(String text) {
-        if (StrUtil.isBlank(text)) {
-            return "";
+    private JSONObject parseArguments(String argumentsText) {
+        if (StrUtil.isBlank(argumentsText)) {
+            return new JSONObject();
         }
         try {
-            JSONObject arguments = JSONUtil.parseObj(text);
-            String relativeFilePath = arguments.getStr("relativeFilePath");
-            return StrUtil.blankToDefault(relativeFilePath, "");
-        } catch (Exception ignored) {
+            return JSONUtil.parseObj(argumentsText);
+        } catch (Exception e) {
+            return new JSONObject();
         }
-        String marker = "文件写入成功：";
-        if (text.contains(marker)) {
-            return text.substring(text.indexOf(marker) + marker.length()).trim();
-        }
-        return "";
     }
+
+    private String buildToolRequestText(String toolName, JSONObject arguments) {
+        BaseTool tool = toolManager == null ? null : toolManager.getTool(toolName);
+        if (tool != null) {
+            return StrUtil.nullToEmpty(tool.generateToolRequestResponse(arguments));
+        }
+        String path = extractPath(arguments);
+        if (StrUtil.isNotBlank(path)) {
+            return "准备处理文件 " + path;
+        }
+        return StrUtil.isBlank(toolName) ? "正在执行工具" : "正在执行工具 " + toolName;
+    }
+
+    private String buildToolExecutedText(String toolName, JSONObject arguments, String result) {
+        BaseTool tool = toolManager == null ? null : toolManager.getTool(toolName);
+        if (tool != null) {
+            return StrUtil.nullToEmpty(tool.generateToolExecutedResult(arguments, result));
+        }
+        String path = extractPath(arguments);
+        if (StrUtil.isNotBlank(path)) {
+            return "已处理文件 " + path;
+        }
+        if (StrUtil.isNotBlank(result)) {
+            return result;
+        }
+        return StrUtil.isBlank(toolName) ? "工具执行成功" : "工具执行成功 " + toolName;
+    }
+
+    private String extractPath(JSONObject arguments) {
+        if (arguments == null || arguments.isEmpty()) {
+            return "";
+        }
+        String relativeFilePath = arguments.getStr("relativeFilePath", "");
+        if (StrUtil.isNotBlank(relativeFilePath)) {
+            return relativeFilePath;
+        }
+        return arguments.getStr("relativeDirPath", "");
+    }
+
 }

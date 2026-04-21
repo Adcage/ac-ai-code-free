@@ -57,12 +57,22 @@ app:
       install-timeout-seconds: 300
       build-timeout-seconds: 180
   screenshot:
-    temp-dir: ${user.dir}/temp/screenshots
+    temp-dir: ${user.dir}/storage/temp
     width: 1600
     height: 900
     wait-after-load-millis: 2000
     compression-quality: 0.3
     upload-prefix: /screenshots
+    max-retries: 3
+    retry-delay-millis: 3000
+    browser: chrome  # 浏览器类型：chrome, edge, firefox
+
+# 存储配置
+storage:
+  type: ${STORAGE_TYPE:cos}  # 存储类型：cos 或 local，默认 COS
+  local:
+    path: ${STORAGE_LOCAL_PATH:./storage}  # 本地存储根目录
+    url-prefix: ${STORAGE_LOCAL_URL_PREFIX:http://localhost:8700/api/storage}  # 访问 URL 前缀
 
 cos:
   client:

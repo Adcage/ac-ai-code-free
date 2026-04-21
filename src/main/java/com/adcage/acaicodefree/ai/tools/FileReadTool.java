@@ -14,49 +14,46 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Component
-public class FileWriteTool extends BaseTool {
+public class FileReadTool extends BaseTool {
 
     @Override
     public String getToolName() {
-        return "writeFile";
+        return "readFile";
     }
 
     @Override
     public String getDisplayName() {
-        return "写文件";
+        return "读文件";
     }
 
     @Override
     public String generateToolRequestResponse(JSONObject arguments) {
         String relativePath = extractRelativePath(arguments);
         if (StrUtil.isBlank(relativePath)) {
-            return "准备写入文件";
+            return "准备读取文件";
         }
-        return "准备写入文件 " + relativePath;
+        return "准备读取文件 " + relativePath;
     }
 
     @Override
     public String generateToolExecutedResult(JSONObject arguments, String result) {
         String relativePath = extractRelativePath(arguments);
         if (StrUtil.isNotBlank(relativePath)) {
-            return "已写入文件 " + relativePath;
+            return "已读取文件 " + relativePath;
         }
-        return StrUtil.blankToDefault(result, "文件写入成功");
+        return "文件读取完成";
     }
 
-    @Tool("写入文件到指定路径")
-    public String writeFile(String relativeFilePath, String content, @ToolMemoryId Long appId) {
+    @Tool("读取指定文件内容")
+    public String readFile(String relativeFilePath, @ToolMemoryId Long appId) {
         Path normalized = resolveRelativePath(relativeFilePath, appId);
-        Path projectRoot = resolveProjectRoot(appId);
-        try {
-            Path parent = normalized.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            Files.writeString(normalized, content == null ? "" : content, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件写入失败");
+        if (!Files.exists(normalized) || !Files.isRegularFile(normalized)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
         }
-        return "文件写入成功：" + toDisplayPath(projectRoot.relativize(normalized));
+        try {
+            return Files.readString(normalized, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败");
+        }
     }
 }

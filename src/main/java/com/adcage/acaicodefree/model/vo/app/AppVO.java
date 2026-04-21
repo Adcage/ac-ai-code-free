@@ -74,5 +74,20 @@ public class AppVO implements Serializable {
      */
     private UserVO user;
 
+    /**
+     * 封面任务状态（PENDING/RUNNING/SUCCESS/FAILED）
+     */
+    private String coverTaskStatus;
+
+    /**
+     * 封面任务重试次数
+     */
+    private Integer coverRetryCount;
+
+    /**
+     * 封面任务错误信息
+     */
+    private String coverErrorMessage;
+
     private static final long serialVersionUID = 1L;
 }

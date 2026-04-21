@@ -4,8 +4,11 @@ import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolExecutedMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
+import com.adcage.acaicodefree.ai.tools.FileWriteTool;
+import com.adcage.acaicodefree.ai.tools.ToolManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -14,7 +17,7 @@ class JsonMessageStreamHandlerTest {
 
     @Test
     void jsonMessageHandlerShouldAppendAiResponseText() {
-        JsonMessageStreamHandler handler = new JsonMessageStreamHandler();
+        JsonMessageStreamHandler handler = createHandler();
         StringBuilder readable = new StringBuilder();
 
         List<String> output = handler.handle(Flux.just(
@@ -29,7 +32,7 @@ class JsonMessageStreamHandlerTest {
 
     @Test
     void jsonMessageHandlerShouldShowToolRequestOnlyOncePerId() {
-        JsonMessageStreamHandler handler = new JsonMessageStreamHandler();
+        JsonMessageStreamHandler handler = createHandler();
         StringBuilder readable = new StringBuilder();
 
         String repeatedRequest = JSONUtil.toJsonStr(new ToolRequestMessage("t1", "writeFile", "{}"));
@@ -41,7 +44,7 @@ class JsonMessageStreamHandlerTest {
 
     @Test
     void jsonMessageHandlerShouldUseToolExecutedAsFinalTrustedFileEvent() {
-        JsonMessageStreamHandler handler = new JsonMessageStreamHandler();
+        JsonMessageStreamHandler handler = createHandler();
         StringBuilder readable = new StringBuilder();
 
         List<String> output = handler.handle(Flux.just(
@@ -51,6 +54,15 @@ class JsonMessageStreamHandlerTest {
 
         Assertions.assertNotNull(output);
         Assertions.assertEquals(2, output.size());
-        Assertions.assertTrue(readable.toString().contains("已写入文件 src/main.js"));
+        Assertions.assertTrue(readable.toString().contains("[工具完成] 已写入文件 src/main.js"));
+    }
+
+    private JsonMessageStreamHandler createHandler() {
+        JsonMessageStreamHandler handler = new JsonMessageStreamHandler();
+        ToolManager toolManager = new ToolManager();
+        ReflectionTestUtils.setField(toolManager, "tools", new com.adcage.acaicodefree.ai.tools.BaseTool[]{new FileWriteTool()});
+        toolManager.init();
+        ReflectionTestUtils.setField(handler, "toolManager", toolManager);
+        return handler;
     }
 }

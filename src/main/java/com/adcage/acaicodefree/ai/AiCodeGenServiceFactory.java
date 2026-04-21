@@ -1,6 +1,6 @@
 package com.adcage.acaicodefree.ai;
 
-import com.adcage.acaicodefree.ai.tools.FileWriteTool;
+import com.adcage.acaicodefree.ai.tools.ToolManager;
 import com.adcage.acaicodefree.core.memory.ChatMemoryLoader;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -34,7 +34,7 @@ public class AiCodeGenServiceFactory {
     private StreamingChatLanguageModel reasoningStreamingChatModel;
 
     @Resource
-    private FileWriteTool fileWriteTool;
+    private ToolManager toolManager;
 
     @Resource
     private ObjectProvider<ChatMemoryLoader> chatMemoryLoaderProvider;
@@ -75,7 +75,7 @@ public class AiCodeGenServiceFactory {
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatLanguageModel(chatModel)
                 .streamingChatLanguageModel(reasoningStreamingChatModel)
-                .tools(fileWriteTool)
+                .tools(toolManager.getAllTools())
                 .chatMemoryProvider(memoryId -> resolveChatMemory(memoryId, appId))
                 .build();
     }

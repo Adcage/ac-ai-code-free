@@ -32,7 +32,10 @@ import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.ByteArrayInputStream;
 import java.util.List;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,6 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -284,8 +288,8 @@ class AppChatE2ETest {
         when(aiCodeGeneratorFacade.generateAndSaveCodeStream(anyString(), any(), anyLong()))
                 .thenReturn(Flux.just(
                         "{\"type\":\"ai_response\",\"data\":\"开始生成 Vue 工程\"}",
-                        "{\"type\":\"tool_request\",\"id\":\"t1\",\"name\":\"FileWriteTool\",\"arguments\":" + JSONUtil.quote(toolArguments) + "}",
-                        "{\"type\":\"tool_executed\",\"id\":\"t1\",\"name\":\"FileWriteTool\",\"arguments\":" + JSONUtil.quote(toolArguments) + ",\"result\":\"文件写入成功：src/main.js\"}"
+                        "{\"type\":\"tool_request\",\"id\":\"t1\",\"name\":\"writeFile\",\"arguments\":" + JSONUtil.quote(toolArguments) + "}",
+                        "{\"type\":\"tool_executed\",\"id\":\"t1\",\"name\":\"writeFile\",\"arguments\":" + JSONUtil.quote(toolArguments) + ",\"result\":\"文件写入成功：src/main.js\"}"
                 ));
 
         MvcResult createSessionResult = mockMvc.perform(post("/app/chat/session/create")
@@ -353,5 +357,38 @@ class AppChatE2ETest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.startsWith("http://localhost:8700/api/static/")));
+    }
+
+    @Test
+    void downloadProject_shouldReturnZipBinary() throws Exception {
+        Path outputDir = Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR)
+                .resolve(CodeGenTypeEnum.SINGLE_FILE.getValue() + "_" + testApp.getId());
+        Files.createDirectories(outputDir);
+        Files.writeString(outputDir.resolve("index.html"), "<html><body>download</body></html>", StandardCharsets.UTF_8);
+        Files.writeString(outputDir.resolve(".env"), "SECRET=1", StandardCharsets.UTF_8);
+
+        MvcResult mvcResult = mockMvc.perform(get("/app/download/{appId}", testApp.getId())
+                        .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/zip"))
+                .andReturn();
+
+        byte[] zipBytes = mvcResult.getResponse().getContentAsByteArray();
+        Assertions.assertTrue(zipBytes.length > 0);
+        boolean containsIndex = false;
+        boolean containsEnv = false;
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry zipEntry;
+            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                if (zipEntry.getName().endsWith("index.html")) {
+                    containsIndex = true;
+                }
+                if (zipEntry.getName().contains(".env")) {
+                    containsEnv = true;
+                }
+            }
+        }
+        Assertions.assertTrue(containsIndex);
+        Assertions.assertFalse(containsEnv);
     }
 }
