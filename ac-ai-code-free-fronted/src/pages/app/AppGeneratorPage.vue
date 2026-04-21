@@ -12,6 +12,14 @@
           <span class="status-tag" v-if="app?.deployKey">
             <a-badge status="success" text="已部署" />
           </span>
+          <a-tag v-if="app?.coverTaskStatus" :color="coverTaskStatusColor(app.coverTaskStatus)">
+            {{ formatCoverTaskStatus(app.coverTaskStatus, app.coverRetryCount) }}
+          </a-tag>
+          <a-tag v-if="app?.codeGenType" color="blue">{{ formatCodeGenType(app.codeGenType) }}</a-tag>
+          <a-button :loading="downloadLoading" :disabled="!canDownload" @click="doDownload" class="download-btn">
+            <template #icon><download-outlined /></template>
+            下载代码
+          </a-button>
           <a-button type="primary" :loading="deployLoading" @click="doDeploy" class="deploy-btn">
             <template #icon><cloud-upload-outlined /></template>
             部署
@@ -86,11 +94,28 @@
           <a-button type="link" size="small" @click="handleReloadCurrentSession">重新加载当前会话</a-button>
         </div>
 
+        <div v-if="selectedElement" class="selected-element-panel">
+          <a-alert type="info" show-icon>
+            <template #message>当前选中元素</template>
+            <template #description>
+              <div class="selected-element-content">
+                <div>标签：{{ selectedElement.tagName }}</div>
+                <div>页面路径：{{ selectedElement.pagePath || '/' }}</div>
+                <div>选择器：{{ selectedElement.selector || '未生成' }}</div>
+                <div>文本：{{ selectedElement.textContent || '（无可见文本）' }}</div>
+              </div>
+            </template>
+            <template #action>
+              <a-button size="small" type="link" @click="clearSelectedElement">清除</a-button>
+            </template>
+          </a-alert>
+        </div>
+
         <div class="input-area">
           <div class="input-wrapper">
             <a-textarea
               v-model:value="inputText"
-              placeholder="描述具体的需求，例如：修改配色为深色模式..."
+              :placeholder="inputPlaceholder"
               :auto-size="{ minRows: 2, maxRows: 6 }"
               @pressEnter="handleEnter"
             />
@@ -122,9 +147,15 @@
             <a-radio-button value="desktop">桌面端</a-radio-button>
             <a-radio-button value="mobile">移动端</a-radio-button>
           </a-radio-group>
-          <a-button size="small" @click="refreshIframe">
-            <template #icon><reload-outlined /></template>
-          </a-button>
+          <a-space>
+            <a-button size="small" :type="editMode ? 'primary' : 'default'" @click="toggleEditMode">
+              {{ editMode ? '退出编辑模式' : '进入编辑模式' }}
+            </a-button>
+            <a-button size="small" :disabled="!selectedElement" @click="clearSelectedElement">清除选中</a-button>
+            <a-button size="small" @click="refreshIframe">
+              <template #icon><reload-outlined /></template>
+            </a-button>
+          </a-space>
         </div>
         <a-alert
           v-if="previewWarning"
@@ -155,13 +186,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { 
-  LeftOutlined, 
-  CloudUploadOutlined, 
-  ReloadOutlined, 
+import {
+  LeftOutlined,
+  CloudUploadOutlined,
+  DownloadOutlined,
+  ReloadOutlined,
   PaperClipOutlined, 
   ThunderboltOutlined, 
   ArrowUpOutlined,
@@ -169,6 +201,7 @@ import {
 } from '@ant-design/icons-vue'
 import { createChatSession, deployApp, getAppVoById, listChatHistoryByPage, listChatSession } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
+import { createVisualEditor, type ElementInfo } from '@/utils/visualEditor'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,6 +215,7 @@ const currentSessionId = ref<string>()
 const inputText = ref('')
 const generating = ref(false)
 const deployLoading = ref(false)
+const downloadLoading = ref(false)
 const sessionLoading = ref(false)
 const sessionInitializing = ref(false)
 const previewType = ref('desktop')
@@ -195,11 +229,41 @@ const chatPanelWidth = ref(450)
 const resizing = ref(false)
 const resizeStartX = ref(0)
 const resizeStartWidth = ref(450)
+const selectedElement = ref<ElementInfo | null>(null)
+const editMode = ref(false)
+
+const isOwner = computed(() => {
+  const loginUserId = loginUserStore.loginUser?.id
+  return !!(loginUserId && app.value?.userId && String(loginUserId) === String(app.value.userId))
+})
+
+const canDownload = computed(() => isOwner.value)
+
+const inputPlaceholder = computed(() => {
+  if (selectedElement.value) {
+    return '已选择页面元素，请描述要修改的内容...'
+  }
+  return '描述具体的需求，例如：修改配色为深色模式...'
+})
 
 type ToolEvent = {
   type: 'request' | 'executed'
   text: string
 }
+
+const visualEditor = createVisualEditor({
+  getIframe: () => iframeRef.value,
+  onElementHover: () => {},
+  onElementSelected: (element) => {
+    selectedElement.value = element
+  },
+  onModeChange: (enabled) => {
+    editMode.value = enabled
+    if (!enabled) {
+      selectedElement.value = null
+    }
+  },
+})
 
 const normalizeId = (id?: string | number | null) => {
   if (id === undefined || id === null) {
@@ -404,6 +468,25 @@ const handleReloadCurrentSession = async () => {
   streamWarning.value = ''
 }
 
+const buildSelectedElementPrompt = (userInput: string) => {
+  if (!selectedElement.value) {
+    return userInput
+  }
+  const target = selectedElement.value
+  const text = target.textContent || '（无可见文本）'
+  const selector = target.selector || '（无可用选择器）'
+  const pagePath = target.pagePath || '/'
+  return [
+    '选中元素信息：',
+    `- 页面路径：${pagePath}`,
+    `- 标签：${target.tagName}`,
+    `- 选择器：${selector}`,
+    `- 当前内容：${text}`,
+    '',
+    `修改需求：${userInput}`,
+  ].join('\n')
+}
+
 const appendVueProjectChunk = (aiMsgIndex: number, chunk: string) => {
   try {
     const messageObj = JSON.parse(chunk)
@@ -413,14 +496,13 @@ const appendVueProjectChunk = (aiMsgIndex: number, chunk: string) => {
       return
     }
     if (type === 'tool_request') {
-      const path = parsePathFromArguments(messageObj.arguments)
-      const text = path ? `\n[工具调用] 准备写入文件 ${path}` : '\n[工具调用] 正在执行文件写入'
+      const text = `\n[工具调用] ${formatToolText(messageObj.name, messageObj.arguments, 'request')}`
       messages.value[aiMsgIndex].content += text
       return
     }
     if (type === 'tool_executed') {
-      const path = parsePathFromArguments(messageObj.arguments)
-      const text = path ? `\n[工具完成] 已写入文件 ${path}` : `\n[工具完成] ${messageObj.result || '执行成功'}`
+      const executedText = formatToolText(messageObj.name, messageObj.arguments, 'executed', messageObj.result)
+      const text = `\n[工具完成] ${executedText}`
       messages.value[aiMsgIndex].content += text
       return
     }
@@ -436,10 +518,38 @@ const parsePathFromArguments = (argumentsText?: string) => {
   }
   try {
     const argsObj = JSON.parse(argumentsText)
-    return argsObj.relativeFilePath || ''
+    return argsObj.relativeFilePath || argsObj.relativeDirPath || ''
   } catch {
     return ''
   }
+}
+
+const formatToolText = (toolName?: string, argumentsText?: string, stage: 'request' | 'executed' = 'request', result?: string) => {
+  const path = parsePathFromArguments(argumentsText)
+  const requestMap: Record<string, string> = {
+    writeFile: path ? `准备写入文件 ${path}` : '准备写入文件',
+    readFile: path ? `准备读取文件 ${path}` : '准备读取文件',
+    modifyFile: path ? `准备修改文件 ${path}` : '准备修改文件',
+    deleteFile: path ? `准备删除文件 ${path}` : '准备删除文件',
+    readDir: path ? `准备读取目录 ${path}` : '准备读取目录结构',
+  }
+  const executedMap: Record<string, string> = {
+    writeFile: path ? `已写入文件 ${path}` : '文件写入成功',
+    readFile: path ? `已读取文件 ${path}` : '文件读取成功',
+    modifyFile: path ? `已修改文件 ${path}` : '文件修改成功',
+    deleteFile: path ? `已删除文件 ${path}` : '文件删除成功',
+    readDir: path ? `目录结构读取完成 ${path}` : '目录结构读取完成',
+  }
+  if (stage === 'request') {
+    return requestMap[toolName || ''] || `正在执行工具 ${toolName || ''}`.trim()
+  }
+  if (result && String(result).startsWith('文件修改失败')) {
+    return result
+  }
+  if (result && String(result).startsWith('禁止删除关键文件')) {
+    return result
+  }
+  return executedMap[toolName || ''] || (result || `工具执行成功 ${toolName || ''}`.trim())
 }
 
 const ensureSessionReady = async () => {
@@ -462,16 +572,17 @@ const ensureSessionReady = async () => {
 }
 
 const doChat = async () => {
-  if (generating.value || !inputText.value) return
+  const rawMessage = inputText.value.trim()
+  if (generating.value || !rawMessage) return
   const sessionId = await ensureSessionReady()
   if (!sessionId) {
     message.warning('会话初始化中，请稍后再试')
     return
   }
-  const msg = inputText.value
-  messages.value.push({ role: 'user', content: msg, toolEvents: [] })
+  const promptMessage = buildSelectedElementPrompt(rawMessage)
+  messages.value.push({ role: 'user', content: rawMessage, toolEvents: [] })
   inputText.value = ''
-  startSSE(msg, sessionId)
+  startSSE(promptMessage, sessionId)
 }
 
 const handleEnter = (e: KeyboardEvent) => {
@@ -488,6 +599,7 @@ const updatePreview = () => {
   const codeGenType = app.value?.codeGenType || 'single_file'
   const deployUrlPrefix = import.meta.env.VITE_APP_DEPLOY_URL_PREFIX
   previewWarning.value = ''
+  selectedElement.value = null
   if (codeGenType === 'vue_project') {
     iframeUrl.value = `${deployUrlPrefix}/vue_project_${appId}/dist/index.html?t=${Date.now()}`
     return
@@ -509,10 +621,32 @@ const handleIframeLoad = () => {
   } catch {
     previewWarning.value = ''
   }
+  visualEditor.handleIframeLoad()
+}
+
+const clearSelectedElement = () => {
+  selectedElement.value = null
+  visualEditor.clearSelection()
+}
+
+const toggleEditMode = () => {
+  if (!iframeUrl.value) {
+    message.warning('暂无可编辑预览，请先生成页面内容')
+    return
+  }
+  if (editMode.value) {
+    visualEditor.exitEditMode()
+    return
+  }
+  const entered = visualEditor.enterEditMode()
+  if (!entered) {
+    message.warning('编辑模式初始化失败，请刷新预览后重试')
+  }
 }
 
 const refreshIframe = () => {
   if (iframeUrl.value) {
+    clearSelectedElement()
     const url = new URL(iframeUrl.value)
     url.searchParams.set('t', Date.now().toString())
     iframeUrl.value = url.toString()
@@ -526,6 +660,7 @@ const handleCreateSession = async () => {
   }
   const newSessionId = await createSession()
   if (newSessionId) {
+    clearSelectedElement()
     currentSessionId.value = newSessionId
     messages.value = []
     updatePreview()
@@ -537,6 +672,7 @@ const handleSwitchSession = async (sessionId?: string | number) => {
   if (!normalizedSessionId || generating.value || normalizedSessionId === currentSessionId.value) {
     return
   }
+  clearSelectedElement()
   currentSessionId.value = normalizedSessionId
   await loadRemoteHistory(normalizedSessionId)
 }
@@ -561,13 +697,119 @@ const doDeploy = async () => {
     const res = await deployApp({ appId: appId as any })
     if (res.data?.code === 0) {
       message.success('部署成功！地址：' + res.data.data)
-      loadApp()
+      await loadApp()
+      pollCoverAfterDeploy()
     } else {
       message.error('部署失败，' + res.data?.message)
     }
   } finally {
     deployLoading.value = false
   }
+}
+
+const doDownload = async () => {
+  if (!ensureValidAppId()) {
+    return
+  }
+  if (!canDownload.value) {
+    message.warning('仅应用创建者可以下载源码')
+    return
+  }
+  downloadLoading.value = true
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL
+    const response = await fetch(`${baseUrl}/app/download/${appId}`, {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      message.error('下载失败，请稍后重试')
+      return
+    }
+    const contentDisposition = response.headers.get('Content-Disposition') || ''
+    const fileNameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+    const fileName = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1]) : `app-${appId}.zip`
+    const blob = await response.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+    message.success('源码下载已开始')
+  } catch (error: any) {
+    message.error('下载失败，' + (error?.message || '未知错误'))
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
+const formatCodeGenType = (codeGenType?: string) => {
+  if (codeGenType === 'single_file') {
+    return '单文件模式'
+  }
+  if (codeGenType === 'multi-file') {
+    return '多文件模式'
+  }
+  if (codeGenType === 'vue_project') {
+    return 'Vue 项目模式'
+  }
+  return codeGenType || '未知模式'
+}
+
+const formatCoverTaskStatus = (status?: string, retryCount?: number) => {
+  if (status === 'PENDING') {
+    return '封面任务待执行'
+  }
+  if (status === 'RUNNING') {
+    return `封面生成中（第 ${retryCount || 1} 次）`
+  }
+  if (status === 'SUCCESS') {
+    return '封面已更新'
+  }
+  if (status === 'SKIPPED') {
+    return '已保留原封面'
+  }
+  if (status === 'FAILED') {
+    return `封面生成失败（重试 ${retryCount || 0} 次）`
+  }
+  return '封面状态未知'
+}
+
+const coverTaskStatusColor = (status?: string) => {
+  if (status === 'PENDING') {
+    return 'gold'
+  }
+  if (status === 'RUNNING') {
+    return 'processing'
+  }
+  if (status === 'SUCCESS') {
+    return 'success'
+  }
+  if (status === 'SKIPPED') {
+    return 'default'
+  }
+  if (status === 'FAILED') {
+    return 'error'
+  }
+  return 'default'
+}
+
+const pollCoverAfterDeploy = async () => {
+  let count = 0
+  const maxCount = 8
+  const timer = setInterval(async () => {
+    count += 1
+    await loadApp()
+    if (app.value?.cover || app.value?.coverTaskStatus === 'FAILED' || count >= maxCount) {
+      if (app.value?.coverTaskStatus === 'FAILED' && app.value?.coverErrorMessage) {
+        message.warning(`封面生成失败：${app.value.coverErrorMessage}`)
+      }
+      clearInterval(timer)
+    }
+  }, 4000)
 }
 
 const renderMarkdown = (text: string) => {
@@ -701,6 +943,8 @@ const startResize = (event: MouseEvent) => {
 }
 
 onUnmounted(() => {
+  visualEditor.exitEditMode()
+  visualEditor.dispose()
   stopResize()
 })
 </script>
@@ -952,6 +1196,22 @@ onUnmounted(() => {
   border-radius: 10px;
 }
 
+.selected-element-panel {
+  padding: 0 20px 12px;
+}
+
+.selected-element-panel :deep(.ant-alert) {
+  border-radius: 10px;
+}
+
+.selected-element-content {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #334155;
+  word-break: break-all;
+}
+
 .input-area {
   padding: 20px;
   border-top: 1px solid #f0f0f0;
@@ -1049,5 +1309,9 @@ onUnmounted(() => {
   border-radius: 20px;
   background: #1a1a1a;
   border-color: #1a1a1a;
+}
+
+.download-btn {
+  border-radius: 20px;
 }
 </style>

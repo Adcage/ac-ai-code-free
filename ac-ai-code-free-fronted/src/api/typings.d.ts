@@ -65,6 +65,9 @@ declare namespace API {
     createTime?: string
     updateTime?: string
     user?: UserVO
+    coverTaskStatus?: string
+    coverRetryCount?: number
+    coverErrorMessage?: string
   }
 
   type BaseResponseApp = {

@@ -86,6 +86,8 @@
       </div>
       <div class="card-info-bottom">
         <div class="status-tags">
+          <a-tag color="blue" size="small" v-if="app.codeGenType">{{ formatCodeGenType(app.codeGenType) }}</a-tag>
+          <a-tag :color="isOwner ? 'green' : 'default'" size="small">{{ isOwner ? '可下载源码' : '仅作者可下载' }}</a-tag>
           <slot name="tags" v-if="tagPosition === 'bottom-left'">
             <a-tag color="success" v-if="app.deployKey" size="small">已部署</a-tag>
           </slot>
@@ -179,6 +181,13 @@ const handleDelete = () => emit('delete', props.app.id)
 const formatDate = (date: any) => {
   if (!date) return ''
   return dayjs(date).fromNow()
+}
+
+const formatCodeGenType = (codeGenType?: string) => {
+  if (codeGenType === 'single_file') return '单文件'
+  if (codeGenType === 'multi-file') return '多文件'
+  if (codeGenType === 'vue_project') return 'Vue'
+  return '未知'
 }
 </script>
 

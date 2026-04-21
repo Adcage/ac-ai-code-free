@@ -39,7 +39,7 @@
       </a-form-item>
 
       <a-form-item label="生成类型" name="codeGenType" extra="生成类型不可修改">
-        <a-input v-model:value="formState.codeGenType" disabled />
+        <a-input :value="formatCodeGenType(formState.codeGenType)" disabled />
       </a-form-item>
 
       <a-form-item label="部署密钥" name="deployKey" extra="部署密钥不可修改">
@@ -86,6 +86,19 @@ const formState = reactive<any>({
   codeGenType: '',
   deployKey: '',
 })
+
+const formatCodeGenType = (codeGenType?: string) => {
+  if (codeGenType === 'single_file') {
+    return '单文件模式'
+  }
+  if (codeGenType === 'multi-file') {
+    return '多文件模式'
+  }
+  if (codeGenType === 'vue_project') {
+    return 'Vue 项目模式'
+  }
+  return codeGenType || '未知模式'
+}
 
 /**
  * 暴露给父组件的打开方法

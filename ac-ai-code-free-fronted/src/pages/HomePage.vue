@@ -147,7 +147,6 @@ const doGenerate = async () => {
   try {
     const res = await addApp({
       initPrompt: searchText.value,
-      codeGenType: 'vue_project',
     })
     if (res.data?.code === 0) {
       router.push(`/app/generate/${res.data.data}`)
