@@ -244,6 +244,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
+        log.info("用户信息:{}",message);
         // 2. 查询应用信息并校验权限
         App app = getAndCheckApp(appId, loginUser);
         // 3. 校验会话归属
@@ -275,7 +276,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                         } catch (Exception e) {
                             status = "failed";
                             aiMessage = aiMessage + "\n构建失败：" + e.getMessage();
-                            extra = JSONUtil.toJsonStr(Map.of("buildError", e.getMessage()));
+                            extra = JSONUtil.toJsonStr(Map.of(
+                                    "buildError", e.getMessage(),
+                                    "buildErrorType", e.getClass().getSimpleName()
+                            ));
+                            log.error("Vue 项目构建失败, appId={}, sessionId={}, codeGenType={}, userId={}, message={}",
+                                    appId, sessionId, codeGenTypeStr, loginUser.getId(), message, e);
                         }
                     }
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, codeGenTypeStr, latencyMs, extra);
@@ -285,6 +291,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     int latencyMs = (int) (System.currentTimeMillis() - startTime);
                     Map<String, String> extraInfo = new HashMap<>();
                     extraInfo.put("error", error.getMessage());
+                    extraInfo.put("errorType", error.getClass().getSimpleName());
+                    log.error("代码生成流程异常, appId={}, sessionId={}, codeGenType={}, userId={}, message={}",
+                            appId, sessionId, codeGenTypeStr, loginUser.getId(), message, error);
                     String aiMessage = StrUtil.isBlank(readableAssistantMessageBuilder.toString())
                             ? "生成失败：" + error.getMessage()
                             : readableAssistantMessageBuilder.toString();

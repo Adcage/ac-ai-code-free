@@ -607,6 +607,31 @@ const updatePreview = () => {
   iframeUrl.value = `${deployUrlPrefix}/${codeGenType}_${appId}/index.html?t=${Date.now()}`
 }
 
+const extractLatestFailureReason = () => {
+  for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+    const item = messages.value[i]
+    if (item.role !== 'ai' || !item.content) {
+      continue
+    }
+    const lines = item.content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .reverse()
+    const failureLine = lines.find((line) => {
+      return (
+        line.startsWith('生成失败：') ||
+        line.startsWith('构建失败：') ||
+        line.includes('argument type mismatch')
+      )
+    })
+    if (failureLine) {
+      return failureLine
+    }
+  }
+  return ''
+}
+
 const handleIframeLoad = () => {
   if (!iframeRef.value) {
     return
@@ -614,7 +639,10 @@ const handleIframeLoad = () => {
   try {
     const text = iframeRef.value.contentDocument?.body?.innerText || ''
     if (text.includes('Whitelabel Error Page') || text.includes('No static resource')) {
-      previewWarning.value = '预览资源不存在，通常是构建失败导致 dist 未生成。请先查看最新 AI 消息中的构建结果。'
+      const latestFailureReason = extractLatestFailureReason()
+      previewWarning.value = latestFailureReason
+        ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
+        : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。请先查看最新 AI 消息中的构建结果。'
       return
     }
     previewWarning.value = ''

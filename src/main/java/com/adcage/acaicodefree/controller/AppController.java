@@ -243,10 +243,15 @@ public class AppController {
         if (finalSessionId == null || finalSessionId <= 0) {
             finalSessionId = appService.createChatSession(appId, loginUser);
         }
+        final Long resolvedSessionId = finalSessionId;
         // 调用服务层方法(流式)
-        Flux<String> stringFlux = appService.chatToGenCode(appId, finalSessionId, message, loginUser)
-                .onErrorResume(error -> Flux.just("生成失败：" + StrUtil.nullToDefault(error.getMessage(), "未知错误")));
-        Map<String, Object> metaData = Map.of("sessionId", finalSessionId);
+        Flux<String> stringFlux = appService.chatToGenCode(appId, resolvedSessionId, message, loginUser)
+                .onErrorResume(error -> {
+                    log.error("SSE 代码生成失败, appId={}, sessionId={}, userId={}, message={}",
+                            appId, resolvedSessionId, loginUser.getId(), message, error);
+                    return Flux.just("生成失败：" + StrUtil.nullToDefault(error.getMessage(), "未知错误"));
+                });
+        Map<String, Object> metaData = Map.of("sessionId", resolvedSessionId);
         String metaJson = JSONUtil.toJsonStr(metaData);
         ServerSentEvent<String> metaEvent = ServerSentEvent.<String>builder()
                 .event("meta")

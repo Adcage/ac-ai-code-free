@@ -25,23 +25,30 @@ class AiCodeGenServiceFactoryTest {
     }
 
     @Test
-    void shouldBuildVueProjectServiceWithToolAndMemory() {
+    void shouldBuildToolServiceForVueProject() {
         TestFactory factory = new TestFactory();
 
         factory.getService(1L, CodeGenTypeEnum.VUE_PROJECT);
 
         Assertions.assertEquals(1, factory.vueCreateCount);
-        Assertions.assertEquals(0, factory.legacyCreateCount);
     }
 
     @Test
-    void shouldBuildLegacyServiceWithoutVueProjectTooling() {
+    void shouldBuildToolServiceForSingleFile() {
         TestFactory factory = new TestFactory();
 
         factory.getService(1L, CodeGenTypeEnum.SINGLE_FILE);
 
-        Assertions.assertEquals(0, factory.vueCreateCount);
-        Assertions.assertEquals(1, factory.legacyCreateCount);
+        Assertions.assertEquals(1, factory.vueCreateCount);
+    }
+
+    @Test
+    void shouldBuildToolServiceForMultiFile() {
+        TestFactory factory = new TestFactory();
+
+        factory.getService(1L, CodeGenTypeEnum.MULTI_FILE);
+
+        Assertions.assertEquals(1, factory.vueCreateCount);
     }
 
     @Test
@@ -66,7 +73,6 @@ class AiCodeGenServiceFactoryTest {
     private static class TestFactory extends AiCodeGenServiceFactory {
 
         private int createCount;
-        private int legacyCreateCount;
         private int vueCreateCount;
 
         private TestFactory() {
@@ -79,14 +85,7 @@ class AiCodeGenServiceFactoryTest {
         }
 
         @Override
-        protected AiCodeGeneratorService createLegacyService() {
-            createCount++;
-            legacyCreateCount++;
-            return Mockito.mock(AiCodeGeneratorService.class);
-        }
-
-        @Override
-        protected AiCodeGeneratorService createVueProjectService(Long appId) {
+        protected AiCodeGeneratorService createToolService(Long appId) {
             createCount++;
             vueCreateCount++;
             return Mockito.mock(AiCodeGeneratorService.class);

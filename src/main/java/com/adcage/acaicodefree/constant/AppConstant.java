@@ -6,6 +6,8 @@ import java.nio.file.Path;
 public interface AppConstant {
 
     String VUE_PROJECT_OUTPUT_PREFIX = "vue_project_";
+    String SINGLE_FILE_OUTPUT_PREFIX = "single_file_";
+    String MULTI_FILE_OUTPUT_PREFIX = "multi-file_";
 
     String DIST_DIR_NAME = "dist";
 
@@ -44,6 +46,14 @@ public interface AppConstant {
 
     static Path getVueProjectOutputDir(Long appId) {
         return getCodeOutputRootPath().resolve(VUE_PROJECT_OUTPUT_PREFIX + appId);
+    }
+
+    static Path getSingleFileOutputDir(Long appId) {
+        return getCodeOutputRootPath().resolve(SINGLE_FILE_OUTPUT_PREFIX + appId);
+    }
+
+    static Path getMultiFileOutputDir(Long appId) {
+        return getCodeOutputRootPath().resolve(MULTI_FILE_OUTPUT_PREFIX + appId);
     }
 
 }

@@ -58,20 +58,14 @@ public class AiCodeGenServiceFactory {
     }
 
     private AiCodeGeneratorService createService(Long appId, CodeGenTypeEnum codeGenType) {
-        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT) {
-            return createVueProjectService(appId);
-        }
-        return createLegacyService();
+        // 统一使用带工具的服务
+        return createToolService(appId);
     }
 
-    protected AiCodeGeneratorService createLegacyService() {
-        return AiServices.builder(AiCodeGeneratorService.class)
-                .chatLanguageModel(chatModel)
-                .streamingChatLanguageModel(legacyStreamingChatLanguageModel)
-                .build();
-    }
-
-    protected AiCodeGeneratorService createVueProjectService(Long appId) {
+    /**
+     * 创建带工具的服务（统一使用）
+     */
+    protected AiCodeGeneratorService createToolService(Long appId) {
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatLanguageModel(chatModel)
                 .streamingChatLanguageModel(reasoningStreamingChatModel)

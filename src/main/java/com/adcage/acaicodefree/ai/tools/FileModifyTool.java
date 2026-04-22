@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.exception.BusinessException;
+import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import org.springframework.stereotype.Component;
@@ -52,16 +53,21 @@ public class FileModifyTool extends BaseTool {
         return StrUtil.blankToDefault(result, "文件修改完成");
     }
 
-    @Tool("替换文件中的指定内容")
-    public String modifyFile(String relativeFilePath, String oldContent, String newContent, @ToolMemoryId Long appId) {
+    @Tool("修改文件内容，通过字符串替换方式")
+    public String modifyFile(String relativeFilePath, String oldContent, String newContent,
+                            @ToolMemoryId Long appId, String codeGenType) {
         if (StrUtil.isBlank(oldContent)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "oldContent 不能为空");
         }
-        Path normalized = resolveRelativePath(relativeFilePath, appId);
-        Path projectRoot = resolveProjectRoot(appId);
+
+        CodeGenTypeEnum genType = parseCodeGenType(codeGenType);
+        Path normalized = resolveRelativePath(relativeFilePath, appId, genType);
+        Path projectRoot = resolveProjectRootByType(appId, genType);
+
         if (!Files.exists(normalized) || !Files.isRegularFile(normalized)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
         }
+
         try {
             String original = Files.readString(normalized, StandardCharsets.UTF_8);
             if (!original.contains(oldContent)) {
@@ -73,5 +79,13 @@ public class FileModifyTool extends BaseTool {
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件修改失败");
         }
+    }
+
+    private CodeGenTypeEnum parseCodeGenType(String codeGenType) {
+        if (StrUtil.isBlank(codeGenType)) {
+            return CodeGenTypeEnum.VUE_PROJECT;
+        }
+        CodeGenTypeEnum type = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        return type != null ? type : CodeGenTypeEnum.VUE_PROJECT;
     }
 }

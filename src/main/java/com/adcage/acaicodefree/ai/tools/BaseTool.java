@@ -5,6 +5,7 @@ import cn.hutool.json.JSONObject;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.exception.BusinessException;
+import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 
 import java.nio.file.Path;
 
@@ -35,14 +36,51 @@ public abstract class BaseTool {
         return getDisplayName() + "完成";
     }
 
+    /**
+     * 解析项目根目录（默认 Vue 工程）
+     *
+     * @param appId 应用 ID
+     * @return 项目根目录路径
+     */
     protected Path resolveProjectRoot(Long appId) {
+        return resolveProjectRootByType(appId, CodeGenTypeEnum.VUE_PROJECT);
+    }
+
+    /**
+     * 根据代码生成类型解析项目根目录
+     *
+     * @param appId       应用 ID
+     * @param codeGenType 代码生成类型（支持 VUE_PROJECT, SINGLE_FILE, MULTI_FILE）
+     * @return 项目根目录路径
+     */
+    protected Path resolveProjectRootByType(Long appId, CodeGenTypeEnum codeGenType) {
         if (appId == null || appId <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "应用 ID 非法");
         }
-        return codeOutputRootPath.resolve(AppConstant.VUE_PROJECT_OUTPUT_PREFIX + appId).normalize();
+        if (codeGenType == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "代码生成类型不能为空");
+        }
+        String prefix = switch (codeGenType) {
+            case SINGLE_FILE -> AppConstant.SINGLE_FILE_OUTPUT_PREFIX;
+            case MULTI_FILE -> AppConstant.MULTI_FILE_OUTPUT_PREFIX;
+            case VUE_PROJECT -> AppConstant.VUE_PROJECT_OUTPUT_PREFIX;
+        };
+        return codeOutputRootPath.resolve(prefix + appId).normalize();
     }
 
     protected Path resolveRelativePath(String relativeFilePath, Long appId) {
+        return resolveRelativePath(relativeFilePath, appId, CodeGenTypeEnum.VUE_PROJECT);
+    }
+
+    /**
+     * 根据代码生成类型解析相对路径
+     *
+     * @param relativeFilePath 相对文件路径
+     * @param appId            应用 ID
+     * @param codeGenType      代码生成类型
+     * @return 解析后的完整路径
+     */
+    protected Path resolveRelativePath(String relativeFilePath, Long appId, CodeGenTypeEnum codeGenType) {
         if (StrUtil.isBlank(relativeFilePath)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件路径不能为空");
         }
@@ -50,7 +88,7 @@ public abstract class BaseTool {
         if (relativePath.isAbsolute()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "非法文件路径");
         }
-        Path projectRoot = resolveProjectRoot(appId);
+        Path projectRoot = resolveProjectRootByType(appId, codeGenType);
         Path normalized = projectRoot.resolve(relativePath).normalize();
         if (!normalized.startsWith(projectRoot)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "非法文件路径");

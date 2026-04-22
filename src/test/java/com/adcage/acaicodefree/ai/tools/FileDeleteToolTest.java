@@ -22,7 +22,7 @@ class FileDeleteToolTest {
         Files.createDirectories(targetFile.getParent());
         Files.writeString(targetFile, "<template>hello</template>", StandardCharsets.UTF_8);
 
-        String result = fileDeleteTool.deleteFile("src/components/Hello.vue", 1L);
+        String result = fileDeleteTool.deleteFile("src/components/Hello.vue", 1L, "vue_project");
 
         Assertions.assertEquals("文件删除成功：src/components/Hello.vue", result);
         Assertions.assertFalse(Files.exists(targetFile));
@@ -35,8 +35,34 @@ class FileDeleteToolTest {
         Files.createDirectories(targetFile.getParent());
         Files.writeString(targetFile, "{}", StandardCharsets.UTF_8);
 
-        Assertions.assertThrows(BusinessException.class, () -> fileDeleteTool.deleteFile("package.json", 1L));
+        Assertions.assertThrows(BusinessException.class, () -> fileDeleteTool.deleteFile("package.json", 1L, "vue_project"));
         Assertions.assertTrue(Files.exists(targetFile));
+    }
+
+    @Test
+    void deleteFileShouldWorkWithSingleFile() throws Exception {
+        FileDeleteTool fileDeleteTool = createTool();
+        Path targetFile = tempDir.resolve("single_file_1").resolve("index.html");
+        Files.createDirectories(targetFile.getParent());
+        Files.writeString(targetFile, "<html></html>", StandardCharsets.UTF_8);
+
+        String result = fileDeleteTool.deleteFile("index.html", 1L, "single_file");
+
+        Assertions.assertEquals("文件删除成功：index.html", result);
+        Assertions.assertFalse(Files.exists(targetFile));
+    }
+
+    @Test
+    void deleteFileShouldWorkWithMultiFile() throws Exception {
+        FileDeleteTool fileDeleteTool = createTool();
+        Path targetFile = tempDir.resolve("multi-file_1").resolve("script.js");
+        Files.createDirectories(targetFile.getParent());
+        Files.writeString(targetFile, "console.log('test')", StandardCharsets.UTF_8);
+
+        String result = fileDeleteTool.deleteFile("script.js", 1L, "multi-file");
+
+        Assertions.assertEquals("文件删除成功：script.js", result);
+        Assertions.assertFalse(Files.exists(targetFile));
     }
 
     private FileDeleteTool createTool() {
