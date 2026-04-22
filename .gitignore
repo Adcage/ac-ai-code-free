@@ -3,6 +3,7 @@ src/main/resources/application-local.yml
 
 
 temp
+storage/
 
 ### Maven ###
 HELP.md
