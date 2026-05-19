@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -36,30 +35,32 @@ class AiCodeGeneratorFacadeTest {
     }
 
     @Test
-    void shouldRouteSingleFileStreamToLegacyService() {
+    void shouldRouteSingleFileStreamWithAppId() {
+        TokenStream tokenStream = new EmptyTokenStream();
         when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.SINGLE_FILE))).thenReturn(aiCodeGeneratorService);
-        when(aiCodeGeneratorService.generateSingleFileCodeStream("生成页面")).thenReturn(Flux.just("<html>", "ok</html>"));
+        when(aiCodeGeneratorService.generateSingleFileCodeStream(1L, "生成页面")).thenReturn(tokenStream);
 
         List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream("生成页面", CodeGenTypeEnum.SINGLE_FILE, 1L)
                 .collectList()
                 .block();
 
         Assertions.assertNotNull(result);
-        verify(aiCodeGeneratorService).generateSingleFileCodeStream("生成页面");
+        verify(aiCodeGeneratorService).generateSingleFileCodeStream(1L, "生成页面");
     }
 
     @Test
     void shouldRouteSingleFileModifyStreamWhenVisualEditPromptProvided() {
         String visualEditPrompt = "选中元素信息：\n- 标签：h1\n\n修改需求：改标题";
+        TokenStream tokenStream = new EmptyTokenStream();
         when(aiCodeGenServiceFactory.getService(anyLong(), eq(CodeGenTypeEnum.SINGLE_FILE))).thenReturn(aiCodeGeneratorService);
-        when(aiCodeGeneratorService.modifySingleFileCodeStream(visualEditPrompt)).thenReturn(Flux.just("<html>modify</html>"));
+        when(aiCodeGeneratorService.modifySingleFileCodeStream(1L, visualEditPrompt)).thenReturn(tokenStream);
 
         List<String> result = aiCodeGeneratorFacade.generateAndSaveCodeStream(visualEditPrompt, CodeGenTypeEnum.SINGLE_FILE, 1L)
                 .collectList()
                 .block();
 
         Assertions.assertNotNull(result);
-        verify(aiCodeGeneratorService).modifySingleFileCodeStream(visualEditPrompt);
+        verify(aiCodeGeneratorService).modifySingleFileCodeStream(1L, visualEditPrompt);
     }
 
     @Test
