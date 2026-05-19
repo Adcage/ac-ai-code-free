@@ -58,17 +58,21 @@ public class AiCodeGenServiceFactory {
     }
 
     private AiCodeGeneratorService createService(Long appId, CodeGenTypeEnum codeGenType) {
-        // 统一使用带工具的服务
-        return createToolService(appId);
+        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT) {
+            log.info("创建代码生成服务, appId={}, codeGenType={}, streamModel=reasoning, tools=enabled", appId, codeGenType);
+            return createToolService(appId, reasoningStreamingChatModel);
+        }
+        log.info("创建代码生成服务, appId={}, codeGenType={}, streamModel=legacy, tools=enabled", appId, codeGenType);
+        return createToolService(appId, legacyStreamingChatLanguageModel);
     }
 
     /**
      * 创建带工具的服务（统一使用）
      */
-    protected AiCodeGeneratorService createToolService(Long appId) {
+    protected AiCodeGeneratorService createToolService(Long appId, StreamingChatLanguageModel streamingChatLanguageModel) {
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatLanguageModel(chatModel)
-                .streamingChatLanguageModel(reasoningStreamingChatModel)
+                .streamingChatLanguageModel(streamingChatLanguageModel)
                 .tools(toolManager.getAllTools())
                 .chatMemoryProvider(memoryId -> resolveChatMemory(memoryId, appId))
                 .build();

@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.ai;
 import com.adcage.acaicodefree.core.memory.ChatMemoryLoader;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,8 @@ class AiCodeGenServiceFactoryTest {
 
         factory.getService(1L, CodeGenTypeEnum.SINGLE_FILE);
 
-        Assertions.assertEquals(1, factory.vueCreateCount);
+        Assertions.assertEquals(0, factory.vueCreateCount);
+        Assertions.assertEquals(1, factory.legacyCreateCount);
     }
 
     @Test
@@ -48,7 +50,8 @@ class AiCodeGenServiceFactoryTest {
 
         factory.getService(1L, CodeGenTypeEnum.MULTI_FILE);
 
-        Assertions.assertEquals(1, factory.vueCreateCount);
+        Assertions.assertEquals(0, factory.vueCreateCount);
+        Assertions.assertEquals(1, factory.legacyCreateCount);
     }
 
     @Test
@@ -74,6 +77,7 @@ class AiCodeGenServiceFactoryTest {
 
         private int createCount;
         private int vueCreateCount;
+        private int legacyCreateCount;
 
         private TestFactory() {
             this(new EmptyObjectProvider<>());
@@ -82,12 +86,20 @@ class AiCodeGenServiceFactoryTest {
         private TestFactory(ObjectProvider<ChatMemoryLoader> chatMemoryLoaderProvider) {
             ReflectionTestUtils.setField(this, "chatMemoryLoaderProvider", chatMemoryLoaderProvider);
             ReflectionTestUtils.setField(this, "memoryWindowSize", 20);
+            ReflectionTestUtils.setField(this, "legacyStreamingChatLanguageModel", Mockito.mock(StreamingChatLanguageModel.class));
+            ReflectionTestUtils.setField(this, "reasoningStreamingChatModel", Mockito.mock(StreamingChatLanguageModel.class));
         }
 
         @Override
-        protected AiCodeGeneratorService createToolService(Long appId) {
+        protected AiCodeGeneratorService createToolService(Long appId, StreamingChatLanguageModel streamingChatLanguageModel) {
             createCount++;
-            vueCreateCount++;
+            StreamingChatLanguageModel reasoningModel = (StreamingChatLanguageModel) ReflectionTestUtils
+                    .getField(this, "reasoningStreamingChatModel");
+            if (streamingChatLanguageModel == reasoningModel) {
+                vueCreateCount++;
+            } else {
+                legacyCreateCount++;
+            }
             return Mockito.mock(AiCodeGeneratorService.class);
         }
     }
