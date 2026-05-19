@@ -632,6 +632,11 @@ const extractLatestFailureReason = () => {
   return ''
 }
 
+const isTimeoutFailureReason = (reason: string) => {
+  const lowerReason = reason.toLowerCase()
+  return lowerReason.includes('timeout') || lowerReason.includes('timed out') || lowerReason.includes('read timed out')
+}
+
 const handleIframeLoad = () => {
   if (!iframeRef.value) {
     return
@@ -640,9 +645,13 @@ const handleIframeLoad = () => {
     const text = iframeRef.value.contentDocument?.body?.innerText || ''
     if (text.includes('Whitelabel Error Page') || text.includes('No static resource')) {
       const latestFailureReason = extractLatestFailureReason()
-      previewWarning.value = latestFailureReason
-        ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
-        : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。请先查看最新 AI 消息中的构建结果。'
+      if (latestFailureReason) {
+        previewWarning.value = isTimeoutFailureReason(latestFailureReason)
+          ? `预览资源不存在，AI 服务响应超时导致本次代码未完整生成。建议重试一次，或先缩短需求范围后再次生成。最近一次失败原因：${latestFailureReason}`
+          : `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
+      } else {
+        previewWarning.value = '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。请先查看最新 AI 消息中的构建结果。'
+      }
       return
     }
     previewWarning.value = ''
