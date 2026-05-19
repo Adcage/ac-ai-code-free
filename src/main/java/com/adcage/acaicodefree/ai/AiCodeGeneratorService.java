@@ -34,35 +34,43 @@ public interface AiCodeGeneratorService {
 
     /**
      * 生成单个文件代码流
+     *
+     * @param appId       应用 ID（记忆隔离）
      * @param userMessage 用户输入
      * @return 生成的代码流
      */
     @SystemMessage(fromResource = "prompt/codegen-single-file-system-prompt.txt")
-    Flux<String> generateSingleFileCodeStream(String userMessage);
+    TokenStream generateSingleFileCodeStream(@MemoryId Long appId, @UserMessage String userMessage);
 
     /**
      * 修改单个文件代码流
+     *
+     * @param appId       应用 ID（记忆隔离）
      * @param userMessage 用户输入
      * @return 生成的代码流
      */
     @SystemMessage(fromResource = "prompt/codegen-single-file-modify-system-prompt.txt")
-    Flux<String> modifySingleFileCodeStream(String userMessage);
+    TokenStream modifySingleFileCodeStream(@MemoryId Long appId, @UserMessage String userMessage);
 
     /**
      * 生成多个文件代码流
+     *
+     * @param appId       应用 ID（记忆隔离）
      * @param userMessage 用户输入
      * @return 生成的代码流
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
-    Flux<String> generateMultiFileCodeStream(String userMessage);
+    TokenStream generateMultiFileCodeStream(@MemoryId Long appId, @UserMessage String userMessage);
 
     /**
      * 修改多文件代码流
+     *
+     * @param appId       应用 ID（记忆隔离）
      * @param userMessage 用户输入
      * @return 生成的代码流
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-modify-system-prompt.txt")
-    Flux<String> modifyMultiFileCodeStream(String userMessage);
+    TokenStream modifyMultiFileCodeStream(@MemoryId Long appId, @UserMessage String userMessage);
 
     /**
      * 生成 Vue 工程代码流（带工具调用事件）
@@ -84,7 +92,7 @@ public interface AiCodeGeneratorService {
     @SystemMessage(fromResource = "prompt/codegen-vue-project-modify-system-prompt.txt")
     TokenStream modifyVueProjectCodeStream(@MemoryId Long appId, @UserMessage String userMessage);
 
-    /**··
+    /**
      * 聊天
      * @param userMessage 用户输入
      * @return 聊天结果

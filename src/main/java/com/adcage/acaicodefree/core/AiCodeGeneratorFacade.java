@@ -11,6 +11,7 @@ import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.core.saver.CodeFileSaverExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolExecution;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -71,11 +72,11 @@ public class AiCodeGeneratorFacade {
         boolean modifyRequest = VisualEditPromptHelper.isVisualEditRequest(userMessage);
         Flux<String> codeStream = switch (codeGenType) {
             case SINGLE_FILE -> modifyRequest
-                    ? aiCodeGeneratorService.modifySingleFileCodeStream(userMessage)
-                    : aiCodeGeneratorService.generateSingleFileCodeStream(userMessage);
+                    ? buildTokenTextStream(aiCodeGeneratorService.modifySingleFileCodeStream(appId, userMessage))
+                    : buildTokenTextStream(aiCodeGeneratorService.generateSingleFileCodeStream(appId, userMessage));
             case MULTI_FILE -> modifyRequest
-                    ? aiCodeGeneratorService.modifyMultiFileCodeStream(userMessage)
-                    : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+                    ? buildTokenTextStream(aiCodeGeneratorService.modifyMultiFileCodeStream(appId, userMessage))
+                    : buildTokenTextStream(aiCodeGeneratorService.generateMultiFileCodeStream(appId, userMessage));
             case VUE_PROJECT -> buildVueProjectMessageStream(aiCodeGeneratorService, appId, userMessage, modifyRequest);
             default -> {
                 String message = "不支持的生成代码类型" + codeGenType.getValue();
@@ -93,20 +94,41 @@ public class AiCodeGeneratorFacade {
                                                       Long appId,
                                                       String userMessage,
                                                       boolean modifyRequest) {
+        TokenStream tokenStream = modifyRequest
+                ? service.modifyVueProjectCodeStream(appId, userMessage)
+                : service.generateVueProjectCodeStream(appId, userMessage);
         return Flux.create(sink -> {
             try {
-                if (modifyRequest) {
-                    service.modifyVueProjectCodeStream(appId, userMessage)
-                            .onNext(token -> handleToken(sink, token))
-                            .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
-                            .onError(sink::error)
-                            .onComplete(response -> sink.complete())
-                            .start();
-                    return;
-                }
-                service.generateVueProjectCodeStream(appId, userMessage)
+                tokenStream
                         .onNext(token -> handleToken(sink, token))
                         .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
+                        .onError(sink::error)
+                        .onComplete(response -> sink.complete())
+                        .start();
+            } catch (Exception e) {
+                sink.error(e);
+            }
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    private Flux<String> buildTokenTextStream(TokenStream tokenStream) {
+        return Flux.create(sink -> {
+            try {
+                tokenStream
+                        .onNext(token -> {
+                            if (sink.isCancelled() || StrUtil.isBlank(token)) {
+                                return;
+                            }
+                            sink.next(token);
+                        })
+                        .onToolExecuted(toolExecution -> {
+                            if (toolExecution == null || toolExecution.request() == null) {
+                                return;
+                            }
+                            log.info("单/多文件工具调用, name={}, arguments={}",
+                                    toolExecution.request().name(),
+                                    toolExecution.request().arguments());
+                        })
                         .onError(sink::error)
                         .onComplete(response -> sink.complete())
                         .start();
