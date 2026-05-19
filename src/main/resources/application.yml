@@ -1,7 +1,15 @@
 spring:
   application:
     name: ac-ai-code-free-backend
-    # mysql
+  # redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+  # mysql
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ac_ai_code_free
@@ -36,6 +44,7 @@ langchain4j:
       log-requests: true
       log-responses: true
       max-tokens: 8192
+      max-retries: 3
     streaming-chat-model:
       base-url: https://api.deepseek.com
       api-key: ${DEEPSEEK_API_KEY:}
@@ -43,9 +52,24 @@ langchain4j:
       log-requests: true
       log-responses: true
       max-tokens: 8192
+      max-retries: 2
 
 app:
+  rate-limit:
+    ai-chat:
+      user-rate: 5
+      user-interval-seconds: 60
+      ip-rate: 3
+      ip-interval-seconds: 60
   ai:
+    max-sequential-tools-invocations: 20
+    routing:
+      base-url: ${AI_ROUTING_BASE_URL:https://api.deepseek.com}
+      api-key: ${AI_ROUTING_API_KEY:}
+      model-name: ${AI_ROUTING_MODEL:deepseek-chat}
+      max-tokens: 100
+      temperature: 0.0
+      max-retries: 3
     vue-project:
       base-url: https://api.deepseek.com
       api-key: ${DEEPSEEK_API_KEY:}
@@ -53,6 +77,8 @@ app:
       prod-model-name: deepseek-reasoner
       dev-max-tokens: 8192
       prod-max-tokens: 32768
+      temperature: 0.1
+      max-retries: 2
       memory-window-size: 20
       install-timeout-seconds: 300
       build-timeout-seconds: 180

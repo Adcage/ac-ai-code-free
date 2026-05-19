@@ -30,6 +30,12 @@ public class ReasoningStreamingChatModelConfig {
     @Value("${app.ai.vue-project.prod-max-tokens}")
     private Integer prodMaxTokens;
 
+    @Value("${app.ai.vue-project.temperature:0.1}")
+    private Double temperature;
+
+    @Value("${app.ai.vue-project.max-retries:2}")
+    private Integer maxRetries;
+
     @Resource
     private Environment environment;
 
@@ -41,6 +47,7 @@ public class ReasoningStreamingChatModelConfig {
                 .apiKey(apiKey)
                 .modelName(useDevModel ? devModelName : prodModelName)
                 .maxTokens(useDevModel ? devMaxTokens : prodMaxTokens)
+                .temperature(temperature)
                 .logRequests(true)
                 .logResponses(true)
                 .build();
