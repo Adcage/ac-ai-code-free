@@ -6,10 +6,14 @@ import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 
 public abstract class BaseTool {
+
+    private static final Logger log = LoggerFactory.getLogger(BaseTool.class);
 
     protected Path codeOutputRootPath = AppConstant.getCodeOutputRootPath();
 
@@ -120,5 +124,26 @@ public abstract class BaseTool {
             return normalized;
         }
         return normalized.substring(0, maxLength) + "...";
+    }
+
+    protected long logToolStart(String action, Long appId, CodeGenTypeEnum codeGenType, String targetPath) {
+        long startNanos = System.nanoTime();
+        log.info("工具开始执行, tool={}, action={}, appId={}, codeGenType={}, path={}",
+                getToolName(), action, appId, codeGenType == null ? "unknown" : codeGenType.name(), targetPath);
+        return startNanos;
+    }
+
+    protected void logToolSuccess(String action, Long appId, CodeGenTypeEnum codeGenType,
+                                  String targetPath, long startNanos) {
+        long costMs = (System.nanoTime() - startNanos) / 1_000_000;
+        log.info("工具执行成功, tool={}, action={}, appId={}, codeGenType={}, path={}, costMs={}",
+                getToolName(), action, appId, codeGenType == null ? "unknown" : codeGenType.name(), targetPath, costMs);
+    }
+
+    protected void logToolFailure(String action, Long appId, CodeGenTypeEnum codeGenType,
+                                  String targetPath, long startNanos, Exception e) {
+        long costMs = (System.nanoTime() - startNanos) / 1_000_000;
+        log.error("工具执行失败, tool={}, action={}, appId={}, codeGenType={}, path={}, costMs={}",
+                getToolName(), action, appId, codeGenType == null ? "unknown" : codeGenType.name(), targetPath, costMs, e);
     }
 }

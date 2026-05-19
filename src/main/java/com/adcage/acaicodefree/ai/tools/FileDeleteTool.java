@@ -72,6 +72,7 @@ public class FileDeleteTool extends BaseTool {
         Path projectRoot = resolveProjectRootByType(appId, genType);
         Path relativePath = projectRoot.relativize(normalized);
         String displayRelativePath = toDisplayPath(relativePath);
+        long startNanos = logToolStart("delete", appId, genType, displayRelativePath);
         String normalizedRelativePath = displayRelativePath.toLowerCase();
         if (isProtectedFile(normalizedRelativePath)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "禁止删除关键文件：" + displayRelativePath);
@@ -81,7 +82,9 @@ public class FileDeleteTool extends BaseTool {
         }
         try {
             Files.delete(normalized);
+            logToolSuccess("delete", appId, genType, displayRelativePath, startNanos);
         } catch (IOException e) {
+            logToolFailure("delete", appId, genType, displayRelativePath, startNanos, e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件删除失败");
         }
         return "文件删除成功：" + displayRelativePath;

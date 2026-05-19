@@ -61,11 +61,14 @@ public class FileDirReadTool extends BaseTool {
         } else {
             targetDir = resolveRelativePath(relativeDirPath, appId, genType);
         }
+        String displayPath = projectRoot.equals(targetDir) ? "." : toDisplayPath(projectRoot.relativize(targetDir));
+        long startNanos = logToolStart("readDir", appId, genType, displayPath);
         if (!Files.exists(targetDir) || !Files.isDirectory(targetDir)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "目录不存在");
         }
         StringBuilder builder = new StringBuilder();
         appendDirectory(builder, targetDir, projectRoot, 0);
+        logToolSuccess("readDir", appId, genType, displayPath, startNanos);
         return builder.toString().trim();
     }
 

@@ -50,16 +50,20 @@ public class FileWriteTool extends BaseTool {
         CodeGenTypeEnum genType = parseCodeGenType(codeGenType);
         Path normalized = resolveRelativePath(relativeFilePath, appId, genType);
         Path projectRoot = resolveProjectRootByType(appId, genType);
+        String displayPath = toDisplayPath(projectRoot.relativize(normalized));
+        long startNanos = logToolStart("write", appId, genType, displayPath);
         try {
             Path parent = normalized.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
             Files.writeString(normalized, content == null ? "" : content, StandardCharsets.UTF_8);
+            logToolSuccess("write", appId, genType, displayPath, startNanos);
         } catch (IOException e) {
+            logToolFailure("write", appId, genType, displayPath, startNanos, e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件写入失败");
         }
-        return "文件写入成功：" + toDisplayPath(projectRoot.relativize(normalized));
+        return "文件写入成功：" + displayPath;
     }
 
     private CodeGenTypeEnum parseCodeGenType(String codeGenType) {

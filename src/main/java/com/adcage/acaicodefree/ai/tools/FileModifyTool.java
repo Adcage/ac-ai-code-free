@@ -63,6 +63,8 @@ public class FileModifyTool extends BaseTool {
         CodeGenTypeEnum genType = parseCodeGenType(codeGenType);
         Path normalized = resolveRelativePath(relativeFilePath, appId, genType);
         Path projectRoot = resolveProjectRootByType(appId, genType);
+        String displayPath = toDisplayPath(projectRoot.relativize(normalized));
+        long startNanos = logToolStart("modify", appId, genType, displayPath);
 
         if (!Files.exists(normalized) || !Files.isRegularFile(normalized)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
@@ -71,12 +73,15 @@ public class FileModifyTool extends BaseTool {
         try {
             String original = Files.readString(normalized, StandardCharsets.UTF_8);
             if (!original.contains(oldContent)) {
+                logToolSuccess("modify-noop", appId, genType, displayPath, startNanos);
                 return "文件修改失败：未找到匹配内容 " + toDisplayPath(projectRoot.relativize(normalized));
             }
             String replaced = original.replace(oldContent, StrUtil.nullToEmpty(newContent));
             Files.writeString(normalized, replaced, StandardCharsets.UTF_8);
-            return "文件修改成功：" + toDisplayPath(projectRoot.relativize(normalized));
+            logToolSuccess("modify", appId, genType, displayPath, startNanos);
+            return "文件修改成功：" + displayPath;
         } catch (IOException e) {
+            logToolFailure("modify", appId, genType, displayPath, startNanos, e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件修改失败");
         }
     }

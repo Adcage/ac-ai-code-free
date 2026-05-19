@@ -49,12 +49,18 @@ public class FileReadTool extends BaseTool {
     public String readFile(String relativeFilePath, @ToolMemoryId Long appId, String codeGenType) {
         CodeGenTypeEnum genType = parseCodeGenType(codeGenType);
         Path normalized = resolveRelativePath(relativeFilePath, appId, genType);
+        Path projectRoot = resolveProjectRootByType(appId, genType);
+        String displayPath = toDisplayPath(projectRoot.relativize(normalized));
+        long startNanos = logToolStart("read", appId, genType, displayPath);
         if (!Files.exists(normalized) || !Files.isRegularFile(normalized)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
         }
         try {
-            return Files.readString(normalized, StandardCharsets.UTF_8);
+            String content = Files.readString(normalized, StandardCharsets.UTF_8);
+            logToolSuccess("read", appId, genType, displayPath, startNanos);
+            return content;
         } catch (IOException e) {
+            logToolFailure("read", appId, genType, displayPath, startNanos, e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "文件读取失败");
         }
     }
