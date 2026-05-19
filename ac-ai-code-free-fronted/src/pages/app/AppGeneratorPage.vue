@@ -403,7 +403,7 @@ const startSSE = (userMsg: string, sessionId: string) => {
     }
   })
 
-  const stopGenerating = () => {
+  const stopGenerating = (delayPreviewRefresh = false) => {
     eventSource.close()
     if (streamCompleted) {
       streamWarning.value = ''
@@ -411,20 +411,38 @@ const startSSE = (userMsg: string, sessionId: string) => {
     if (generating.value) {
       generating.value = false
       loadSessions()
-      updatePreview()
+      if (delayPreviewRefresh) {
+        setTimeout(() => {
+          updatePreview()
+        }, 500)
+      } else {
+        updatePreview()
+      }
     }
   }
 
+  eventSource.addEventListener('business-error', (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data)
+      const errorMsg = data.message || '操作失败'
+      messages.value[aiMsgIndex].content += `\n\n[错误] ${errorMsg}`
+      message.error(errorMsg)
+    } catch {
+      message.error('操作失败')
+    }
+    stopGenerating()
+  })
+
   eventSource.addEventListener('done', () => {
     streamCompleted = true
-    stopGenerating()
+    stopGenerating(true)
   })
 
   eventSource.onmessage = (event) => {
     const rawData = event.data
     if (rawData === '[DONE]') {
       streamCompleted = true
-      stopGenerating()
+      stopGenerating(true)
       return
     }
     
@@ -432,7 +450,7 @@ const startSSE = (userMsg: string, sessionId: string) => {
       const data = JSON.parse(rawData)
       if (data.d === '[DONE]') {
         streamCompleted = true
-        stopGenerating()
+        stopGenerating(true)
         return
       }
       const chunk = data.d || ''
@@ -445,7 +463,7 @@ const startSSE = (userMsg: string, sessionId: string) => {
     } catch {
       if (rawData.includes('[DONE]')) {
         streamCompleted = true
-        stopGenerating()
+        stopGenerating(true)
       }
     }
   }

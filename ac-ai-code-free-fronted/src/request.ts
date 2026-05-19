@@ -41,6 +41,10 @@ myAxios.interceptors.response.use(
     return response
   },
   function (error) {
+    if (error.response?.status === 429) {
+      message.warning('请求过于频繁，请稍后再试')
+      return Promise.reject(error)
+    }
     if (error.code === 'ERR_CONNECTION_REFUSED') {
       message.error('后端服务未启动，请检查服务状态')
     }
