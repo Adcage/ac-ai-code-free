@@ -778,6 +778,7 @@ object-storage:
 3. 节点测试：每个节点只校验状态变更
 4. 工作流测试：线性工作流、并发工作流
 5. 控制器测试：SSE 接口、同步执行接口
+6. 端到端业务链路测试：全部使用真实外部 API 调用，验证从用户输入到最终代码生成落盘的完整业务闭环。覆盖正向链路、异常降级链路、配置切换链路和并发场景。测试类使用 `@Tag("e2e")` 标注，不纳入常规 `mvn test`，需通过 `mvn test -Dgroups=e2e` 或等价方式手动触发执行。测试执行前提：所有外部 API Key 已配置、Mermaid CLI 已安装、MySQL/Redis 服务可用。
 
 #### 12.2 外部依赖测试策略
 
@@ -791,6 +792,30 @@ object-storage:
 1. 外部 API 测试默认不进入 CI 主流程。
 2. 使用独立开关、环境变量或测试标签控制。
 3. 单测中不要直接依赖真实外部响应结构，避免脆弱。
+
+#### 12.3 端到端测试执行前提
+
+端到端测试不是单元测试的替代，而是对业务闭环的最终验证。每次执行前必须确认：
+
+1. `application-local.yml` 或环境变量中已配置真实 API Key：DeepSeek、Pexels、DashScope、COS。
+2. 本地已安装 Node.js 和 `@mermaid-js/mermaid-cli`（`npm install -g @mermaid-js/mermaid-cli`）。
+3. MySQL 和 Redis 服务正在运行。
+4. `app.codegen.workflow.enabled=true`，`app.codegen.workflow.mode=workflow`。
+5. 测试会真实调用外部 API，会产生少量费用（主要是 DashScope 文生图），请控制执行频次。
+
+执行命令：
+
+```bash
+mvn test -Dgroups=e2e
+```
+
+或者单独运行某个 E2E 测试类：
+
+```bash
+mvn test -Dtest=WorkflowE2EHappyPathTest
+mvn test -Dtest=WorkflowE2EEdgeCaseTest
+mvn test -Dtest=WorkflowE2EConfigSwitchTest
+```
 
 ### 13. 实施注意事项清单
 
@@ -1174,6 +1199,237 @@ mvn test -Dtest=CodeGenWorkflowStructureTest
 
 这个任务不是主路径，只用于对照学习和快速演示。
 
+### Task 14: 端到端业务链路与特殊场景测试
+
+本任务是阶段 10 的最终验证环节，在 Task 1-13 全部完成后执行。所有测试使用真实外部 API 调用，不用 Mock，确保验证的是真实业务链路而非假象。
+
+**Files:**
+- Create: `src/test/java/com/adcage/acaicodefree/workflow/e2e/E2ETestBase.java`
+- Create: `src/test/java/com/adcage/acaicodefree/workflow/e2e/WorkflowE2EHappyPathTest.java`
+- Create: `src/test/java/com/adcage/acaicodefree/workflow/e2e/WorkflowE2EEdgeCaseTest.java`
+- Create: `src/test/java/com/adcage/acaicodefree/workflow/e2e/WorkflowE2EConfigSwitchTest.java`
+
+**前置条件：**
+1. Task 1-13 全部完成且单测通过。
+2. 所有外部 API Key 已配置（DeepSeek、Pexels、DashScope、COS）。
+3. Mermaid CLI 已安装。
+4. MySQL 和 Redis 服务可用。
+5. `app.codegen.workflow.enabled=true`，`app.codegen.workflow.mode=workflow`。
+
+**Step 1: 创建 E2E 测试基类**
+
+`E2ETestBase.java` 提供以下能力：
+1. Spring Boot 测试上下文初始化，加载完整应用配置。
+2. 数据库清理与测试数据准备辅助方法。
+3. 临时应用创建与清理。
+4. SSE 事件收集与断言工具。
+5. 文件系统验证工具（检查生成目录、文件存在性）。
+6. 所有 E2E 测试类继承此基类。
+7. 类级别标注 `@Tag("e2e")`。
+
+**Step 2: 正向全链路测试（WorkflowE2EHappyPathTest）**
+
+以下 7 个测试用例验证业务链路从输入到输出的完整闭环：
+
+**E2E-01: Legacy 模式全链路**
+- 设置 `app.codegen.workflow.enabled=false`。
+- 发送对话请求，验证：SSE 流正常输出、代码文件落盘正确、chat_history 有记录。
+- 目的：确保引入工作流后旧链路不受影响。
+
+**E2E-02: Workflow 线性模式全链路（SINGLE_FILE）**
+- 设置 `mode=workflow`，`enable-parallel-image-collect=false`。
+- 输入"帮我做一个个人介绍网页"。
+- 验证：
+  - SSE 事件序列包含 `workflow_start`、多个 `step_completed`、`workflow_completed`。
+  - `imageListStr` 非空（Pexels 返回了图片）。
+  - `enhancedPrompt` 比原始 prompt 更具体更长。
+  - 路由结果为 `SINGLE_FILE`。
+  - `generatedCodeDir` 对应的目录存在且包含 `.html` 文件。
+  - `qualityResult.isValid=true`。
+  - chat_history 表有用户消息和 AI 回复记录。
+
+**E2E-03: Workflow 线性模式全链路（MULTI_FILE）**
+- 输入"帮我做一个企业官网，包含首页和关于我们"。
+- 验证：
+  - 路由结果为 `MULTI_FILE`。
+  - 生成目录包含 `index.html`、`style.css`、`script.js`。
+  - 其他同 E2E-02。
+
+**E2E-04: Workflow 并发模式全链路**
+- 设置 `enable-parallel-image-collect=true`。
+- 输入"帮我做一个产品展示网站"。
+- 验证：
+  - 日志中线程名包含 `Parallel-Image-Collect-`，确认并发生效。
+  - `imageList` 包含多种类别的图片（CONTENT、ILLUSTRATION 等）。
+  - 聚合节点在全部分支完成后触发。
+  - 最终代码生成和落盘正确。
+
+**E2E-05: 质量检查通过→skip_build**
+- 使用 `SINGLE_FILE` 模式。
+- 验证：质量检查通过后，工作流直接跳到 END，不触发 `project_builder`。
+  - SSE 事件中 `step_completed` 不包含 `project_builder`。
+
+**E2E-06: 质量检查失败→重试→通过**
+- 构造场景：首次生成结果不通过质量检查（例如缺少关键文件），重试后通过。
+- 验证：
+  - 工作流执行了至少两次 `code_generator` 节点。
+  - 最终 `qualityResult.isValid=true`。
+  - 最终生成目录有正确文件。
+
+**E2E-07: SSE 事件完整序列**
+- 对任意正常请求，收集全部 SSE 事件。
+- 验证：
+  - 第一个事件是 `workflow_start`。
+  - 最后一个非错误事件是 `workflow_completed`。
+  - 中间至少有 5 个 `step_completed` 事件（6 个节点至少经过 5 个）。
+  - 每个事件都包含 `step` 字段标识当前阶段。
+  - 事件之间没有缺失（`workflow_start` 的 `appId` 与 `workflow_completed` 的 `appId` 一致）。
+
+**Step 3: 异常边界与特殊场景测试（WorkflowE2EEdgeCaseTest）**
+
+以下 13 个测试用例验证异常降级链路和边界场景：
+
+**E2E-08: 所有图片工具失败**
+- 配置无效的 Pexels API Key、DashScope API Key。
+- 验证：
+  - `imageListStr` 为空或仅包含降级信息。
+  - `enhancedPrompt` 仍然可用（基于原始 prompt 生成）。
+  - 工作流不中断，最终代码仍能生成。
+  - SSE 流正常完成（`workflow_completed`），不是 `workflow_error`。
+
+**E2E-09: 部分图片工具失败**
+- 只配置有效的 Pexels API Key，其他 Key 无效。
+- 验证：
+  - `imageList` 只包含 CONTENT 类别图片。
+  - ILLUSTRATION、ARCHITECTURE、LOGO 类别为空。
+  - 工作流正常完成。
+
+**E2E-10: 对象存储上传失败**
+- 配置无效的 COS 凭证。
+- 验证：
+  - Mermaid 渲染的图片上传失败时，`MermaidDiagramTool` 返回空列表。
+  - Logo 生成后转存失败时，`LogoGeneratorTool` 返回空列表。
+  - 工作流不阻塞。
+
+**E2E-11: Mermaid CLI 不可用**
+- 将 `workflow.mermaid.command` 设置为不存在的命令（如 `mmdc_not_exist`）。
+- 验证：
+  - `MermaidDiagramTool` 优雅降级，返回空列表。
+  - 日志中有明确的命令执行失败信息。
+  - 工作流继续执行。
+
+**E2E-12: DashScope API 限流/超时**
+- 使用低配额或不存在的 DashScope API Key。
+- 验证：
+  - `LogoGeneratorTool` 返回空列表。
+  - 工作流继续执行。
+  - 日志中有明确的错误信息（限流或认证失败）。
+
+**E2E-13: 质量检查连续失败超限**
+- 构造场景：代码生成结果始终不通过质量检查（例如生成空目录）。
+- 验证：
+  - 工作流重试达到最大次数后以 `workflow_error` 事件结束。
+  - `errorMessage` 非空，包含失败原因。
+  - 不进入无限循环。
+
+**E2E-14: 空提示词输入**
+- 输入空字符串或纯空格。
+- 验证：
+  - 工作流在图片收集或增强阶段产生有效的降级结果。
+  - 不出现 NPE 或其他未捕获异常。
+  - SSE 流正常结束（可能是 `workflow_error` 或降级后的 `workflow_completed`）。
+
+**E2E-15: 超长提示词输入**
+- 输入超过 2000 字的 prompt。
+- 验证：
+  - 增强节点产出的 `enhancedPrompt` 长度可控（不超过模型最大 token 限制）。
+  - 工作流正常完成。
+
+**E2E-16: AI 路由返回异常值**
+- 构造场景：路由服务返回不在 `CodeGenTypeEnum` 中的值（通过 Mock 或特殊 prompt 诱导）。
+- 验证：
+  - 路由节点回退到默认值（`MULTI_FILE`）。
+  - 工作流不中断。
+  - 日志记录了异常路由结果。
+
+**E2E-17: 结构化输出解析失败**
+- 构造场景：`ImageCollectionPlanService` 返回非法 JSON 或不符合 `ImageCollectionPlan` 结构的响应。
+- 验证：
+  - 系统回退到基线版 `ImageCollectionService`（字符串模式）。
+  - 工作流正常完成。
+  - 日志记录了结构化输出解析失败。
+
+**E2E-18: SSE 连接中途断开**
+- 启动工作流后，在 `step_completed` 事件中途关闭 SSE 连接。
+- 验证：
+  - 后端工作流继续执行到完成（不是挂起）。
+  - 不出现线程泄漏或资源泄漏。
+  - 生成目录仍然正确落盘。
+  - chat_history 仍然有记录。
+
+**E2E-19: 多个工作流并发执行**
+- 同时发起两个不同 appId 的工作流请求。
+- 验证：
+  - 两个工作流的状态不串（`WorkflowContext` 的 `appId` 不混淆）。
+  - 生成目录各自独立。
+  - SSE 事件不交叉。
+  - 两个工作流都正常完成。
+
+**E2E-20: 并发线程池压力测试**
+- 设置 `workflow.thread-pool.core-size=2`，`max-size=3`。
+- 同时发起 5 个并发图片收集请求。
+- 验证：
+  - 线程池队列溢出时不崩溃。
+  - 超出容量的请求排队等待或降级处理。
+  - 工作流最终完成或以可控错误结束。
+
+**Step 4: 配置切换与兼容性测试（WorkflowE2EConfigSwitchTest）**
+
+以下 3 个测试用例验证配置切换时系统的行为一致性：
+
+**E2E-21: 运行时切换 mode**
+- 先用 `mode=legacy` 执行一次生成，确认成功。
+- 然后切换为 `mode=workflow`，对同一应用再次生成。
+- 验证：两次都能成功，且第二次走的是工作流链路（SSE 事件包含 `workflow_start`）。
+
+**E2E-22: Workflow 关闭时旧链路无回归**
+- 设置 `app.codegen.workflow.enabled=false`。
+- 执行完整对话生成流程。
+- 验证：
+  - 行为与阶段 7-9 完全一致（不经过工作流模块）。
+  - SSE 事件格式为旧格式，不含 `workflow_*` 事件。
+  - 代码生成、保存、部署功能正常。
+
+**E2E-23: 配置缺失时启动失败**
+- 移除必要配置项（如 `pexels.api-key` 或 `dashscope.api-key`），但保持 `app.codegen.workflow.enabled=true`。
+- 验证：
+  - 应用能正常启动（配置缺失不应阻止启动，只在运行时降级）。
+  - 或应用启动时明确报错且错误信息清晰（如果设计为启动时校验）。
+  - 不出现 NPE 或模糊错误。
+
+**Step 5: 执行全部 E2E 测试**
+
+```bash
+mvn test -Dgroups=e2e
+```
+
+或按类执行：
+
+```bash
+mvn test -Dtest=WorkflowE2EHappyPathTest
+mvn test -Dtest=WorkflowE2EEdgeCaseTest
+mvn test -Dtest=WorkflowE2EConfigSwitchTest
+```
+
+**Step 6: 验收标准**
+
+1. 7 个正向链路测试全部通过，业务闭环完整。
+2. 13 个异常边界测试全部通过，降级和容错行为符合预期。
+3. 3 个配置切换测试全部通过，旧链路无回归。
+4. 所有测试使用真实外部 API，不存在 Mock 假象。
+5. 每个失败的测试都有清晰的错误信息，便于定位问题。
+6. E2E 测试执行总时间不超过 10 分钟（控制 API 调用次数）。
+
 ### 推荐测试命令
 
 按阶段执行，不要每改一个文件就全量跑一次：
@@ -1319,6 +1575,57 @@ mvn clean package
 4. 代码接口层面的改造建议
 ```
 
+#### Prompt 9：端到端业务链路测试
+
+```text
+请为 Spring Boot + LangGraph4j + LangChain4j 工作流项目生成端到端业务链路测试类。
+
+要求：
+1. 放在 `com.adcage.acaicodefree.workflow.e2e` 包下。
+2. 创建 `E2ETestBase` 基类，提供 Spring Boot 测试上下文、数据库清理、临时应用创建、SSE 事件收集、文件系统验证等辅助方法。
+3. 所有测试类标注 `@Tag("e2e")`，不纳入常规 `mvn test`。
+4. **全部使用真实外部 API 调用，不用 Mock**。测试执行前提：DeepSeek、Pexels、DashScope、COS 的 API Key 已配置，Mermaid CLI 已安装，MySQL 和 Redis 可用。
+
+生成以下 3 个测试类：
+
+**WorkflowE2EHappyPathTest**（7 个正向链路测试）：
+1. Legacy 模式全链路
+2. Workflow 线性模式 SINGLE_FILE 全链路
+3. Workflow 线性模式 MULTI_FILE 全链路
+4. Workflow 并发模式全链路
+5. 质量检查通过→skip_build
+6. 质量检查失败→重试→通过
+7. SSE 事件完整序列
+
+**WorkflowE2EEdgeCaseTest**（13 个异常边界测试）：
+8. 所有图片工具失败
+9. 部分图片工具失败
+10. 对象存储上传失败
+11. Mermaid CLI 不可用
+12. DashScope API 限流/超时
+13. 质量检查连续失败超限
+14. 空提示词输入
+15. 超长提示词输入
+16. AI 路由返回异常值
+17. 结构化输出解析失败
+18. SSE 连接中途断开
+19. 多个工作流并发执行
+20. 并发线程池压力测试
+
+**WorkflowE2EConfigSwitchTest**（3 个配置切换测试）：
+21. 运行时切换 mode（legacy→workflow）
+22. Workflow 关闭时旧链路无回归
+23. 配置缺失时的行为
+
+每个测试方法的验证点必须具体：
+- SSE 事件序列和内容
+- WorkflowContext 状态字段的值
+- 文件系统的生成目录和文件
+- 数据库 chat_history 表的记录
+- 日志中的关键信息
+- 不出现 NPE、无限循环、资源泄漏
+```
+
 ### 最终验收清单
 
 1. `legacy` 与 `workflow` 两条代码生成链路可以并存。
@@ -1331,3 +1638,6 @@ mvn clean package
 8. 并发图片收集版本可以看到真实并发生效。
 9. 所有密钥都已切换为环境变量，不留明文。
 10. 关键测试命令可以执行，且结果可复现。
+11. 端到端真实 API 测试全部通过，正向链路从图片收集到代码生成落盘闭环。
+12. 所有异常边界场景（工具全部失败、质量检查连续失败、路由返回异常值、SSE 中途断开、并发状态串扰等）均有对应测试且通过。
+13. legacy/workflow 模式切换无回归，旧链路功能不受影响。
