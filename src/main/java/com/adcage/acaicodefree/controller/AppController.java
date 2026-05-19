@@ -25,6 +25,8 @@ import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
+import com.adcage.acaicodefree.ratelimit.annotation.RateLimit;
+import com.adcage.acaicodefree.ratelimit.enums.RateLimitType;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.ProjectDownloadService;
 import com.adcage.acaicodefree.service.UserService;
@@ -212,9 +214,8 @@ public class AppController {
         long pageNum = appQueryRequest.getPageNum();
         // 只查询精选的应用
         appQueryRequest.setPriority(AppConstant.GOOD_APP_PRIORITY);
-        QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest);
-        // 分页查询
-        Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
+        // 分页查询（走缓存）
+        Page<App> appPage = appService.listGoodAppPage(pageNum, pageSize, appQueryRequest);
         // 数据封装
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
         List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
@@ -230,6 +231,7 @@ public class AppController {
      * @param request 请求
      * @return 生成结果流
      */
+    @RateLimit(type = RateLimitType.USER, rate = 5, intervalSeconds = 60, message = "AI 对话请求过于频繁，请稍后再试")
     @GetMapping(value = "/chat/gen/code/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                                        @RequestParam(required = false) Long sessionId,
@@ -244,32 +246,45 @@ public class AppController {
             finalSessionId = appService.createChatSession(appId, loginUser);
         }
         final Long resolvedSessionId = finalSessionId;
-        // 调用服务层方法(流式)
-        Flux<String> stringFlux = appService.chatToGenCode(appId, resolvedSessionId, message, loginUser)
-                .onErrorResume(error -> {
-                    log.error("SSE 代码生成失败, appId={}, sessionId={}, userId={}, message={}",
-                            appId, resolvedSessionId, loginUser.getId(), message, error);
-                    return Flux.just("生成失败：" + StrUtil.nullToDefault(error.getMessage(), "未知错误"));
-                });
+        Flux<String> stringFlux = appService.chatToGenCode(appId, resolvedSessionId, message, loginUser);
         Map<String, Object> metaData = Map.of("sessionId", resolvedSessionId);
         String metaJson = JSONUtil.toJsonStr(metaData);
         ServerSentEvent<String> metaEvent = ServerSentEvent.<String>builder()
                 .event("meta")
                 .data(metaJson)
                 .build();
-        return Flux.just(metaEvent).concatWith(stringFlux.map(chunk -> {
-            Map<String, String> data = Map.of("d", chunk);
-            String jsonData = JSONUtil.toJsonStr(data);
-            return ServerSentEvent.<String>builder()
-                    .data(jsonData)
-                    .build();
-        })).concatWith(Mono.just(
-                // 发送结束事件
-                ServerSentEvent.<String>builder()
-                        .event("done")
-                        .data("")
-                        .build()
-        ));
+        ServerSentEvent<String> doneEvent = ServerSentEvent.<String>builder()
+                .event("done")
+                .data("")
+                .build();
+        return Flux.just(metaEvent)
+                .concatWith(stringFlux.map(chunk -> {
+                    Map<String, String> data = Map.of("d", chunk);
+                    String jsonData = JSONUtil.toJsonStr(data);
+                    return ServerSentEvent.<String>builder()
+                            .data(jsonData)
+                            .build();
+                }))
+                .concatWith(Mono.just(doneEvent))
+                .onErrorResume(error -> {
+                    log.error("SSE 代码生成失败, appId={}, sessionId={}, userId={}, message={}",
+                            appId, resolvedSessionId, loginUser.getId(), message, error);
+                    int errorCode;
+                    String errorMsg;
+                    if (error instanceof BusinessException be) {
+                        errorCode = be.getCode();
+                        errorMsg = be.getMessage();
+                    } else {
+                        errorCode = ErrorCode.SYSTEM_ERROR.getCode();
+                        errorMsg = "生成失败：" + StrUtil.nullToDefault(error.getMessage(), "未知错误");
+                    }
+                    Map<String, Object> errorData = Map.of("code", errorCode, "message", errorMsg);
+                    ServerSentEvent<String> errorEvent = ServerSentEvent.<String>builder()
+                            .event("business-error")
+                            .data(JSONUtil.toJsonStr(errorData))
+                            .build();
+                    return Flux.just(errorEvent);
+                });
     }
 
     /**

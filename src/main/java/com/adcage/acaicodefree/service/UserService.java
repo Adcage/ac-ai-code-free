@@ -48,6 +48,8 @@ public interface UserService extends IService<User> {
      */
     User getLoginUser(HttpServletRequest request);
 
+    User getLoginUserPermitNull(HttpServletRequest request);
+
     /**
      * 用户登录
      *

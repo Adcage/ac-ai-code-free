@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.ai.AiCodeGenServiceFactory;
 import com.adcage.acaicodefree.ai.AiCodeGeneratorService;
+import com.adcage.acaicodefree.ai.guardrail.PromptSafetyInputGuardrail;
 import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolExecutedMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
@@ -34,6 +35,9 @@ public class AiCodeGeneratorFacade {
     @Resource
     private AiCodeGenServiceFactory aiCodeGenServiceFactory;
 
+    @Resource
+    private PromptSafetyInputGuardrail promptSafetyInputGuardrail;
+
     /**
      * 统一入口,生成并保存代码
      *
@@ -42,6 +46,7 @@ public class AiCodeGeneratorFacade {
      * @return
      */
     public File generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType,Long appId) {
+        promptSafetyInputGuardrail.validate(userMessage);
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
@@ -65,6 +70,7 @@ public class AiCodeGeneratorFacade {
      * @return
      */
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType,Long appId) {
+        promptSafetyInputGuardrail.validate(userMessage);
         if (codeGenType == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成代码类型不能为空");
         }
