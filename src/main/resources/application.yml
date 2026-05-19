@@ -56,6 +56,13 @@ app:
       memory-window-size: 20
       install-timeout-seconds: 300
       build-timeout-seconds: 180
+  codegen:
+    workflow:
+      enabled: false
+      mode: legacy
+      max-image-count: 24
+      image-summary-limit: 12
+      enable-parallel-image-collect: false
   screenshot:
     temp-dir: ${user.dir}/storage/temp
     width: 1600
@@ -81,3 +88,15 @@ cos:
     secret-key: ${COS_SECRET_KEY:}
     region: ${COS_REGION:ap-shanghai}
     bucket: ${COS_BUCKET:}
+
+workflow:
+  mermaid:
+    command: ${WORKFLOW_MERMAID_COMMAND:mmdc}
+    temp-dir: ${java.io.tmpdir}
+
+pexels:
+  api-key: ${PEXELS_API_KEY:}
+
+dashscope:
+  api-key: ${DASHSCOPE_API_KEY:}
+  image-model: ${DASHSCOPE_IMAGE_MODEL:wanx2.2-t2i-flash}
