@@ -106,8 +106,3 @@ Vue 工程模式下 AI 作为智能体运行，具备自主工具调用能力：
 - **一键部署**：生成 6 位唯一 deployKey，复制 dist 到部署目录，静态资源映射即可访问
 - **多模型配置**：标准任务 DeepSeek Chat，Vue 工程推理 DeepSeek Reasoner
 
----
-
-## 许可证
-
-[MIT](LICENSE)
