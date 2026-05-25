@@ -42,8 +42,6 @@ build/
 
 
 ### Local ###
-docs/Projection/
-docs/plans/
-docs/phase-*-implementation-summary.md
+docs/*
+!docs/images/
 .worktrees/
-docs/diagrams/exports/
