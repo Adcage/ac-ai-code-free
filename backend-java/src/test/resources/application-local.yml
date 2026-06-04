@@ -1,0 +1,33 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+
+app:
+  ai:
+    routing:
+      base-url: http://localhost
+      api-key: dummy-key
+      model-name: dummy-model
+    vue-project:
+      base-url: http://localhost
+      api-key: dummy-key
+      dev-model-name: dummy-model
+      prod-model-name: dummy-model
+      dev-max-tokens: 100
+      prod-max-tokens: 100
+  redisson:
+    enabled: false
+
+langchain4j:
+  open-ai:
+    chat-model:
+      api-key: dummy-key
+    streaming-chat-model:
+      api-key: dummy-key
+
+storage:
+  type: local
+  local:
+    path: ../storage
+    url-prefix: http://localhost:8700/api/storage

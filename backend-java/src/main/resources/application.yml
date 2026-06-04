@@ -1,0 +1,128 @@
+spring:
+  application:
+    name: ac-ai-code-free-backend
+  # redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+  # mysql
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ac_ai_code_free
+    username: root
+    password: 123456
+  profiles:
+    active: local #使用local本地环境
+server:
+  port: 8700
+  servlet:
+    context-path: /api
+    session:
+      timeout: 1d
+
+# springdoc-openapi
+springdoc:
+  group-configs:
+    - group: 'default'
+      packages-to-scan: com.adcage.acaicodefree.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model-name: deepseek-chat
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+      max-retries: 3
+    streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model-name: deepseek-chat
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+      max-retries: 2
+
+app:
+  rate-limit:
+    ai-chat:
+      user-rate: 5
+      user-interval-seconds: 60
+      ip-rate: 3
+      ip-interval-seconds: 60
+  ai:
+    max-sequential-tools-invocations: 20
+    routing:
+      base-url: ${AI_ROUTING_BASE_URL:https://api.deepseek.com}
+      api-key: ${AI_ROUTING_API_KEY:}
+      model-name: ${AI_ROUTING_MODEL:deepseek-chat}
+      max-tokens: 100
+      temperature: 0.0
+      max-retries: 3
+    vue-project:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      dev-model-name: deepseek-chat
+      prod-model-name: deepseek-reasoner
+      dev-max-tokens: 8192
+      prod-max-tokens: 32768
+      temperature: 0.1
+      max-retries: 2
+      memory-window-size: 20
+      install-timeout-seconds: 300
+      build-timeout-seconds: 180
+  codegen:
+    workflow:
+      enabled: false
+      mode: legacy
+      max-image-count: 24
+      image-summary-limit: 12
+      enable-parallel-image-collect: false
+  screenshot:
+    temp-dir: ${APP_SCREENSHOT_TEMP_DIR:${user.dir}/../storage/temp}
+    width: 1600
+    height: 900
+    wait-after-load-millis: 2000
+    compression-quality: 0.3
+    upload-prefix: /screenshots
+    max-retries: 3
+    retry-delay-millis: 3000
+    browser: chrome  # 浏览器类型：chrome, edge, firefox
+
+# 存储配置
+storage:
+  type: ${STORAGE_TYPE:cos}  # 存储类型：cos 或 local，默认 COS
+  local:
+    path: ${STORAGE_LOCAL_PATH:../storage}  # 本地存储根目录
+    url-prefix: ${STORAGE_LOCAL_URL_PREFIX:http://localhost:8700/api/storage}  # 访问 URL 前缀
+
+cos:
+  client:
+    host: ${COS_HOST:https://your-cdn-or-cos-domain.com}
+    secret-id: ${COS_SECRET_ID:}
+    secret-key: ${COS_SECRET_KEY:}
+    region: ${COS_REGION:ap-shanghai}
+    bucket: ${COS_BUCKET:}
+
+workflow:
+  mermaid:
+    command: ${WORKFLOW_MERMAID_COMMAND:mmdc}
+    temp-dir: ${java.io.tmpdir}
+
+pexels:
+  api-key: ${PEXELS_API_KEY:}
+
+dashscope:
+  api-key: ${DASHSCOPE_API_KEY:}
+  image-model: ${DASHSCOPE_IMAGE_MODEL:wanx2.2-t2i-flash}

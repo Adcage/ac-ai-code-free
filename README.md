@@ -4,13 +4,51 @@
 
 ## 技术栈
 
-**后端**：Java 21 / Spring Boot 3.5.5 / MyBatis-Flex / LangChain4j 0.36.2 / Caffeine / Redis / Selenium / 腾讯云 COS
+**后端**：Java 17 / Spring Boot 3.5.5 / MyBatis-Flex / LangChain4j 0.36.2 / Caffeine / Redis / Selenium / 腾讯云 COS
 
 **前端**：Vue 3 / TypeScript / Vite 7 / Ant Design Vue / Pinia / Axios
 
 **AI 模型**：DeepSeek Chat / DeepSeek Reasoner / MiniMax M2.7
 
 **数据库**：MySQL 5.7+
+
+---
+
+## 仓库结构
+
+```text
+.
+├── backend-java/     # Spring Boot 后端与 LangChain4j AI 应用层
+├── frontend-vue/     # Vue 3 前端
+├── docs/             # 架构图与项目文档
+├── sql/              # 数据库建表脚本
+├── storage/          # 本地运行时存储（不提交）
+└── temp/             # 代码生成、构建、部署临时产物（不提交）
+```
+
+## 本地开发
+
+后端：
+
+```bash
+cd backend-java
+mvn spring-boot:run
+```
+
+前端：
+
+```bash
+cd frontend-vue
+npm install
+npm run dev
+```
+
+也可以在 Windows 根目录执行：
+
+```bash
+start-backend.bat
+start-frontend.bat
+```
 
 ---
 
@@ -105,4 +143,3 @@ Vue 工程模式下 AI 作为智能体运行，具备自主工具调用能力：
 - **源码下载**：自动排除 `node_modules` / `dist` / `.env`，ZIP 压缩写入 HTTP 响应流
 - **一键部署**：生成 6 位唯一 deployKey，复制 dist 到部署目录，静态资源映射即可访问
 - **多模型配置**：标准任务 DeepSeek Chat，Vue 工程推理 DeepSeek Reasoner
-

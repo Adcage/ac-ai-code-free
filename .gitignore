@@ -1,14 +1,15 @@
 ### Spring Boot App ###
-src/main/resources/application-local.yml
+backend-java/src/main/resources/application-local.yml
 
 
 temp
-storage/
+/storage/
 
 ### Maven ###
 HELP.md
 target/
-.mvn/wrapper/maven-wrapper.jar
+backend-java/target/
+backend-java/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
@@ -34,6 +35,9 @@ target/
 /nbdist/
 /.nb-gradle/
 build/
+frontend-vue/dist/
+frontend-vue/node_modules/
+frontend-vue/.vite/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
