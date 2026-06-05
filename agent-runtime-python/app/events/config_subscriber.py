@@ -1,11 +1,11 @@
 import json
-import logging
 
 import redis
 
-from app.config.settings import settings
+from app.core.config import settings
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("app.events.config_subscriber")
 
 CHANNEL = "model-config-events"
 

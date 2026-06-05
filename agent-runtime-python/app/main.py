@@ -1,17 +1,41 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 
-from app.api.code_generation import router as code_generation_router
-from app.config.settings import settings
+from app.api.router import api_router
+from app.core.config import settings
+from app.core.exception_handlers import (
+    agent_runtime_error_handler,
+    unhandled_exception_handler,
+    validation_error_handler,
+)
+from app.core.exceptions import AgentRuntimeError
+from app.core.logging import setup_logging
+from app.core.middleware import RequestContextMiddleware
+from app.core.response import success
 
-app = FastAPI(title="AC AI Code Free Agent Runtime")
-app.include_router(code_generation_router)
+
+def create_app() -> FastAPI:
+    setup_logging(settings.log_level)
+
+    app = FastAPI(title=settings.app_name, debug=settings.debug)
+
+    app.add_exception_handler(AgentRuntimeError, agent_runtime_error_handler)
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
+
+    app.add_middleware(RequestContextMiddleware)
+
+    app.include_router(api_router)
+
+    @app.get("/health", tags=["health"])
+    async def health(request: Request) -> dict:
+        return success(data={"status": "ok", "runtime": settings.agent_runtime_name}, request=request)
+
+    @app.get("/health/warmup", tags=["health"])
+    async def warmup(request: Request) -> dict:
+        return success(data={"status": "warmed"}, request=request)
+
+    return app
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "runtime": settings.agent_runtime_name}
-
-
-@app.get("/health/warmup")
-async def warmup() -> dict[str, str]:
-    return {"status": "warmed"}
+app = create_app()
