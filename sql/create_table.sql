@@ -92,3 +92,24 @@ CREATE TABLE IF NOT EXISTS chat_history
     INDEX idx_userId_appId_createTime (userId, appId, createTime),
     INDEX idx_appId_createTime (appId, createTime)
 ) COMMENT '对话历史' COLLATE = utf8mb4_unicode_ci;
+
+-- 模型配置表
+CREATE TABLE IF NOT EXISTS model_config
+(
+    id            BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    userId        BIGINT       NOT NULL COMMENT '用户id',
+    provider      VARCHAR(64)  NOT NULL COMMENT '模型提供商',
+    modelName     VARCHAR(128) NOT NULL COMMENT '模型名称',
+    baseUrl       VARCHAR(512) NOT NULL COMMENT 'API 基础地址',
+    apiKeyCipher  TEXT         NOT NULL COMMENT 'API 密钥（加密存储）',
+    temperature   DOUBLE       DEFAULT 0.7 COMMENT '温度参数',
+    maxTokens     INT          DEFAULT 8192 COMMENT '最大 token 数',
+    configVersion INT          DEFAULT 1     NOT NULL COMMENT '配置版本号',
+    enabled       TINYINT      DEFAULT 1     NOT NULL COMMENT '是否启用',
+    isDefault     TINYINT      DEFAULT 0     NOT NULL COMMENT '是否为默认配置',
+    createTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete      TINYINT      DEFAULT 0     NOT NULL COMMENT '是否删除',
+    INDEX idx_user_default (userId, isDefault),
+    INDEX idx_user_enabled (userId, enabled)
+) COMMENT '模型配置' COLLATE = utf8mb4_unicode_ci;
