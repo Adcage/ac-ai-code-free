@@ -4,8 +4,7 @@ import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RedissonClient;
-import org.redisson.api.Topic;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -15,10 +14,10 @@ import java.util.Map;
 @Service
 public class ModelConfigEventPublisher {
 
-    private static final String TOPIC_NAME = "model-config-events";
+    private static final String CHANNEL_NAME = "model-config-events";
 
     @Resource
-    private RedissonClient redissonClient;
+    private StringRedisTemplate stringRedisTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -31,8 +30,7 @@ public class ModelConfigEventPublisher {
             event.put("userId", modelConfig.getUserId());
 
             String message = objectMapper.writeValueAsString(event);
-            Topic topic = redissonClient.getTopic(TOPIC_NAME);
-            topic.publish(message);
+            stringRedisTemplate.convertAndSend(CHANNEL_NAME, message);
             log.info("发布模型配置更新事件: modelConfigId={}, configVersion={}", modelConfig.getId(), modelConfig.getConfigVersion());
         } catch (Exception e) {
             log.error("发布模型配置更新事件失败: {}", e.getMessage(), e);
