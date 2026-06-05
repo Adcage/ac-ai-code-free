@@ -9,8 +9,10 @@ import com.adcage.acaicodefree.exception.ThrowUtils;
 import com.adcage.acaicodefree.mapper.ModelConfigMapper;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.vo.modelconfig.ModelConfigVO;
+import com.adcage.acaicodefree.service.ModelConfigEventPublisher;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,6 +20,9 @@ import java.util.List;
 
 @Service
 public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, ModelConfig> implements ModelConfigService {
+
+    @Resource
+    private ModelConfigEventPublisher modelConfigEventPublisher;
 
     @Override
     public void validModelConfig(ModelConfig modelConfig, boolean add) {
@@ -59,5 +64,6 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
         update.setConfigVersion(modelConfig.getConfigVersion() + 1);
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新配置版本失败");
+        modelConfigEventPublisher.publishConfigUpdated(modelConfig);
     }
 }
