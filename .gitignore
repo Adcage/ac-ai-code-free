@@ -1,51 +1,61 @@
-### Spring Boot App ###
-backend-java/src/main/resources/application-local.yml
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/application-local.yml
+**/application-*.local.yml
 
+# Runtime outputs
+temp/
+storage/
+logs/
+*.log
 
-temp
-/storage/
-
-### Maven ###
+# Java / Maven
 HELP.md
-target/
 backend-java/target/
 backend-java/.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+!backend-java/**/src/main/**/target/
+!backend-java/**/src/test/**/target/
 
-### STS ###
-.apt_generated
+# Node / Vue
+frontend-vue/node_modules/
+frontend-vue/dist/
+frontend-vue/.vite/
+frontend-vue/coverage/
+
+# Python
+agent-runtime-python/.venv/
+agent-runtime-python/__pycache__/
+agent-runtime-python/**/*.pyc
+agent-runtime-python/.pytest_cache/
+agent-runtime-python/.ruff_cache/
+agent-runtime-python/.mypy_cache/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
+# Local tools
+.worktrees/
+.opencode/
+.ruff_cache/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-frontend-vue/dist/
-frontend-vue/node_modules/
-frontend-vue/.vite/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
-
-
-### Local ###
+# Docs - only track specific subdirectories
 docs/*
 !docs/images/
-.worktrees/
+!docs/superpowers/
+!docs/releases/
+
+# Generated local docs artifacts
+docs/**/*.tmp
+docs/**/*.bak
