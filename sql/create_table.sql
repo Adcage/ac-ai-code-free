@@ -113,3 +113,41 @@ CREATE TABLE IF NOT EXISTS model_config
     INDEX idx_user_default (userId, isDefault),
     INDEX idx_user_enabled (userId, enabled)
 ) COMMENT '模型配置' COLLATE = utf8mb4_unicode_ci;
+
+-- Agent 运行记录表
+CREATE TABLE IF NOT EXISTS agent_run
+(
+    id            BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appId         BIGINT       NOT NULL COMMENT '应用id',
+    sessionId     BIGINT       NOT NULL COMMENT '会话id',
+    userId        BIGINT       NOT NULL COMMENT '用户id',
+    runtime       VARCHAR(64)  NOT NULL COMMENT '运行时类型',
+    modelConfigId BIGINT       NULL COMMENT '模型配置id',
+    configVersion INT          NULL COMMENT '配置版本号',
+    status        VARCHAR(32)  NOT NULL COMMENT '运行状态',
+    workspacePath VARCHAR(1024) NULL COMMENT '工作区路径',
+    errorMessage  TEXT         NULL COMMENT '错误信息',
+    latencyMs     INT          DEFAULT 0 COMMENT '耗时（毫秒）',
+    createTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete      TINYINT      DEFAULT 0     NOT NULL COMMENT '是否删除',
+    INDEX idx_app_status (appId, status),
+    INDEX idx_session_time (sessionId, createTime)
+) COMMENT 'Agent 运行记录' COLLATE = utf8mb4_unicode_ci;
+
+-- 应用版本表
+CREATE TABLE IF NOT EXISTS app_version
+(
+    id           BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appId        BIGINT        NOT NULL COMMENT '应用id',
+    agentRunId   BIGINT        NOT NULL COMMENT 'Agent 运行id',
+    versionNo    INT           NOT NULL COMMENT '版本号',
+    sourcePath   VARCHAR(1024) NOT NULL COMMENT '源码路径',
+    buildPath    VARCHAR(1024) NULL COMMENT '构建输出路径',
+    status       VARCHAR(32)   NOT NULL COMMENT '版本状态',
+    createTime   DATETIME      DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime   DATETIME      DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete     TINYINT       DEFAULT 0     NOT NULL COMMENT '是否删除',
+    UNIQUE KEY uk_app_version (appId, versionNo),
+    INDEX idx_app_status (appId, status)
+) COMMENT '应用版本' COLLATE = utf8mb4_unicode_ci;
