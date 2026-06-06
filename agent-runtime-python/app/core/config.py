@@ -14,5 +14,8 @@ class Settings(BaseSettings):
     redis_url: str = ""
     agent_internal_secret: str = ""
 
+    model_request_timeout: int = 120
+    default_model_provider: str = "openai"
+
 
 settings = Settings()
