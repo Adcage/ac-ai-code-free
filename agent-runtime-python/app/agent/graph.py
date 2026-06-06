@@ -11,9 +11,16 @@ from app.tools.workspace import Workspace
 
 prompt_builder = PromptBuilder()
 
+_FALLBACK_CONTENT = "<template><main><h1>AI Generated App</h1></main></template>\n"
+
 
 def _strip_markdown_fences(text: str) -> str:
-    return re.sub(r"^```(?:vue|html)?\s*\n?", "", text).rstrip("`").strip()
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:vue|html)?\s*\n?", "", text)
+    if text.endswith("```"):
+        text = text[:-3].rstrip()
+    return text.strip()
 
 
 async def invoke_model(state: AgentState) -> AgentState:
@@ -23,7 +30,15 @@ async def invoke_model(state: AgentState) -> AgentState:
     chat_model = state.get("chat_model")
 
     if chat_model is None:
-        return {"request": request, "events": events, "chat_model": None, "generated_content": None, "error": None}
+        events.append(AgentEvent(
+            agentRunId=request.agentRunId, seq=seq, eventType="ai_response",
+            data={"content": _FALLBACK_CONTENT, "fallback": True},
+        ))
+        return {
+            "request": request, "events": events,
+            "model_config": state.get("model_config"), "chat_model": None,
+            "generated_content": _FALLBACK_CONTENT, "error": None,
+        }
 
     system_prompt = prompt_builder.build_vue_app_prompt(request.prompt)
     response: AIMessage = await chat_model.ainvoke([
@@ -37,27 +52,44 @@ async def invoke_model(state: AgentState) -> AgentState:
             agentRunId=request.agentRunId, seq=seq, eventType="error",
             data={"message": "模型返回内容为空"},
         ))
-        return {"request": request, "events": events, "chat_model": chat_model, "generated_content": None, "error": "模型返回内容为空"}
+        return {
+            "request": request, "events": events,
+            "model_config": state.get("model_config"), "chat_model": chat_model,
+            "generated_content": None, "error": "模型返回内容为空",
+        }
 
     events.append(AgentEvent(
         agentRunId=request.agentRunId, seq=seq, eventType="ai_response",
         data={"content": content},
     ))
 
-    return {"request": request, "events": events, "chat_model": chat_model, "generated_content": content, "error": None}
+    return {
+        "request": request, "events": events,
+        "model_config": state.get("model_config"), "chat_model": chat_model,
+        "generated_content": content, "error": None,
+    }
 
 
 async def write_file(state: AgentState) -> AgentState:
     request = state["request"]
     events = list(state["events"])
     seq = len(events) + 1
+    generated_content = state.get("generated_content")
+
+    if generated_content is None:
+        events.append(AgentEvent(
+            agentRunId=request.agentRunId, seq=seq, eventType="error",
+            data={"message": "无生成内容，跳过文件写入"},
+        ))
+        return {
+            "request": request, "events": events,
+            "model_config": state.get("model_config"), "chat_model": state.get("chat_model"),
+            "generated_content": None, "error": state.get("error") or "无生成内容",
+        }
+
     workspace = Workspace(request.workspacePath or f"storage/agent-workspaces/{request.agentRunId}/source")
     tools = FileTools(workspace)
     path = "src/App.vue"
-    content = state.get("generated_content")
-
-    if content is None:
-        content = "<template><main><h1>AI Generated App</h1></main></template>\n"
 
     events.append(AgentEvent(
         agentRunId=request.agentRunId, seq=seq, eventType="tool_request",
@@ -65,7 +97,7 @@ async def write_file(state: AgentState) -> AgentState:
     ))
     seq += 1
 
-    result = tools.write_file(path, content)
+    result = tools.write_file(path, generated_content)
     events.append(AgentEvent(
         agentRunId=request.agentRunId, seq=seq, eventType="tool_executed",
         data={"id": "tool-1", "name": "write_file", "arguments": {"path": path}, "result": result},
@@ -73,7 +105,11 @@ async def write_file(state: AgentState) -> AgentState:
     seq += 1
 
     events.append(AgentEvent(agentRunId=request.agentRunId, seq=seq, eventType="done", data={"message": "completed"}))
-    return {"request": request, "events": events, "chat_model": state.get("chat_model"), "generated_content": content, "error": None}
+    return {
+        "request": request, "events": events,
+        "model_config": state.get("model_config"), "chat_model": state.get("chat_model"),
+        "generated_content": generated_content, "error": None,
+    }
 
 
 def build_graph():

@@ -9,6 +9,7 @@ from app.schemas.code_generation import CodeGenerationRequest
 class AgentState(TypedDict):
     request: CodeGenerationRequest
     events: list[AgentEvent]
+    model_config: dict | None
     chat_model: BaseChatModel | None
     generated_content: str | None
     error: str | None

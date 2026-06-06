@@ -22,22 +22,23 @@ class AgentService:
         self.prompt_builder = prompt_builder
         self.graph = build_graph()
 
-    async def _resolve_chat_model(self, request: CodeGenerationRequest) -> BaseChatModel | None:
+    async def _resolve_chat_model(self, request: CodeGenerationRequest) -> tuple[dict | None, BaseChatModel | None]:
         if request.modelConfigId is None:
-            return None
+            return None, None
         config = await self.model_config_client.get_runtime_config(
             request.modelConfigId,
             request.configVersion or 0,
         )
-        return self.chat_model_factory.create(config)
+        return config, self.chat_model_factory.create(config)
 
     async def stream(self, request: CodeGenerationRequest) -> AsyncIterator[AgentEvent]:
         start = AgentEvent(agentRunId=request.agentRunId, seq=1, eventType="agent_start", data={"runtime": "python-langgraph"})
         yield start
-        chat_model = await self._resolve_chat_model(request)
+        model_config, chat_model = await self._resolve_chat_model(request)
         result = await self.graph.ainvoke({
             "request": request,
             "events": [start],
+            "model_config": model_config,
             "chat_model": chat_model,
             "generated_content": None,
             "error": None,

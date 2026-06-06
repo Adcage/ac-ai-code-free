@@ -27,6 +27,7 @@ async def test_graph_writes_app_vue_with_fake_model(tmp_path: Path):
     result = await graph.ainvoke({
         "request": request,
         "events": [],
+        "model_config": None,
         "chat_model": FakeChatModel(),
         "generated_content": None,
         "error": None,
@@ -59,6 +60,7 @@ async def test_graph_fallback_without_model(tmp_path: Path):
     result = await graph.ainvoke({
         "request": request,
         "events": [],
+        "model_config": None,
         "chat_model": None,
         "generated_content": None,
         "error": None,
@@ -66,5 +68,5 @@ async def test_graph_fallback_without_model(tmp_path: Path):
 
     assert (tmp_path / "src" / "App.vue").exists()
     event_types = [e.eventType for e in result["events"]]
-    assert "ai_response" not in event_types
+    assert "ai_response" in event_types
     assert "tool_request" in event_types

@@ -88,7 +88,7 @@ async def test_agent_service_without_model_config(tmp_path: Path):
     event_types = [event.eventType for event in events]
 
     assert "agent_start" in event_types
-    assert "ai_response" not in event_types
+    assert "ai_response" in event_types
     assert "tool_request" in event_types
     assert "tool_executed" in event_types
     assert "done" in event_types
