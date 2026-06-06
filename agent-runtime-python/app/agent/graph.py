@@ -1,19 +1,63 @@
+import re
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from app.agent.state import AgentState
 from app.events.agent_event import AgentEvent
+from app.services.prompt_builder import PromptBuilder
 from app.tools.file_tools import FileTools
 from app.tools.workspace import Workspace
 
+prompt_builder = PromptBuilder()
 
-def write_minimal_project(state: AgentState) -> AgentState:
+
+def _strip_markdown_fences(text: str) -> str:
+    return re.sub(r"^```(?:vue|html)?\s*\n?", "", text).rstrip("`").strip()
+
+
+async def invoke_model(state: AgentState) -> AgentState:
+    request = state["request"]
+    events = list(state["events"])
+    seq = len(events) + 1
+    chat_model = state.get("chat_model")
+
+    if chat_model is None:
+        return {"request": request, "events": events, "chat_model": None, "generated_content": None, "error": None}
+
+    system_prompt = prompt_builder.build_vue_app_prompt(request.prompt)
+    response: AIMessage = await chat_model.ainvoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=request.prompt),
+    ])
+    content = _strip_markdown_fences(response.content or "")
+
+    if not content:
+        events.append(AgentEvent(
+            agentRunId=request.agentRunId, seq=seq, eventType="error",
+            data={"message": "模型返回内容为空"},
+        ))
+        return {"request": request, "events": events, "chat_model": chat_model, "generated_content": None, "error": "模型返回内容为空"}
+
+    events.append(AgentEvent(
+        agentRunId=request.agentRunId, seq=seq, eventType="ai_response",
+        data={"content": content},
+    ))
+
+    return {"request": request, "events": events, "chat_model": chat_model, "generated_content": content, "error": None}
+
+
+async def write_file(state: AgentState) -> AgentState:
     request = state["request"]
     events = list(state["events"])
     seq = len(events) + 1
     workspace = Workspace(request.workspacePath or f"storage/agent-workspaces/{request.agentRunId}/source")
     tools = FileTools(workspace)
     path = "src/App.vue"
-    content = "<template><main><h1>AI Generated App</h1></main></template>\n"
+    content = state.get("generated_content")
+
+    if content is None:
+        content = "<template><main><h1>AI Generated App</h1></main></template>\n"
 
     events.append(AgentEvent(
         agentRunId=request.agentRunId, seq=seq, eventType="tool_request",
@@ -29,12 +73,14 @@ def write_minimal_project(state: AgentState) -> AgentState:
     seq += 1
 
     events.append(AgentEvent(agentRunId=request.agentRunId, seq=seq, eventType="done", data={"message": "completed"}))
-    return {"request": request, "events": events}
+    return {"request": request, "events": events, "chat_model": state.get("chat_model"), "generated_content": content, "error": None}
 
 
 def build_graph():
     graph = StateGraph(AgentState)
-    graph.add_node("write_minimal_project", write_minimal_project)
-    graph.set_entry_point("write_minimal_project")
-    graph.add_edge("write_minimal_project", END)
+    graph.add_node("invoke_model", invoke_model)
+    graph.add_node("write_file", write_file)
+    graph.set_entry_point("invoke_model")
+    graph.add_edge("invoke_model", "write_file")
+    graph.add_edge("write_file", END)
     return graph.compile()

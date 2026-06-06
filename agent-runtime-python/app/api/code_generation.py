@@ -6,14 +6,21 @@ from fastapi.responses import StreamingResponse
 from app.core.logging import get_logger
 from app.core.response import success
 from app.core.sse import format_sse
+from app.core.config import settings
 from app.schemas.code_generation import CodeGenerationRequest
 from app.services.agent_service import AgentService
+from app.services.chat_model_factory import ChatModelFactory
+from app.services.model_config_client import ModelConfigClient
+from app.services.prompt_builder import PromptBuilder
 
 logger = get_logger("app.api.code_generation")
 
 router = APIRouter(prefix="/agent/code-generation", tags=["code-generation"])
 
-agent_service = AgentService()
+_model_config_client = ModelConfigClient(settings.java_platform_base_url, settings.agent_internal_secret)
+_chat_model_factory = ChatModelFactory()
+_prompt_builder = PromptBuilder()
+agent_service = AgentService(_model_config_client, _chat_model_factory, _prompt_builder)
 
 
 async def event_stream(request: CodeGenerationRequest, request_id: str) -> AsyncIterator[str]:
