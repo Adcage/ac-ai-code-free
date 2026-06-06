@@ -43,11 +43,11 @@ npm install
 npm run dev
 ```
 
-也可以在 Windows 根目录执行：
+Python Agent Runtime：
 
 ```bash
-start-backend.bat
-start-frontend.bat
+cd agent-runtime-python
+python -m uvicorn app.main:app --reload --port 9000
 ```
 
 ---
