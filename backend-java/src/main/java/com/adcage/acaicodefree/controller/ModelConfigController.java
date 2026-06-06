@@ -161,7 +161,7 @@ public class ModelConfigController {
         runtimeVO.setProvider(modelConfig.getProvider());
         runtimeVO.setModelName(modelConfig.getModelName());
         runtimeVO.setBaseUrl(modelConfig.getBaseUrl());
-        runtimeVO.setApiKeyCipher(modelConfig.getApiKeyCipher());
+        runtimeVO.setApiKey(modelConfig.getApiKeyCipher());
         return ResultUtils.success(runtimeVO);
     }
 
@@ -174,7 +174,7 @@ public class ModelConfigController {
 
         private String baseUrl;
 
-        private String apiKeyCipher;
+        private String apiKey;
 
         private static final long serialVersionUID = 1L;
     }
