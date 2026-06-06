@@ -1,5 +1,6 @@
 package com.adcage.acaicodefree.runtime.impl;
 
+import cn.hutool.core.util.StrUtil;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
@@ -87,7 +88,10 @@ public class PythonAgentRuntime implements CodeGenerationRuntime {
         body.put("userId", request.getLoginUser().getId());
         body.put("prompt", request.getMessage());
         body.put("codeGenType", request.getApp().getCodeGenType());
-        body.put("workspacePath", resolveWorkspacePath(request.getAgentRunId()));
+        body.put("workspacePath", StrUtil.blankToDefault(
+                request.getWorkspacePath(),
+                resolveWorkspacePath(request.getAgentRunId())
+        ));
         body.put("modelConfigId", request.getModelConfigId());
         body.put("configVersion", request.getConfigVersion());
         String jsonBody = objectMapper.writeValueAsString(body);

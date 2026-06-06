@@ -13,6 +13,7 @@ import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingService;
 import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingServiceFactory;
 import com.adcage.acaicodefree.config.properties.ScreenshotProperties;
+import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
@@ -127,6 +128,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private AgentRunService agentRunService;
+
+    @Resource
+    private WorkspaceProperties workspaceProperties;
 
     @Value("${server.port:8700}")
     private String serverPort;
@@ -292,6 +296,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .app(app)
                 .loginUser(loginUser)
                 .codeGenTypeEnum(codeGenTypeEnum)
+                .workspacePath(workspaceProperties.getAgentWorkspaceDir() + "/" + agentRunId + "/source")
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();
