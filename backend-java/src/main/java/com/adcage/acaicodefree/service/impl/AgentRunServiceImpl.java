@@ -15,6 +15,12 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
 
     @Override
     public Long createAgentRun(Long appId, Long sessionId, Long userId, String runtime) {
+        return createAgentRun(appId, sessionId, userId, runtime, null, null, null);
+    }
+
+    @Override
+    public Long createAgentRun(Long appId, Long sessionId, Long userId, String runtime,
+                               Long modelConfigId, Integer configVersion, String workspacePath) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
         ThrowUtils.throwIf(userId == null || userId <= 0, ErrorCode.PARAMS_ERROR, "用户 ID 不能为空");
@@ -23,6 +29,9 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .sessionId(sessionId)
                 .userId(userId)
                 .runtime(runtime)
+                .modelConfigId(modelConfigId)
+                .configVersion(configVersion)
+                .workspacePath(workspacePath)
                 .status("running")
                 .latencyMs(0)
                 .createTime(LocalDateTime.now())
@@ -59,5 +68,18 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .build();
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 状态失败");
+    }
+
+    @Override
+    public void updateAgentRunWorkspacePath(Long id, String workspacePath) {
+        ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "AgentRun ID 不能为空");
+        AgentRun agentRun = this.getById(id);
+        ThrowUtils.throwIf(agentRun == null, ErrorCode.NOT_FOUND_ERROR, "AgentRun 不存在");
+        AgentRun update = AgentRun.builder()
+                .id(id)
+                .workspacePath(workspacePath)
+                .build();
+        boolean result = this.updateById(update);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 工作空间路径失败");
     }
 }
