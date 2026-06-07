@@ -11,6 +11,7 @@ import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.vo.modelconfig.ModelConfigVO;
 import com.adcage.acaicodefree.service.ModelConfigEventPublisher;
 import com.adcage.acaicodefree.service.ModelConfigService;
+import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -65,5 +66,24 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新配置版本失败");
         modelConfigEventPublisher.publishConfigUpdated(modelConfig);
+    }
+
+    @Override
+    public ModelConfig getDefaultEnabledModelConfig(Long userId) {
+        QueryWrapper defaultQuery = QueryWrapper.create()
+                .eq("userId", userId)
+                .eq("enabled", 1)
+                .eq("isDefault", 1)
+                .limit(1);
+        ModelConfig defaultConfig = mapper.selectOneByQuery(defaultQuery);
+        if (defaultConfig != null) {
+            return defaultConfig;
+        }
+        QueryWrapper fallbackQuery = QueryWrapper.create()
+                .eq("userId", userId)
+                .eq("enabled", 1)
+                .orderBy("updateTime", false)
+                .limit(1);
+        return mapper.selectOneByQuery(fallbackQuery);
     }
 }

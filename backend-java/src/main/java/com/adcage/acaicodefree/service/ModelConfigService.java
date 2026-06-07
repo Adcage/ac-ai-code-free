@@ -15,4 +15,6 @@ public interface ModelConfigService extends IService<ModelConfig> {
     List<ModelConfigVO> getModelConfigVOList(List<ModelConfig> modelConfigList);
 
     void incrementConfigVersion(Long id);
+
+    ModelConfig getDefaultEnabledModelConfig(Long userId);
 }
