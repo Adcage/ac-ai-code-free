@@ -13,6 +13,7 @@ import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.mapper.UserMapper;
 import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Assertions;
@@ -78,6 +79,9 @@ class AppChatE2ETest {
     @MockBean
     private AgentRunService agentRunService;
 
+    @MockBean
+    private ModelConfigService modelConfigService;
+
     private User loginUser;
 
     private App testApp;
@@ -86,6 +90,8 @@ class AppChatE2ETest {
     void setUp() {
         ensureChatSchema();
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
+        when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
+        when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
         String suffix = String.valueOf(System.nanoTime());
         User user = User.builder()
                 .userAccount("e2e_user_" + suffix)

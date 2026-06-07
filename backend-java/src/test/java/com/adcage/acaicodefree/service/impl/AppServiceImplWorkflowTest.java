@@ -12,7 +12,9 @@ import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
+import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.workflow.config.WorkflowProperties;
 import com.adcage.acaicodefree.workflow.service.WorkflowCodeGeneratorService;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -33,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -76,6 +80,9 @@ class AppServiceImplWorkflowTest {
     @MockBean
     private AgentRunService agentRunService;
 
+    @MockBean
+    private ModelConfigService modelConfigService;
+
     private User loginUser;
     private App testApp;
     private ChatSession testSession;
@@ -87,6 +94,8 @@ class AppServiceImplWorkflowTest {
         workflowProperties.setMode("legacy");
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-legacy");
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
+        when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
+        when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
 
         String suffix = String.valueOf(System.nanoTime());
         loginUser = User.builder()
