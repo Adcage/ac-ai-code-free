@@ -14,7 +14,10 @@ public class PythonAgentEventMapper {
     public String mapToStreamMessage(PythonAgentEvent event) {
         Map<String, Object> data = event.getData();
         return switch (event.getEventType()) {
-            case "ai_response" -> JSONUtil.toJsonStr(new AiResponseMessage(String.valueOf(data.getOrDefault("text", ""))));
+            case "ai_response" -> {
+                Object text = data.getOrDefault("text", data.getOrDefault("content", ""));
+                yield JSONUtil.toJsonStr(new AiResponseMessage(String.valueOf(text)));
+            }
             case "tool_request" -> JSONUtil.toJsonStr(new ToolRequestMessage(
                     String.valueOf(data.getOrDefault("id", "unknown")),
                     String.valueOf(data.getOrDefault("name", "unknown")),

@@ -26,6 +26,20 @@ class PythonAgentEventMapperTest {
     }
 
     @Test
+    void map_shouldConvertAiResponseContentFallback() {
+        PythonAgentEvent event = PythonAgentEvent.builder()
+                .agentRunId("1")
+                .seq(1L)
+                .eventType("ai_response")
+                .data(Map.of("content", "hello from python"))
+                .build();
+
+        String result = mapper.mapToStreamMessage(event);
+
+        Assertions.assertTrue(result.contains("hello from python"));
+    }
+
+    @Test
     void map_shouldConvertToolRequest() {
         PythonAgentEvent event = PythonAgentEvent.builder()
                 .agentRunId("1")
