@@ -37,7 +37,9 @@ import com.adcage.acaicodefree.model.vo.user.UserVO;
 import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
+import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.adcage.acaicodefree.service.ScreenshotService;
@@ -128,6 +130,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private AgentRunService agentRunService;
+
+    @Resource
+    private ModelConfigService modelConfigService;
+
+    @Resource
+    private WorkspaceProperties workspaceProperties;
 
     @Value("${server.port:8700}")
     private String serverPort;
@@ -284,7 +292,13 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         // 6. 通过 Runtime Router 选择运行时
         CodeGenerationRuntime runtime = codeGenerationRuntimeRouter.select();
-        Long agentRunId = agentRunService.createAgentRun(appId, sessionId, loginUser.getId(), runtime.getName());
+        ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
+        Long modelConfigId = modelConfig == null ? null : modelConfig.getId();
+        Integer configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
+        Long agentRunId = agentRunService.createAgentRun(appId, sessionId, loginUser.getId(), runtime.getName(),
+                modelConfigId, configVersion, null);
+        String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" + agentRunId + "/source";
+        agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
                 .appId(appId)
@@ -293,6 +307,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .app(app)
                 .loginUser(loginUser)
                 .codeGenTypeEnum(codeGenTypeEnum)
+                .modelConfigId(modelConfigId)
+                .configVersion(configVersion)
+                .workspacePath(workspacePath)
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();

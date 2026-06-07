@@ -1,23 +1,159 @@
 package com.adcage.acaicodefree.service.impl;
 
-import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
-import com.adcage.acaicodefree.service.AppService;
-import com.mybatisflex.core.query.QueryWrapper;
-import jakarta.annotation.Resource;
+import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
+import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
+import com.adcage.acaicodefree.mapper.ChatSessionMapper;
+import com.adcage.acaicodefree.model.entity.App;
+import com.adcage.acaicodefree.model.entity.ChatSession;
+import com.adcage.acaicodefree.model.entity.ModelConfig;
+import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
+import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
+import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
+import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.service.ModelConfigService;
+import com.adcage.acaicodefree.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
+import reactor.core.publisher.Flux;
 
-@SpringBootTest
-public class AppServiceImplTest {
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-    @Resource
-    private AppService appService;
+class AppServiceImplTest {
+
+    private AppServiceImpl appService;
+
+    private ModelConfigService modelConfigService;
+    private AgentRunService agentRunService;
+    private WorkspaceProperties workspaceProperties;
+    private CodeGenerationRuntimeRouter codeGenerationRuntimeRouter;
+    private CodeGenerationRuntime mockRuntime;
+    private ChatSessionMapper chatSessionMapper;
+    private ChatHistoryMapper chatHistoryMapper;
+
+    @BeforeEach
+    void setUp() {
+        appService = spy(new AppServiceImpl());
+
+        modelConfigService = mock(ModelConfigService.class);
+        agentRunService = mock(AgentRunService.class);
+        workspaceProperties = new WorkspaceProperties();
+        codeGenerationRuntimeRouter = mock(CodeGenerationRuntimeRouter.class);
+        mockRuntime = mock(CodeGenerationRuntime.class);
+        chatSessionMapper = mock(ChatSessionMapper.class);
+        chatHistoryMapper = mock(ChatHistoryMapper.class);
+
+        ReflectionTestUtils.setField(appService, "modelConfigService", modelConfigService);
+        ReflectionTestUtils.setField(appService, "agentRunService", agentRunService);
+        ReflectionTestUtils.setField(appService, "workspaceProperties", workspaceProperties);
+        ReflectionTestUtils.setField(appService, "codeGenerationRuntimeRouter", codeGenerationRuntimeRouter);
+        ReflectionTestUtils.setField(appService, "chatSessionMapper", chatSessionMapper);
+        ReflectionTestUtils.setField(appService, "chatHistoryMapper", chatHistoryMapper);
+
+        when(mockRuntime.getName()).thenReturn("python-agent");
+        when(mockRuntime.stream(any())).thenReturn(Flux.empty());
+        when(codeGenerationRuntimeRouter.select()).thenReturn(mockRuntime);
+    }
 
     @Test
-    public void testGetQueryWrapper() {
-        AppQueryRequest request = new AppQueryRequest(); // All fields null
-        request.setUserId(125L);
-        QueryWrapper wrapper = appService.getQueryWrapper(request);
-        System.out.println("SQL: " + wrapper.toSQL());
+    void chatToGenCode_shouldResolveModelConfigAndPassToRuntime() {
+        Long appId = 1L;
+        Long sessionId = 10L;
+        Long userId = 100L;
+        String message = "build app";
+        User loginUser = User.builder().id(userId).build();
+
+        App app = new App();
+        app.setId(appId);
+        app.setUserId(userId);
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
+
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(sessionId);
+        chatSession.setAppId(appId);
+        chatSession.setUserId(userId);
+
+        ModelConfig modelConfig = ModelConfig.builder()
+                .id(42L)
+                .configVersion(3)
+                .build();
+
+        doReturn(app).when(appService).getById(appId);
+        when(chatSessionMapper.selectOneByQuery(any())).thenReturn(chatSession);
+        when(chatHistoryMapper.selectCountByQuery(any())).thenReturn(0L);
+        when(chatHistoryMapper.insert(any())).thenReturn(1);
+        when(modelConfigService.getDefaultEnabledModelConfig(userId)).thenReturn(modelConfig);
+        when(agentRunService.createAgentRun(eq(appId), eq(sessionId), eq(userId), eq("python-agent"),
+                eq(42L), eq(3), isNull())).thenReturn(99L);
+
+        workspaceProperties.setAgentWorkspaceDir("/data/agent-workspaces");
+
+        appService.chatToGenCode(appId, sessionId, message, loginUser);
+
+        verify(modelConfigService).getDefaultEnabledModelConfig(userId);
+
+        verify(agentRunService).createAgentRun(appId, sessionId, userId, "python-agent",
+                42L, 3, null);
+
+        String expectedWorkspacePath = "/data/agent-workspaces/99/source";
+        verify(agentRunService).updateAgentRunWorkspacePath(99L, expectedWorkspacePath);
+
+        ArgumentCaptor<CodeGenerationRequest> requestCaptor = ArgumentCaptor.forClass(CodeGenerationRequest.class);
+        verify(mockRuntime).stream(requestCaptor.capture());
+        CodeGenerationRequest capturedRequest = requestCaptor.getValue();
+
+        assertEquals(42L, capturedRequest.getModelConfigId());
+        assertEquals(3, capturedRequest.getConfigVersion());
+        assertEquals(expectedWorkspacePath, capturedRequest.getWorkspacePath());
+    }
+
+    @Test
+    void chatToGenCode_shouldHandleNullModelConfig() {
+        Long appId = 1L;
+        Long sessionId = 10L;
+        Long userId = 100L;
+        String message = "build app";
+        User loginUser = User.builder().id(userId).build();
+
+        App app = new App();
+        app.setId(appId);
+        app.setUserId(userId);
+        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(sessionId);
+        chatSession.setAppId(appId);
+        chatSession.setUserId(userId);
+
+        doReturn(app).when(appService).getById(appId);
+        when(chatSessionMapper.selectOneByQuery(any())).thenReturn(chatSession);
+        when(chatHistoryMapper.selectCountByQuery(any())).thenReturn(0L);
+        when(chatHistoryMapper.insert(any())).thenReturn(1);
+        when(modelConfigService.getDefaultEnabledModelConfig(userId)).thenReturn(null);
+        when(agentRunService.createAgentRun(eq(appId), eq(sessionId), eq(userId), eq("python-agent"),
+                isNull(), isNull(), isNull())).thenReturn(50L);
+
+        workspaceProperties.setAgentWorkspaceDir("/tmp/workspaces");
+
+        appService.chatToGenCode(appId, sessionId, message, loginUser);
+
+        verify(agentRunService).createAgentRun(appId, sessionId, userId, "python-agent",
+                null, null, null);
+
+        String expectedWorkspacePath = "/tmp/workspaces/50/source";
+        verify(agentRunService).updateAgentRunWorkspacePath(50L, expectedWorkspacePath);
+
+        ArgumentCaptor<CodeGenerationRequest> requestCaptor = ArgumentCaptor.forClass(CodeGenerationRequest.class);
+        verify(mockRuntime).stream(requestCaptor.capture());
+        CodeGenerationRequest capturedRequest = requestCaptor.getValue();
+
+        assertNull(capturedRequest.getModelConfigId());
+        assertNull(capturedRequest.getConfigVersion());
+        assertEquals(expectedWorkspacePath, capturedRequest.getWorkspacePath());
     }
 }
