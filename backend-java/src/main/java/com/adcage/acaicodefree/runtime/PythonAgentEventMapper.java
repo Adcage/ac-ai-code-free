@@ -15,7 +15,8 @@ public class PythonAgentEventMapper {
         Map<String, Object> data = event.getData();
         return switch (event.getEventType()) {
             case "ai_response" -> {
-                Object text = data.getOrDefault("text", data.getOrDefault("content", ""));
+                Object text = data.get("text");
+                if (text == null) text = data.getOrDefault("content", "");
                 yield JSONUtil.toJsonStr(new AiResponseMessage(String.valueOf(text)));
             }
             case "tool_request" -> JSONUtil.toJsonStr(new ToolRequestMessage(

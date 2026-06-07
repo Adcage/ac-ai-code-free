@@ -40,6 +40,21 @@ class PythonAgentEventMapperTest {
     }
 
     @Test
+    void map_shouldPreferTextOverContent() {
+        PythonAgentEvent event = PythonAgentEvent.builder()
+                .agentRunId("1")
+                .seq(1L)
+                .eventType("ai_response")
+                .data(Map.of("text", "from text field", "content", "from content field"))
+                .build();
+
+        String result = mapper.mapToStreamMessage(event);
+
+        Assertions.assertTrue(result.contains("from text field"));
+        Assertions.assertFalse(result.contains("from content field"));
+    }
+
+    @Test
     void map_shouldConvertToolRequest() {
         PythonAgentEvent event = PythonAgentEvent.builder()
                 .agentRunId("1")
