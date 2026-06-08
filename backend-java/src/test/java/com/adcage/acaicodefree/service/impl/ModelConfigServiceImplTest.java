@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.service.impl;
 import com.adcage.acaicodefree.mapper.ModelConfigMapper;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.service.ModelConfigEventPublisher;
+import com.mybatisflex.annotation.Column;
 import com.mybatisflex.core.query.QueryWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -89,5 +91,25 @@ class ModelConfigServiceImplTest {
         ModelConfig result = modelConfigService.getDefaultEnabledModelConfig(100L);
 
         assertNull(result);
+    }
+
+    @Test
+    void modelConfigColumnMapping_ShouldMatchCamelCaseDatabaseColumns() throws Exception {
+        Map<String, String> expectedColumns = Map.of(
+                "userId", "userId",
+                "modelName", "modelName",
+                "baseUrl", "baseUrl",
+                "apiKeyCipher", "apiKeyCipher",
+                "maxTokens", "maxTokens",
+                "configVersion", "configVersion",
+                "isDefault", "isDefault",
+                "createTime", "createTime"
+        );
+
+        for (Map.Entry<String, String> entry : expectedColumns.entrySet()) {
+            Column column = ModelConfig.class.getDeclaredField(entry.getKey()).getAnnotation(Column.class);
+            assertNotNull(column, entry.getKey() + " should declare @Column");
+            assertEquals(entry.getValue(), column.value());
+        }
     }
 }

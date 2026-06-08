@@ -51,13 +51,17 @@
 
 ## Result
 
-**验证时间:** 2026-06-07 18:44 CST (最终成功验证)
+**验证时间:** 2026-06-07 18:44 CST - 19:10 CST
 
 **环境:**
-- Java backend: port 8700, active profile=local, runtime=java-legacy
+- Java backend: port 8700, active profile=local
 - Python runtime: port 9000 (health OK)
 - Frontend: port 5173 (Vue 3 dev server)
 - AI model: mimo-v2.5 via token-plan-cn.xiaomimimo.com
+
+### Java Legacy Baseline
+
+该基线用于确认模型配置、聊天落库和旧 Java 生成链路仍可回归。
 
 **验证步骤:**
 1. 登录 admin 用户 (userAccount=12345678, id=323775635606482944)
@@ -93,13 +97,38 @@
 - ✅ SSE 流式响应正常，AI 文本、错误信息均可传回前端
 - ✅ AI 模型调用成功，生成了符合用户需求的页面内容
 - ✅ 前端预览正常渲染生成的页面
-- ⚠️ 当前使用 java-legacy runtime（python-agent runtime 需额外设置 AGENT_RUNTIME 环境变量）
+
+### Python Agent Runtime
+
+该验证用于确认 Java 控制面可以把生成任务切换到 Python Agent 执行面。
+
+**启动参数:**
+
+```powershell
+$env:AGENT_RUNTIME="python-agent"
+$env:AGENT_PYTHON_BASE_URL="http://localhost:9000"
+```
+
+**验证结果:**
+
+- ✅ `AGENT_RUNTIME=python-agent` 下浏览器端到端生成流程已通过人工验证
+- ✅ Java Runtime Router 可选择 `python-agent`
+- ✅ Java 请求体向 Python 传递 `agentRunId/appId/sessionId/userId/prompt/codeGenType/workspacePath/modelConfigId/configVersion`
+- ✅ Python Runtime 可调用 Java `/api/model-config/internal/runtime` 获取模型配置
+- ✅ Python Agent 使用模型生成 Vue 内容并写入 `storage/agent-workspaces/<agentRunId>/source/src/App.vue`
+- ✅ Python SSE 事件可被 Java 映射为前端兼容的 `StreamMessage`
+- ✅ 前端可展示 AI 文本、工具请求和工具执行结果
+
+**补充日志证据:**
+
+- `logs/agent-python.log` 已记录 `/agent/code-generation/stream` 的 `stream started` / `stream completed`
+- `logs/backend.log` 已记录 `agent_run` 创建、模型配置 ID 和 workspacePath 更新
 
 ## Known Gaps
 
 - ~~`modelConfigId` 和 `configVersion` 在 `AppServiceImpl` 构建 `CodeGenerationRequest` 时未填充。~~ **已修复**: AppServiceImpl 现在通过 ModelConfigService.getDefaultEnabledModelConfig 查找默认配置并传递。
 - ~~当前 Python Agent 无模型配置时使用确定性 fallback 内容，非模型驱动生成。~~ **已修复**: Python AgentService 现在通过 Java internal API 获取模型配置并创建模型客户端。
-- python-agent runtime 的完整 E2E 验证需设置 `AGENT_RUNTIME=python-agent` 环境变量重启 Java。当前 java-legacy runtime 的模型配置传递已验证通过。
+- Python Agent 当前主要写入 `src/App.vue`，多文件工程级生成和更细粒度代码修改能力进入下一阶段。
 
 ## Issues
 

@@ -28,31 +28,39 @@ public class ModelConfig implements Serializable {
     @Id(keyType = KeyType.Generator, value = KeyGenerators.snowFlakeId)
     private Long id;
 
+    @Column("userId")
     private Long userId;
 
     private String provider;
 
+    @Column("modelName")
     private String modelName;
 
+    @Column("baseUrl")
     private String baseUrl;
 
+    @Column("apiKeyCipher")
     private String apiKeyCipher;
 
     @Builder.Default
     private Double temperature = 0.7;
 
     @Builder.Default
+    @Column("maxTokens")
     private Integer maxTokens = 8192;
 
     @Builder.Default
+    @Column("configVersion")
     private Integer configVersion = 1;
 
     @Builder.Default
     private Integer enabled = 1;
 
     @Builder.Default
+    @Column("isDefault")
     private Integer isDefault = 0;
 
+    @Column("createTime")
     private LocalDateTime createTime;
 
     @Column(value = "updateTime", onUpdateValue = "now()")

@@ -202,6 +202,36 @@ frontend-vue/src/
 | `.env.development` | `VITE_API_BASE_URL=http://localhost:8700/api` |
 | `.env.production` | `VITE_API_BASE_URL=https://your-api-domain.com/api` |
 
+## 端到端测试
+
+### 测试工具
+
+使用 **Playwright CLI** 进行端到端测试，通过 `npx playwright` 命令执行浏览器自动化操作。
+
+### 日志排查规则
+
+端到端测试过程中遇到问题时，**应主动读取 `logs/` 目录下的最新日志来排查原因**，而不是向用户询问。具体做法：
+
+1. 执行端到端操作后，如果页面行为异常或接口返回错误，读取对应日志文件末尾
+2. 在日志中查找对应的 ERROR、WARN 或相关请求路径的日志条目
+3. 根据日志中的异常堆栈、SQL 错误、业务错误码等信息定位问题
+4. 仅当日志信息不足以判断问题时，才向用户询问
+
+日志文件（项目根目录 `logs/` 下，均为 append 模式，读取时关注最新的时间戳）：
+
+| 文件 | 来源 |
+|------|------|
+| `logs/backend.log` | Java 后端（Spring Boot） |
+| `logs/agent-python.log` | Python Agent Runtime（FastAPI + LangGraph） |
+
+## 开发热重载
+
+开发环境下三个服务均支持代码修改后自动重载，无需手动重启：
+
+- **Java 后端**：Spring Boot DevTools，代码变更后自动重启（LiveReload 端口 35729）
+- **Python Agent Runtime**：uvicorn `--reload` 模式，代码变更后自动重载
+- **前端**：Vite HMR，代码变更后浏览器自动热更新
+
 ## 重要注意事项
 
 1. **Java 版本**：JDK 17 | **Node.js 版本**：`^20.19.0 || >=22.12.0`

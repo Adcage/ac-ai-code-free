@@ -1,2 +1,5 @@
 !temp
 !docs/superpowers/
+
+!logs/
+!*.log

@@ -2,10 +2,12 @@ package com.adcage.acaicodefree.service.impl;
 
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.entity.AgentRun;
+import com.mybatisflex.annotation.Column;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.Serializable;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -86,5 +88,25 @@ class AgentRunServiceImplTest {
     void updateAgentRunWorkspacePath_NotFound_ThrowsException() {
         assertThrows(BusinessException.class,
                 () -> agentRunService.updateAgentRunWorkspacePath(999L, "/path"));
+    }
+
+    @Test
+    void agentRunColumnMapping_ShouldMatchCamelCaseDatabaseColumns() throws NoSuchFieldException {
+        Map<String, String> expectedColumns = Map.of(
+                "appId", "appId",
+                "sessionId", "sessionId",
+                "userId", "userId",
+                "modelConfigId", "modelConfigId",
+                "configVersion", "configVersion",
+                "workspacePath", "workspacePath",
+                "errorMessage", "errorMessage",
+                "latencyMs", "latencyMs"
+        );
+
+        for (Map.Entry<String, String> entry : expectedColumns.entrySet()) {
+            Column column = AgentRun.class.getDeclaredField(entry.getKey()).getAnnotation(Column.class);
+            assertNotNull(column, entry.getKey() + " 缺少 @Column 注解");
+            assertEquals(entry.getValue(), column.value(), entry.getKey() + " 数据库列名映射错误");
+        }
     }
 }

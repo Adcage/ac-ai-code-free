@@ -7,7 +7,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       database: ${REDIS_DB:0}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:123456}
       timeout: 3s
   # mysql
   datasource:
@@ -23,6 +23,19 @@ server:
     context-path: /api
     session:
       timeout: 1d
+
+logging:
+  file:
+    name: ${APP_LOG_FILE:../logs/backend.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${APP_LOG_FILE_PATTERN:../logs/backend.%d{yyyy-MM-dd}.%i.log}
+      max-file-size: ${APP_LOG_MAX_FILE_SIZE:20MB}
+      max-history: ${APP_LOG_MAX_HISTORY:14}
+      total-size-cap: ${APP_LOG_TOTAL_SIZE_CAP:512MB}
+  level:
+    root: info
+    com.adcage.acaicodefree: debug
 
 # springdoc-openapi
 springdoc:

@@ -42,6 +42,7 @@ public class AgentRun implements Serializable {
     @Column("modelConfigId")
     private Long modelConfigId;
 
+    @Column("configVersion")
     @Builder.Default
     private Integer configVersion = 1;
 
@@ -53,6 +54,7 @@ public class AgentRun implements Serializable {
     @Column("errorMessage")
     private String errorMessage;
 
+    @Column("latencyMs")
     @Builder.Default
     private Integer latencyMs = 0;
 

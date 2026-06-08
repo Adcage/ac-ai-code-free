@@ -28,6 +28,7 @@ frontend-vue/coverage/
 agent-runtime-python/.venv/
 agent-runtime-python/__pycache__/
 agent-runtime-python/**/*.pyc
+agent-runtime-python/*.egg-info/
 agent-runtime-python/.pytest_cache/
 agent-runtime-python/.ruff_cache/
 agent-runtime-python/.mypy_cache/
@@ -48,6 +49,7 @@ agent-runtime-python/.mypy_cache/
 # Local tools
 .worktrees/
 .opencode/
+.playwright-cli/
 .ruff_cache/
 
 # Docs - only track specific subdirectories
