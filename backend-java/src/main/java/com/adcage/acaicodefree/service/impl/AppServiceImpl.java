@@ -68,6 +68,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentHashMap;
@@ -313,21 +314,39 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();
+        AtomicReference<String> workflowCodeGenTypeRef = new AtomicReference<>();
+        AtomicReference<String> workflowGeneratedDirRef = new AtomicReference<>();
         long startTime = System.currentTimeMillis();
         Flux<String> sourceStream = runtime.stream(runtimeRequest);
         Flux<String> handledStream;
-        if ("java-legacy".equals(runtime.getName())) {
+        if ("java-agent".equals(runtime.getName())) {
             handledStream = streamHandlerExecutor.handle(codeGenTypeEnum, sourceStream, readableAssistantMessageBuilder);
         } else {
             handledStream = sourceStream.doOnNext(chunk -> readableAssistantMessageBuilder.append(chunk).append('\n'));
         }
         return handledStream
+                .doOnNext(chunk -> captureWorkflowCompletedEvent(chunk, workflowCodeGenTypeRef, workflowGeneratedDirRef))
                 .doOnComplete(() -> {
                     int latencyMs = (int) (System.currentTimeMillis() - startTime);
                     String aiMessage = readableAssistantMessageBuilder.toString();
                     String status = "success";
                     String extra = null;
-                    if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
+                    String actualCodeGenTypeStr = StrUtil.blankToDefault(workflowCodeGenTypeRef.get(), codeGenTypeStr);
+                    CodeGenTypeEnum actualCodeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(actualCodeGenTypeStr);
+                    if (actualCodeGenTypeEnum != null && !actualCodeGenTypeStr.equals(codeGenTypeStr)) {
+                        App updateApp = new App();
+                        updateApp.setId(appId);
+                        updateApp.setCodeGenType(actualCodeGenTypeStr);
+                        boolean updated = updateById(updateApp);
+                        if (updated) {
+                            app.setCodeGenType(actualCodeGenTypeStr);
+                            log.info("Java-agent 工作流生成类型已同步, appId={}, from={}, to={}", appId, codeGenTypeStr, actualCodeGenTypeStr);
+                        }
+                    }
+                    if (StrUtil.isBlank(aiMessage) && StrUtil.isNotBlank(workflowGeneratedDirRef.get())) {
+                        aiMessage = "代码生成完成：已生成 " + actualCodeGenTypeStr + " 产物\n生成目录：" + workflowGeneratedDirRef.get();
+                    }
+                    if (actualCodeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
                         try {
                             log.info("Vue 项目构建开始, appId={}, sessionId={}", appId, sessionId);
                             vueProjectBuildService.buildVueProject(appId);
@@ -344,7 +363,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                                     appId, sessionId, codeGenTypeStr, loginUser.getId(), message, e);
                         }
                     }
-                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, codeGenTypeStr, latencyMs, extra);
+                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
                     updateSessionSummary(sessionId);
                 })
                 .doOnError(error -> {
@@ -381,6 +400,35 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         int insertResult = chatSessionMapper.insert(chatSession);
         ThrowUtils.throwIf(insertResult <= 0 || chatSession.getId() == null, ErrorCode.OPERATION_ERROR, "创建会话失败");
         return chatSession.getId();
+    }
+
+    private void captureWorkflowCompletedEvent(String chunk,
+                                               AtomicReference<String> codeGenTypeRef,
+                                               AtomicReference<String> generatedDirRef) {
+        if (StrUtil.isBlank(chunk)) {
+            return;
+        }
+        try {
+            JSONObject jsonObject = JSONUtil.parseObj(chunk);
+            if (!"workflow_event".equals(jsonObject.getStr("type"))
+                    || !"workflow_completed".equals(jsonObject.getStr("event"))) {
+                return;
+            }
+            JSONObject data = jsonObject.getJSONObject("data");
+            if (data == null) {
+                return;
+            }
+            String codeGenType = data.getStr("codeGenType", "");
+            String generatedCodeDir = data.getStr("generatedCodeDir", "");
+            if (StrUtil.isNotBlank(codeGenType)) {
+                codeGenTypeRef.set(codeGenType);
+            }
+            if (StrUtil.isNotBlank(generatedCodeDir)) {
+                generatedDirRef.set(generatedCodeDir);
+            }
+        } catch (Exception ignored) {
+            // 非工作流事件无需影响主生成流程。
+        }
     }
 
     @Override
@@ -583,9 +631,31 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 return routed;
             }
         } catch (Exception e) {
+            if (isAiSafetyRejection(e)) {
+                log.warn("AI 路由被模型服务拒绝，终止创建应用, prompt={}, reason={}", initPrompt, e.getMessage());
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "AI 模型服务拒绝处理本次提示词，请调整描述后重试");
+            }
             log.warn("AI 路由失败，将使用兜底模式, prompt={}", initPrompt, e);
         }
         return CodeGenTypeEnum.MULTI_FILE;
+    }
+
+    private boolean isAiSafetyRejection(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            if (StrUtil.isNotBlank(message)) {
+                String lowerMessage = message.toLowerCase();
+                if (lowerMessage.contains("high risk")
+                        || lowerMessage.contains("request was rejected")
+                        || lowerMessage.contains("content policy")
+                        || lowerMessage.contains("safety")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private CodeGenTypeEnum parseCodeGenType(String valueOrName) {
