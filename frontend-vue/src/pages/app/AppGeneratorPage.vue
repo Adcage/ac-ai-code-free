@@ -78,6 +78,27 @@
                         </div>
                       </div>
                     </details>
+                    <div v-if="msg.workflowSteps?.length" class="workflow-steps message-workflow-steps">
+                      <div class="workflow-steps-title">工作流进度</div>
+                      <div class="workflow-steps-list">
+                        <div
+                          v-for="step in msg.workflowSteps"
+                          :key="step.step"
+                          :class="['workflow-step-item', step.status]"
+                        >
+                          <div class="workflow-step-icon">
+                            <check-circle-outlined v-if="step.status === 'completed'" />
+                            <loading-outlined v-else-if="step.status === 'running'" />
+                            <close-circle-outlined v-else-if="step.status === 'error'" />
+                            <clock-circle-outlined v-else />
+                          </div>
+                          <div class="workflow-step-content">
+                            <div class="workflow-step-name">{{ step.message }}</div>
+                            <div v-if="step.status === 'error'" class="workflow-step-error">{{ step.errorMessage || step.message }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </template>
                 </template>
                 <div v-else class="message-text" v-html="renderMarkdown(msg.content)"></div>
@@ -176,7 +197,7 @@
           <div v-else class="preview-empty">
             <div class="empty-content">
               <div class="empty-icon">预览</div>
-              <p>应用生成中，完成后将在此展示效果</p>
+              <p>{{ previewEmptyText }}</p>
             </div>
           </div>
         </div>
@@ -197,7 +218,10 @@ import {
   PaperClipOutlined, 
   ThunderboltOutlined, 
   ArrowUpOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons-vue'
 import { createChatSession, deployApp, getAppVoById, listChatHistoryByPage, listChatSession } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
@@ -209,11 +233,27 @@ const loginUserStore = useLoginUserStore()
 const appId = String(route.params.id ?? '')
 
 const app = ref<API.AppVO>()
-const messages = ref<{ role: 'user' | 'ai', content: string, toolEvents?: ToolEvent[] }[]>([])
+type WorkflowStep = {
+  step: string
+  status: 'pending' | 'running' | 'completed' | 'error'
+  message?: string
+  errorMessage?: string
+}
+
+type ChatMessage = {
+  role: 'user' | 'ai'
+  content: string
+  status?: string
+  toolEvents?: ToolEvent[]
+  workflowSteps?: WorkflowStep[]
+}
+
+const messages = ref<ChatMessage[]>([])
 const sessions = ref<API.ChatSessionVO[]>([])
 const currentSessionId = ref<string>()
 const inputText = ref('')
 const generating = ref(false)
+const workflowSteps = ref<WorkflowStep[]>([])
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
 const sessionLoading = ref(false)
@@ -224,6 +264,7 @@ const iframeRef = ref<HTMLIFrameElement>()
 const messageListRef = ref<HTMLElement>()
 const streamWarning = ref('')
 const previewWarning = ref('')
+const previewStatus = ref<'idle' | 'generating' | 'checking' | 'ready' | 'failed'>('idle')
 const entryPathStorageKey = `app_generate_entry_${appId}`
 const chatPanelWidth = ref(450)
 const resizing = ref(false)
@@ -244,6 +285,19 @@ const inputPlaceholder = computed(() => {
     return '已选择页面元素，请描述要修改的内容...'
   }
   return '描述具体的需求，例如：修改配色为深色模式...'
+})
+
+const previewEmptyText = computed(() => {
+  if (previewStatus.value === 'generating') {
+    return '应用正在生成中，完成后将在此展示效果'
+  }
+  if (previewStatus.value === 'checking') {
+    return '正在检查预览资源...'
+  }
+  if (previewStatus.value === 'failed') {
+    return previewWarning.value || '本次生成未产出可预览页面，请根据左侧错误信息调整后重试'
+  }
+  return '暂无可预览内容，生成完成后将在此展示效果'
 })
 
 type ToolEvent = {
@@ -326,6 +380,7 @@ const loadRemoteHistory = async (sessionId: string) => {
     messages.value = historyList.map((item) => ({
       role: item.messageType === 'user' ? 'user' : 'ai',
       content: item.message || '',
+      status: item.status || '',
       toolEvents: normalizeToolEvents(item.toolEvents || []),
     }))
     scrollToBottom()
@@ -359,14 +414,14 @@ const loadApp = async () => {
     if (sessions.value.length > 0 && sessions.value[0].id) {
       currentSessionId.value = normalizeId(sessions.value[0].id)
       await loadRemoteHistory(currentSessionId.value)
-      updatePreview()
+      await updatePreview()
     } else {
       const newSessionId = await createSession()
       if (newSessionId) {
         currentSessionId.value = newSessionId
       }
       if (app.value?.initPrompt && currentSessionId.value) {
-        messages.value.push({ role: 'user', content: app.value.initPrompt, toolEvents: [] })
+        messages.value.push({ role: 'user', content: app.value.initPrompt, status: 'success', toolEvents: [] })
         startSSE(app.value.initPrompt, currentSessionId.value)
       }
     }
@@ -381,10 +436,24 @@ const loadApp = async () => {
 const startSSE = (userMsg: string, sessionId: string) => {
   generating.value = true
   streamWarning.value = ''
+  iframeUrl.value = ''
+  previewWarning.value = ''
+  previewStatus.value = 'generating'
+  workflowSteps.value = [
+    { step: 'image_collect', status: 'pending', message: '收集素材' },
+    { step: 'prompt_enhancer', status: 'pending', message: '增强 prompt' },
+    { step: 'router', status: 'pending', message: '判断类型' },
+    { step: 'code_generator', status: 'pending', message: '生成代码' },
+    { step: 'code_quality_check', status: 'pending', message: '质量检查' },
+    { step: 'project_builder', status: 'pending', message: '构建' },
+  ]
   let streamCompleted = false
   const aiMsgIndex = messages.value.length
-  messages.value.push({ role: 'ai', content: '' })
-  const isVueProjectMode = app.value?.codeGenType === 'vue_project'
+  messages.value.push({ role: 'ai', content: '', status: 'running', workflowSteps: workflowSteps.value })
+  const isStructuredToolMode =
+    app.value?.codeGenType === 'vue_project' ||
+    app.value?.codeGenType === 'multi-file' ||
+    app.value?.codeGenType === 'single_file'
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL
   const eventSource = new EventSource(
@@ -413,9 +482,11 @@ const startSSE = (userMsg: string, sessionId: string) => {
       loadSessions()
       if (delayPreviewRefresh) {
         setTimeout(() => {
+          messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
           updatePreview()
         }, 500)
       } else {
+        messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
         updatePreview()
       }
     }
@@ -426,6 +497,9 @@ const startSSE = (userMsg: string, sessionId: string) => {
       const data = JSON.parse(event.data)
       const errorMsg = data.message || '操作失败'
       messages.value[aiMsgIndex].content += `\n\n[错误] ${errorMsg}`
+      messages.value[aiMsgIndex].status = 'failed'
+      previewStatus.value = 'failed'
+      previewWarning.value = errorMsg
       message.error(errorMsg)
     } catch {
       message.error('操作失败')
@@ -454,11 +528,7 @@ const startSSE = (userMsg: string, sessionId: string) => {
         return
       }
       const chunk = data.d || ''
-      if (!isVueProjectMode) {
-        messages.value[aiMsgIndex].content += chunk
-      } else {
-        appendVueProjectChunk(aiMsgIndex, chunk)
-      }
+      appendStreamChunk(aiMsgIndex, chunk, isStructuredToolMode)
       scrollToBottom()
     } catch {
       if (rawData.includes('[DONE]')) {
@@ -472,6 +542,9 @@ const startSSE = (userMsg: string, sessionId: string) => {
     console.error('SSE Error', err)
     if (!streamCompleted) {
       streamWarning.value = '连接中断，本次 AI 输出可能未完整保存。可重新加载当前会话查看已落库内容。'
+      messages.value[aiMsgIndex].status = 'failed'
+      previewStatus.value = 'failed'
+      previewWarning.value = '连接中断，本次 AI 输出可能未完整保存。'
       message.warning('连接中断，已停止本次生成')
     }
     stopGenerating()
@@ -505,7 +578,11 @@ const buildSelectedElementPrompt = (userInput: string) => {
   ].join('\n')
 }
 
-const appendVueProjectChunk = (aiMsgIndex: number, chunk: string) => {
+const appendStreamChunk = (aiMsgIndex: number, chunk: string, structuredToolMode: boolean) => {
+  if (!structuredToolMode) {
+    messages.value[aiMsgIndex].content += chunk
+    return
+  }
   try {
     const messageObj = JSON.parse(chunk)
     const type = messageObj.type
@@ -524,9 +601,75 @@ const appendVueProjectChunk = (aiMsgIndex: number, chunk: string) => {
       messages.value[aiMsgIndex].content += text
       return
     }
+    if (type === 'workflow_event') {
+      handleWorkflowEvent(messageObj, aiMsgIndex)
+      return
+    }
     messages.value[aiMsgIndex].content += chunk
   } catch {
     messages.value[aiMsgIndex].content += chunk
+  }
+}
+
+const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
+  const eventType = eventData.event
+  const data = eventData.data || {}
+
+  if (eventType === 'workflow_start') {
+    workflowSteps.value.forEach((step, index) => {
+      step.status = index === 0 ? 'running' : 'pending'
+    })
+    return
+  }
+
+  if (eventType === 'step_started') {
+    const stepName = data.step
+    workflowSteps.value.forEach(step => {
+      if (step.step === stepName) {
+        step.status = 'running'
+      } else if (step.status === 'running') {
+        step.status = 'pending'
+      }
+    })
+    return
+  }
+
+  if (eventType === 'step_completed') {
+    const stepName = data.step
+    const stepIndex = workflowSteps.value.findIndex(s => s.step === stepName)
+    if (stepIndex >= 0) {
+      workflowSteps.value[stepIndex].status = 'completed'
+      if (stepIndex + 1 < workflowSteps.value.length) {
+        workflowSteps.value[stepIndex + 1].status = 'running'
+      }
+    }
+    return
+  }
+
+  if (eventType === 'workflow_completed') {
+    workflowSteps.value.forEach(step => {
+      if (step.status !== 'completed') {
+        step.status = 'completed'
+      }
+    })
+    if (data.codeGenType && app.value) {
+      app.value.codeGenType = data.codeGenType
+    }
+    if (!messages.value[aiMsgIndex].content.trim()) {
+      const codeGenTypeText = data.codeGenType ? formatCodeGenType(data.codeGenType) : '代码'
+      messages.value[aiMsgIndex].content = `代码生成完成：已生成 ${codeGenTypeText} 产物`
+    }
+    return
+  }
+
+  if (eventType === 'workflow_error') {
+    workflowSteps.value.forEach(step => {
+      if (step.status === 'running') {
+        step.status = 'error'
+        step.errorMessage = data.message || '执行失败'
+      }
+    })
+    return
   }
 }
 
@@ -598,7 +741,7 @@ const doChat = async () => {
     return
   }
   const promptMessage = buildSelectedElementPrompt(rawMessage)
-  messages.value.push({ role: 'user', content: rawMessage, toolEvents: [] })
+  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
   inputText.value = ''
   startSSE(promptMessage, sessionId)
 }
@@ -613,16 +756,89 @@ const handleEnter = (e: KeyboardEvent) => {
 /**
  * 更新预览
  */
-const updatePreview = () => {
+const updatePreview = async () => {
   const codeGenType = app.value?.codeGenType || 'single_file'
   const deployUrlPrefix = import.meta.env.VITE_APP_DEPLOY_URL_PREFIX
   previewWarning.value = ''
   selectedElement.value = null
-  if (codeGenType === 'vue_project') {
-    iframeUrl.value = `${deployUrlPrefix}/vue_project_${appId}/dist/index.html?t=${Date.now()}`
+  if (!hasPreviewCandidate()) {
+    iframeUrl.value = ''
+    previewStatus.value = hasLatestGenerationFailure() ? 'failed' : 'idle'
+    if (previewStatus.value === 'failed') {
+      previewWarning.value = extractLatestFailureReason() || '本次生成未产出可预览页面，请根据左侧错误信息调整后重试'
+    }
     return
   }
-  iframeUrl.value = `${deployUrlPrefix}/${codeGenType}_${appId}/index.html?t=${Date.now()}`
+  previewStatus.value = 'checking'
+  const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix)
+  const resourceAvailable = await checkPreviewResource(nextUrl)
+  if (!resourceAvailable) {
+    iframeUrl.value = ''
+    previewStatus.value = 'failed'
+    const latestFailureReason = extractLatestFailureReason()
+    previewWarning.value = latestFailureReason
+      ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
+      : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。'
+    return
+  }
+  previewStatus.value = 'ready'
+  iframeUrl.value = nextUrl
+}
+
+const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string) => {
+  if (codeGenType === 'vue_project') {
+    return `${deployUrlPrefix}/vue_project_${appId}/dist/index.html?t=${Date.now()}`
+  }
+  return `${deployUrlPrefix}/${codeGenType}_${appId}/index.html?t=${Date.now()}`
+}
+
+const hasPreviewCandidate = () => {
+  const latestAiMessage = [...messages.value].reverse().find((item) => item.role === 'ai')
+  if (!latestAiMessage || latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content)) {
+    return false
+  }
+  return latestAiMessage.status === 'success' || hasFileWriteSignal(latestAiMessage)
+}
+
+const hasLatestGenerationFailure = () => {
+  const latestAiMessage = [...messages.value].reverse().find((item) => item.role === 'ai')
+  return !!latestAiMessage && (latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content))
+}
+
+const hasFileWriteSignal = (messageItem: ChatMessage) => {
+  if (messageItem.toolEvents?.some((eventItem) => eventItem.type === 'executed' && eventItem.text.includes('写入文件'))) {
+    return true
+  }
+  return messageItem.content.includes('[工具完成]') || messageItem.content.includes('已写入文件')
+}
+
+const looksLikeGenerationFailure = (content: string) => {
+  const lowerContent = content.toLowerCase()
+  return (
+    lowerContent.includes('the request was rejected') ||
+    lowerContent.includes('high risk') ||
+    content.includes('[错误]') ||
+    content.includes('生成失败：') ||
+    content.includes('构建失败：') ||
+    content.includes('HTML代码不能为空')
+  )
+}
+
+const checkPreviewResource = async (url: string) => {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      return false
+    }
+    const text = await response.text()
+    return !(text.includes('Whitelabel Error Page') || text.includes('No static resource'))
+  } catch {
+    return false
+  }
 }
 
 const extractLatestFailureReason = () => {
@@ -640,6 +856,8 @@ const extractLatestFailureReason = () => {
       return (
         line.startsWith('生成失败：') ||
         line.startsWith('构建失败：') ||
+        line.toLowerCase().includes('the request was rejected') ||
+        line.toLowerCase().includes('high risk') ||
         line.includes('argument type mismatch')
       )
     })
@@ -662,6 +880,8 @@ const handleIframeLoad = () => {
   try {
     const text = iframeRef.value.contentDocument?.body?.innerText || ''
     if (text.includes('Whitelabel Error Page') || text.includes('No static resource')) {
+      iframeUrl.value = ''
+      previewStatus.value = 'failed'
       const latestFailureReason = extractLatestFailureReason()
       if (latestFailureReason) {
         previewWarning.value = isTimeoutFailureReason(latestFailureReason)
@@ -673,6 +893,7 @@ const handleIframeLoad = () => {
       return
     }
     previewWarning.value = ''
+    previewStatus.value = 'ready'
   } catch {
     previewWarning.value = ''
   }
@@ -718,7 +939,7 @@ const handleCreateSession = async () => {
     clearSelectedElement()
     currentSessionId.value = newSessionId
     messages.value = []
-    updatePreview()
+    await updatePreview()
   }
 }
 
@@ -730,6 +951,7 @@ const handleSwitchSession = async (sessionId?: string | number) => {
   clearSelectedElement()
   currentSessionId.value = normalizedSessionId
   await loadRemoteHistory(normalizedSessionId)
+  await updatePreview()
 }
 
 const formatSessionTime = (time?: string) => {
@@ -1241,6 +1463,71 @@ onUnmounted(() => {
   color: #8c8c8c;
   margin-top: -12px;
   margin-left: 44px;
+}
+
+.workflow-steps {
+  margin-top: 12px;
+  margin-left: 44px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+}
+
+.workflow-steps-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8c8c8c;
+  margin-bottom: 8px;
+}
+
+.workflow-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workflow-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.workflow-step-item.running {
+  color: #1890ff;
+}
+
+.workflow-step-item.completed {
+  color: #52c41a;
+}
+
+.workflow-step-item.error {
+  color: #ff4d4f;
+}
+
+.workflow-step-icon {
+  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-step-content {
+  flex: 1;
+}
+
+.workflow-step-name {
+  font-weight: 500;
+}
+
+.workflow-step-error {
+  font-size: 11px;
+  color: #ff4d4f;
+  margin-top: 2px;
 }
 
 .stream-warning {
