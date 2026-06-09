@@ -1,29 +1,36 @@
 package com.adcage.acaicodefree.workflow.node;
 
 import cn.hutool.core.util.StrUtil;
+import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.workflow.state.WorkflowContext;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.state.AgentState;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Slf4j
 public class CodeGeneratorNode {
 
     private final AiCodeGeneratorFacade aiCodeGeneratorFacade;
+    private final Consumer<String> streamConsumer;
 
     public CodeGeneratorNode() {
         this(null);
     }
 
     public CodeGeneratorNode(AiCodeGeneratorFacade aiCodeGeneratorFacade) {
+        this(aiCodeGeneratorFacade, null);
+    }
+
+    public CodeGeneratorNode(AiCodeGeneratorFacade aiCodeGeneratorFacade, Consumer<String> streamConsumer) {
         this.aiCodeGeneratorFacade = aiCodeGeneratorFacade;
+        this.streamConsumer = streamConsumer;
     }
 
     public Map<String, Object> apply(AgentState state) {
@@ -39,8 +46,16 @@ public class CodeGeneratorNode {
             return ctx.toStateUpdate();
         }
         String prompt = StrUtil.blankToDefault(ctx.getEnhancedPrompt(), ctx.getOriginalPrompt());
-        File generatedFile = aiCodeGeneratorFacade.generateAndSaveCode(prompt, generationType, ctx.getAppId());
-        ctx.setGeneratedCodeDir(generatedFile.getAbsolutePath());
+        aiCodeGeneratorFacade.generateAndSaveCodeStream(prompt, generationType, ctx.getAppId())
+                .doOnNext(chunk -> {
+                    log.debug("[CodeGeneratorNode] chunk: {}", chunk);
+                    if (streamConsumer != null) {
+                        streamConsumer.accept(chunk);
+                    }
+                })
+                .blockLast();
+        log.info("[CodeGeneratorNode] stream completed");
+        ctx.setGeneratedCodeDir(resolveGeneratedCodeDir(ctx.getAppId(), generationType));
         log.info("[CodeGeneratorNode] completed, generatedCodeDir={}", ctx.getGeneratedCodeDir());
         return ctx.toStateUpdate();
     }
@@ -57,5 +72,13 @@ public class CodeGeneratorNode {
         } catch (IOException e) {
             throw new RuntimeException("创建工作流临时代码目录失败", e);
         }
+    }
+
+    private String resolveGeneratedCodeDir(Long appId, CodeGenTypeEnum generationType) {
+        return switch (generationType) {
+            case VUE_PROJECT -> AppConstant.getVueProjectOutputDir(appId).toString();
+            case MULTI_FILE -> AppConstant.getMultiFileOutputDir(appId).toString();
+            case SINGLE_FILE -> AppConstant.getSingleFileOutputDir(appId).toString();
+        };
     }
 }

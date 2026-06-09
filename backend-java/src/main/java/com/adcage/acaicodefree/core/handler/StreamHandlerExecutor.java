@@ -15,7 +15,9 @@ public class StreamHandlerExecutor {
     private JsonMessageStreamHandler jsonMessageStreamHandler;
 
     public Flux<String> handle(CodeGenTypeEnum codeGenType, Flux<String> stream, StringBuilder readableOutput) {
-        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT) {
+        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT
+                || codeGenType == CodeGenTypeEnum.MULTI_FILE
+                || codeGenType == CodeGenTypeEnum.SINGLE_FILE) {
             return jsonMessageStreamHandler.handle(stream, readableOutput);
         }
         return simpleTextStreamHandler.handle(stream, readableOutput);

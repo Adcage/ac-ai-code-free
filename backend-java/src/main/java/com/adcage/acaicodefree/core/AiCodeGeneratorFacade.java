@@ -15,7 +15,6 @@ import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolExecution;
 import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
@@ -28,7 +27,6 @@ import java.io.File;
  * @author adcage
  * @description AiCodeGeneratorFacade
  */
-@Slf4j
 @Service
 public class AiCodeGeneratorFacade {
 
@@ -77,23 +75,73 @@ public class AiCodeGeneratorFacade {
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGenServiceFactory.getService(appId, codeGenType);
         boolean modifyRequest = VisualEditPromptHelper.isVisualEditRequest(userMessage);
         Flux<String> codeStream = switch (codeGenType) {
-            case SINGLE_FILE -> modifyRequest
-                    ? buildTokenTextStream(aiCodeGeneratorService.modifySingleFileCodeStream(appId, userMessage))
-                    : buildTokenTextStream(aiCodeGeneratorService.generateSingleFileCodeStream(appId, userMessage));
-            case MULTI_FILE -> modifyRequest
-                    ? buildTokenTextStream(aiCodeGeneratorService.modifyMultiFileCodeStream(appId, userMessage))
-                    : buildTokenTextStream(aiCodeGeneratorService.generateMultiFileCodeStream(appId, userMessage));
+            case SINGLE_FILE -> buildSingleFileMessageStream(aiCodeGeneratorService, appId, userMessage, modifyRequest);
+            case MULTI_FILE -> buildMultiFileMessageStream(aiCodeGeneratorService, appId, userMessage, modifyRequest);
             case VUE_PROJECT -> buildVueProjectMessageStream(aiCodeGeneratorService, appId, userMessage, modifyRequest);
             default -> {
                 String message = "不支持的生成代码类型" + codeGenType.getValue();
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, message);
             }
         };
-        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT) {
+        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT
+                || codeGenType == CodeGenTypeEnum.MULTI_FILE
+                || codeGenType == CodeGenTypeEnum.SINGLE_FILE) {
             return codeStream;
         }
         // 委托给 Executor 处理解析与保存逻辑
         return CodeFileSaverExecutor.executeSaverStream(codeStream, codeGenType,appId);
+    }
+
+    private Flux<String> buildSingleFileMessageStream(AiCodeGeneratorService service,
+                                                      Long appId,
+                                                      String userMessage,
+                                                      boolean modifyRequest) {
+        TokenStream tokenStream = modifyRequest
+                ? service.modifySingleFileCodeStream(appId, userMessage)
+                : service.generateSingleFileCodeStream(appId, userMessage);
+        return Flux.create(sink -> {
+            try {
+                tokenStream
+                        .onNext(token -> {
+                            if (sink.isCancelled() || StrUtil.isBlank(token)) {
+                                return;
+                            }
+                            sink.next(token);
+                        })
+                        .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
+                        .onError(sink::error)
+                        .onComplete(response -> sink.complete())
+                        .start();
+            } catch (Exception e) {
+                sink.error(e);
+            }
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    private Flux<String> buildMultiFileMessageStream(AiCodeGeneratorService service,
+                                                     Long appId,
+                                                     String userMessage,
+                                                     boolean modifyRequest) {
+        TokenStream tokenStream = modifyRequest
+                ? service.modifyMultiFileCodeStream(appId, userMessage)
+                : service.generateMultiFileCodeStream(appId, userMessage);
+        return Flux.create(sink -> {
+            try {
+                tokenStream
+                        .onNext(token -> {
+                            if (sink.isCancelled() || StrUtil.isBlank(token)) {
+                                return;
+                            }
+                            sink.next(token);
+                        })
+                        .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
+                        .onError(sink::error)
+                        .onComplete(response -> sink.complete())
+                        .start();
+            } catch (Exception e) {
+                sink.error(e);
+            }
+        }, FluxSink.OverflowStrategy.BUFFER);
     }
 
     private Flux<String> buildVueProjectMessageStream(AiCodeGeneratorService service,
@@ -108,33 +156,6 @@ public class AiCodeGeneratorFacade {
                 tokenStream
                         .onNext(token -> handleToken(sink, token))
                         .onToolExecuted(toolExecution -> handleToolExecution(sink, toolExecution))
-                        .onError(sink::error)
-                        .onComplete(response -> sink.complete())
-                        .start();
-            } catch (Exception e) {
-                sink.error(e);
-            }
-        }, FluxSink.OverflowStrategy.BUFFER);
-    }
-
-    private Flux<String> buildTokenTextStream(TokenStream tokenStream) {
-        return Flux.create(sink -> {
-            try {
-                tokenStream
-                        .onNext(token -> {
-                            if (sink.isCancelled() || StrUtil.isBlank(token)) {
-                                return;
-                            }
-                            sink.next(token);
-                        })
-                        .onToolExecuted(toolExecution -> {
-                            if (toolExecution == null || toolExecution.request() == null) {
-                                return;
-                            }
-                            log.info("单/多文件工具调用, name={}, arguments={}",
-                                    toolExecution.request().name(),
-                                    toolExecution.request().arguments());
-                        })
                         .onError(sink::error)
                         .onComplete(response -> sink.complete())
                         .start();

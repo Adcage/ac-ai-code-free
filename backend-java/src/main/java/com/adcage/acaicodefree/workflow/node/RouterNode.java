@@ -18,11 +18,27 @@ public class RouterNode {
         log.info("[RouterNode] starting, enhancedPrompt length={}", ctx.getEnhancedPrompt().length());
         ctx.advanceStep("router");
         String prompt = ctx.getEnhancedPrompt() != null ? ctx.getEnhancedPrompt().toLowerCase() : "";
-        CodeGenTypeEnum type = prompt.contains("首页") || prompt.contains("官网") || prompt.contains("多页面")
-                ? CodeGenTypeEnum.MULTI_FILE
-                : CodeGenTypeEnum.SINGLE_FILE;
+        CodeGenTypeEnum type;
+        if (isVueProjectPrompt(prompt)) {
+            type = CodeGenTypeEnum.VUE_PROJECT;
+        } else if (prompt.contains("首页") || prompt.contains("官网") || prompt.contains("多页面")) {
+            type = CodeGenTypeEnum.MULTI_FILE;
+        } else {
+            type = CodeGenTypeEnum.SINGLE_FILE;
+        }
         ctx.setGenerationType(type);
         log.info("[RouterNode] completed, generationType={}", type);
         return ctx.toStateUpdate();
+    }
+
+    private boolean isVueProjectPrompt(String prompt) {
+        return prompt.contains("vue")
+                || prompt.contains("组件")
+                || prompt.contains("spa")
+                || prompt.contains("单页应用")
+                || prompt.contains("管理系统")
+                || prompt.contains("后台管理")
+                || prompt.contains("dashboard")
+                || prompt.contains("admin");
     }
 }

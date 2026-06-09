@@ -61,6 +61,9 @@ public class JsonMessageStreamHandler {
                 }
                 return Flux.just(chunk);
             }
+            if ("workflow_event".equals(type)) {
+                return Flux.just(chunk);
+            }
             readableOutput.append(chunk);
             return Flux.just(chunk);
         });
