@@ -37,4 +37,17 @@ class RouterNodeTest {
 
         assertEquals(CodeGenTypeEnum.SINGLE_FILE, updated.getGenerationType());
     }
+
+    @Test
+    void applyShouldRouteVueProjectToVueProject() {
+        RouterNode node = new RouterNode();
+        WorkflowContext context = WorkflowContext.builder()
+                .enhancedPrompt("请生成一个 Vue 后台管理系统，包含用户管理和数据统计组件")
+                .build();
+
+        Map<String, Object> result = node.apply(new AgentState(context.toStateUpdate()));
+        WorkflowContext updated = (WorkflowContext) result.get(WorkflowContext.STATE_KEY);
+
+        assertEquals(CodeGenTypeEnum.VUE_PROJECT, updated.getGenerationType());
+    }
 }

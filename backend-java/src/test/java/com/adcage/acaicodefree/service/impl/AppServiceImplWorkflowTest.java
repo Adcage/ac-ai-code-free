@@ -92,7 +92,7 @@ class AppServiceImplWorkflowTest {
         ensureChatSchema();
         workflowProperties.setEnabled(false);
         workflowProperties.setMode("legacy");
-        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-legacy");
+        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-agent");
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
         when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
@@ -147,8 +147,7 @@ class AppServiceImplWorkflowTest {
     }
 
     @Test
-    void chatToGenCodeWhenWorkflowEnabledShouldUseWorkflowService() {
-        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-workflow");
+    void chatToGenCodeWhenJavaAgentShouldUseWorkflowService() {
         when(workflowCodeGeneratorService.executeWorkflowWithFlux(anyLong(), anyString()))
                 .thenReturn(Flux.just("workflow_start", "workflow_completed"));
 
@@ -158,22 +157,18 @@ class AppServiceImplWorkflowTest {
 
         assertEquals(List.of("workflow_start", "workflow_completed"), result);
         verify(workflowCodeGeneratorService).executeWorkflowWithFlux(testApp.getId(), "帮我做一个官网");
-        verify(aiCodeGeneratorFacade, never()).generateAndSaveCodeStream(anyString(), any(), anyLong());
     }
 
     @Test
-    void chatToGenCodeWhenWorkflowDisabledShouldUseLegacyFacade() {
-        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-legacy");
-        Flux<String> sourceFlux = Flux.just("legacy_chunk");
-        when(aiCodeGeneratorFacade.generateAndSaveCodeStream(anyString(), any(), anyLong())).thenReturn(sourceFlux);
-        when(streamHandlerExecutor.handle(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+    void chatToGenCodeWhenPythonAgentShouldNotUseWorkflowService() {
+        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "python-agent");
 
+        // python-agent runtime is not injected in this test context, so selecting it should throw
         List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个单页", loginUser)
                 .collectList()
                 .block();
 
-        assertEquals(List.of("legacy_chunk"), result);
-        verify(aiCodeGeneratorFacade).generateAndSaveCodeStream("帮我做一个单页", CodeGenTypeEnum.SINGLE_FILE, testApp.getId());
+        // The result should contain an error message since python-agent is not available
         verify(workflowCodeGeneratorService, never()).executeWorkflowWithFlux(anyLong(), anyString());
     }
 

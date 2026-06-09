@@ -9,12 +9,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
-class JavaWorkflowRuntimeTest {
+class JavaAgentRuntimeTest {
 
     @Test
     void stream_shouldDelegateToWorkflowService() {
         WorkflowCodeGeneratorService workflowService = Mockito.mock(WorkflowCodeGeneratorService.class);
-        JavaWorkflowRuntime runtime = new JavaWorkflowRuntime();
+        JavaAgentRuntime runtime = new JavaAgentRuntime();
         ReflectionTestUtils.setField(runtime, "workflowCodeGeneratorService", workflowService);
         Mockito.when(workflowService.executeWorkflowWithFlux(1L, "build app"))
                 .thenReturn(Flux.just("workflow-start", "workflow-done"));
@@ -31,7 +31,7 @@ class JavaWorkflowRuntimeTest {
     }
 
     @Test
-    void getName_shouldReturnJavaWorkflow() {
-        Assertions.assertEquals("java-workflow", new JavaWorkflowRuntime().getName());
+    void getName_shouldReturnJavaAgent() {
+        Assertions.assertEquals("java-agent", new JavaAgentRuntime().getName());
     }
 }

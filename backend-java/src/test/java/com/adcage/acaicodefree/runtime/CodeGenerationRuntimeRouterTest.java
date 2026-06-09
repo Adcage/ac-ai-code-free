@@ -13,7 +13,7 @@ class CodeGenerationRuntimeRouterTest {
     @Test
     void select_shouldReturnConfiguredRuntime() {
         CodeGenerationRuntimeRouter router = new CodeGenerationRuntimeRouter();
-        ReflectionTestUtils.setField(router, "runtimes", List.of(new StubRuntime("java-legacy"), new StubRuntime("python-agent")));
+        ReflectionTestUtils.setField(router, "runtimes", List.of(new StubRuntime("java-agent"), new StubRuntime("python-agent")));
         ReflectionTestUtils.setField(router, "runtimeName", "python-agent");
 
         CodeGenerationRuntime selected = router.select();
@@ -24,7 +24,7 @@ class CodeGenerationRuntimeRouterTest {
     @Test
     void select_shouldThrowWhenRuntimeMissing() {
         CodeGenerationRuntimeRouter router = new CodeGenerationRuntimeRouter();
-        ReflectionTestUtils.setField(router, "runtimes", List.of(new StubRuntime("java-legacy")));
+        ReflectionTestUtils.setField(router, "runtimes", List.of(new StubRuntime("java-agent")));
         ReflectionTestUtils.setField(router, "runtimeName", "python-agent");
 
         BusinessException exception = Assertions.assertThrows(BusinessException.class, router::select);
