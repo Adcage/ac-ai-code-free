@@ -1,3 +1,6 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 
@@ -12,12 +15,25 @@ from app.core.exceptions import AgentRuntimeError
 from app.core.logging import setup_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.response import success
+from app.grpc_server.server import create_grpc_server
+
+logger = logging.getLogger("app.main")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    grpc_server = await create_grpc_server()
+    await grpc_server.start()
+    logger.info("gRPC server started on port %s", settings.grpc_server_port)
+    yield
+    await grpc_server.stop(grace=5)
+    logger.info("gRPC server stopped")
 
 
 def create_app() -> FastAPI:
     setup_logging(settings.log_level)
 
-    app = FastAPI(title=settings.app_name, debug=settings.debug)
+    app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
 
     app.add_exception_handler(AgentRuntimeError, agent_runtime_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
