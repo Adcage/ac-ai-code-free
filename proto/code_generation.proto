@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package com.adcage.acaicodefree;
+
+import "common.proto";
+
+option java_multiple_files = true;
+option java_package = "com.adcage.acaicodefree.grpc.codegen";
+
+service CodeGenerationService {
+  rpc StreamGenerate(CodeGenerationRequest) returns (stream CodeGenerationEvent);
+  rpc StreamModify(CodeModificationRequest) returns (stream CodeGenerationEvent);
+  rpc RouteCodeGenType(RouteCodeGenTypeRequest) returns (RouteCodeGenTypeResponse);
+  rpc ValidatePrompt(ValidatePromptRequest) returns (ValidatePromptResponse);
+}
+
+message CodeGenerationRequest {
+  string agent_run_id = 1;
+  int64 app_id = 2;
+  int64 session_id = 3;
+  int64 user_id = 4;
+  string prompt = 5;
+  CodeGenType code_gen_type = 6;
+  string workspace_path = 7;
+  int64 model_config_id = 8;
+  int32 config_version = 9;
+}
+
+message CodeModificationRequest {
+  string agent_run_id = 1;
+  int64 app_id = 2;
+  int64 session_id = 3;
+  int64 user_id = 4;
+  string prompt = 5;
+  CodeGenType code_gen_type = 6;
+  string workspace_path = 7;
+  int64 model_config_id = 8;
+  int32 config_version = 9;
+  string original_content = 10;
+}
+
+message CodeGenerationEvent {
+  string agent_run_id = 1;
+  int64 seq = 2;
+  EventType event_type = 3;
+  oneof payload {
+    AiResponseData ai_response = 4;
+    ToolRequestData tool_request = 5;
+    ToolExecutedData tool_executed = 6;
+    ErrorData error = 7;
+    DoneData done = 8;
+  }
+}
+
+message RouteCodeGenTypeRequest {
+  string prompt = 1;
+}
+
+message RouteCodeGenTypeResponse {
+  CodeGenType code_gen_type = 1;
+}
+
+message ValidatePromptRequest {
+  string prompt = 1;
+}
+
+message ValidatePromptResponse {
+  bool valid = 1;
+  string reason = 2;
+}

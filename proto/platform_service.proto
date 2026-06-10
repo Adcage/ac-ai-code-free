@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package com.adcage.acaicodefree;
+
+import "common.proto";
+
+option java_multiple_files = true;
+option java_package = "com.adcage.acaicodefree.grpc.platform";
+
+service PlatformService {
+  rpc GetModelConfig(GetModelConfigRequest) returns (GetModelConfigResponse);
+  rpc BuildVueProject(BuildVueProjectRequest) returns (BuildVueProjectResponse);
+  rpc DeployApp(DeployAppRequest) returns (DeployAppResponse);
+  rpc CompleteAgentRun(CompleteAgentRunRequest) returns (CompleteAgentRunResponse);
+  rpc CreateAppVersion(CreateAppVersionRequest) returns (CreateAppVersionResponse);
+  rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
+  rpc UpdateAppCodeGenType(UpdateAppCodeGenTypeRequest) returns (UpdateAppCodeGenTypeResponse);
+  rpc GetAppDetail(GetAppDetailRequest) returns (GetAppDetailResponse);
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+}
+
+message GetModelConfigRequest {
+  int64 model_config_id = 1;
+  int32 config_version = 2;
+}
+
+message GetModelConfigResponse {
+  string provider = 1;
+  string model_name = 2;
+  string base_url = 3;
+  string api_key = 4;
+}
+
+message BuildVueProjectRequest {
+  int64 app_id = 1;
+}
+
+message BuildVueProjectResponse {
+  string dist_path = 1;
+  string install_log = 2;
+  string build_log = 3;
+  bool success = 4;
+  string error_message = 5;
+}
+
+message DeployAppRequest {
+  int64 app_id = 1;
+  int64 user_id = 2;
+}
+
+message DeployAppResponse {
+  string url = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+message CompleteAgentRunRequest {
+  int64 agent_run_id = 1;
+  bool success = 2;
+  string workspace_path = 3;
+  int32 latency_ms = 4;
+  string error_message = 5;
+}
+
+message CompleteAgentRunResponse {
+  bool ok = 1;
+}
+
+message CreateAppVersionRequest {
+  int64 app_id = 1;
+  int64 agent_run_id = 2;
+  string source_path = 3;
+  string build_path = 4;
+}
+
+message CreateAppVersionResponse {
+  int64 version_id = 1;
+}
+
+message ChatHistoryEntry {
+  int64 id = 1;
+  string role = 2;
+  string content = 3;
+  int64 created_at = 4;
+}
+
+message GetChatHistoryRequest {
+  int64 session_id = 1;
+  int32 limit = 2;
+}
+
+message GetChatHistoryResponse {
+  repeated ChatHistoryEntry entries = 1;
+}
+
+message UpdateAppCodeGenTypeRequest {
+  int64 app_id = 1;
+  CodeGenType code_gen_type = 2;
+}
+
+message UpdateAppCodeGenTypeResponse {
+  bool ok = 1;
+}
+
+message GetAppDetailRequest {
+  int64 app_id = 1;
+}
+
+message GetAppDetailResponse {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  CodeGenType code_gen_type = 4;
+  int64 user_id = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message GetUserInfoRequest {
+  int64 user_id = 1;
+}
+
+message GetUserInfoResponse {
+  int64 id = 1;
+  string user_name = 2;
+  string user_avatar = 3;
+  string user_role = 4;
+}
