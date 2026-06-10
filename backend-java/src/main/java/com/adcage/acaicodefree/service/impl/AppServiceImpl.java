@@ -318,12 +318,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         AtomicReference<String> workflowGeneratedDirRef = new AtomicReference<>();
         long startTime = System.currentTimeMillis();
         Flux<String> sourceStream = runtime.stream(runtimeRequest);
-        Flux<String> handledStream;
-        if ("java-agent".equals(runtime.getName())) {
-            handledStream = streamHandlerExecutor.handle(codeGenTypeEnum, sourceStream, readableAssistantMessageBuilder);
-        } else {
-            handledStream = sourceStream.doOnNext(chunk -> readableAssistantMessageBuilder.append(chunk).append('\n'));
-        }
+        Flux<String> handledStream = streamHandlerExecutor.handle(codeGenTypeEnum, sourceStream, readableAssistantMessageBuilder);
         return handledStream
                 .doOnNext(chunk -> captureWorkflowCompletedEvent(chunk, workflowCodeGenTypeRef, workflowGeneratedDirRef))
                 .doOnComplete(() -> {

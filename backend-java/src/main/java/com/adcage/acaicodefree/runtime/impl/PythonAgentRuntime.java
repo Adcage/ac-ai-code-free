@@ -21,7 +21,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
-@Component
+@Deprecated
+// @Component // 已被 GrpcPythonAgentRuntime 替代，注释掉避免 Bean 冲突
 public class PythonAgentRuntime implements CodeGenerationRuntime {
 
     private static final String NAME = "python-agent";
