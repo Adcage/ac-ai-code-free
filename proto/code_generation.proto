@@ -12,6 +12,7 @@ service CodeGenerationService {
   rpc StreamModify(CodeModificationRequest) returns (stream CodeGenerationEvent);
   rpc RouteCodeGenType(RouteCodeGenTypeRequest) returns (RouteCodeGenTypeResponse);
   rpc ValidatePrompt(ValidatePromptRequest) returns (ValidatePromptResponse);
+  rpc EnhancePrompt(EnhancePromptRequest) returns (EnhancePromptResponse);
 }
 
 message CodeGenerationRequest {
@@ -67,4 +68,16 @@ message ValidatePromptRequest {
 message ValidatePromptResponse {
   bool valid = 1;
   string reason = 2;
+}
+
+message EnhancePromptRequest {
+  string prompt = 1;
+  int64 model_config_id = 2;
+  int32 config_version = 3;
+}
+
+message EnhancePromptResponse {
+  bool success = 1;
+  string enhanced_prompt = 2;
+  string error_message = 3;
 }
