@@ -176,6 +176,224 @@ public class User implements Serializable {
 
 AI 对话生成使用 `Flux<ServerSentEvent<String>>` 返回流式数据，路径 `/app/chat/gen/code/stream`。
 
+## Python Agent Runtime 代码风格（Python 3.11+ / FastAPI / LangGraph）
+
+### 目录结构
+
+```
+agent-runtime-python/app/
+├── main.py              # FastAPI 入口 + gRPC 生命周期
+├── api/                 # HTTP 路由（仅 health，AI 生成走 gRPC）
+├── core/                # 基础设施
+│   ├── config.py        # pydantic-settings 配置
+│   ├── context.py       # contextvars（trace_id, agent_run_id）
+│   ├── error_codes.py   # AgentErrorCode 枚举（6xxxx 范围）
+│   ├── exceptions.py    # AgentRuntimeError
+│   ├── exception_handlers.py
+│   ├── log_utils.py     # AI 链路日志工具（log_prompt, log_response, log_model_call, log_tool_call）
+│   ├── logging.py       # 结构化日志 + TraceIdFilter
+│   ├── metrics.py       # Prometheus 指标定义
+│   ├── middleware.py    # HTTP 请求上下文中间件
+│   ├── response.py      # 统一响应封装
+│   └── sse.py           # SSE 格式化
+├── grpc/                # protobuf 生成代码（勿手动编辑，由 scripts/generate_grpc.py 生成）
+├── grpc_client/         # Python → Java gRPC 客户端
+│   ├── channel.py       # gRPC Channel 管理（keepalive + 超时选项）
+│   ├── platform_client.py  # 调用 Java PlatformService（模型配置、构建、部署、AgentRun 完成）
+│   ├── retry.py         # 异步重试工具
+│   └── tool_client.py   # 调用 Java ToolService（文件读写删改）
+├── grpc_server/         # Java → Python gRPC 服务端
+│   ├── code_generation_servicer.py  # 5 个 RPC 方法实现
+│   ├── interceptors.py  # gRPC Server Interceptor（请求日志 + trace_id + 指标埋点）
+│   └── server.py        # gRPC 服务创建与启动
+├── agent/               # Agent Graph 编排（LangGraph StateGraph）
+├── services/            # 业务服务
+│   ├── chat_model_factory.py  # 模型工厂（provider → ChatOpenAI）
+│   └── prompt_enhancer.py     # 提示词增强服务
+├── tools/               # LangChain Tool 定义与注册
+├── events/              # 事件模型（AgentEvent）
+└── schemas/             # Pydantic 请求/响应模型
+```
+
+### 构建/测试/开发命令
+
+```bash
+# agent-runtime-python/ 目录执行
+pip install -e ".[dev]"              # 安装依赖（含开发依赖）
+uvicorn app.main:app --reload --port 8000  # 启动开发服务器（FastAPI + gRPC）
+pytest                              # 运行所有测试
+pytest tests/test_xxx.py            # 运行单个测试文件
+ruff check .                        # lint 检查
+ruff format .                       # 格式化
+python scripts/generate_grpc.py     # 从 proto 文件重新生成 gRPC 代码
+```
+
+### 命名与编码规范
+
+- **类名** PascalCase：`AgentService`, `ChatModelFactory`
+- **函数/方法/变量** snake_case：`build_graph`, `agent_run_id`
+- **常量** UPPER_SNAKE_CASE：`SUPPORTED_PROVIDERS`, `RISK_REJECTION_PATTERNS`
+- **模块名** 全小写，简短：`graph.py`, `state.py`, `registry.py`
+- **Pydantic 模型** PascalCase，字段 camelCase（与 proto/Java 对齐）：`agentRunId`, `codeGenType`
+- **类型注解** 必须使用：函数签名、Pydantic 模型、TypedDict 均需完整类型
+
+### 错误码体系
+
+Python Agent Runtime 使用独立的错误码体系（6xxxx 范围），与 Java 端错误码（4xxxx/5xxxx）隔离。Python 错误码通过 gRPC 事件和响应传递给 Java，Java 在 SSE 流中携带 code + message 传给前端，不做映射转换。
+
+| 范围 | 领域 | 枚举值示例 |
+|------|------|-----------|
+| 60000-60999 | AI 模型 | `MODEL_CALL_FAILED(60001)`, `MODEL_TIMEOUT(60002)`, `CONTENT_SAFETY_REJECTED(60003)`, `MODEL_QUOTA_EXCEEDED(60004)`, `MODEL_RESPONSE_EMPTY(60005)` |
+| 61000-61999 | Agent 图 | `GRAPH_EXECUTION_INTERRUPTED(61001)`, `NODE_EXECUTION_ERROR(61002)`, `STATE_ERROR(61003)`, `MAX_ITERATIONS_EXCEEDED(61004)` |
+| 62000-62999 | 工具执行 | `TOOL_CALL_FAILED(62001)`, `TOOL_ARGS_ERROR(62002)`, `TOOL_TIMEOUT(62003)`, `PATH_TRAVERSAL_BLOCKED(62004)` |
+| 63000-63999 | 提示词 | `PROMPT_VALIDATION_FAILED(63001)`, `PROMPT_ENHANCE_FAILED(63002)`, `PROMPT_INJECTION_DETECTED(63003)`, `PROMPT_LENGTH_EXCEEDED(63004)`, `PROMPT_EMPTY(63005)` |
+| 64000-64999 | 配置 | `MODEL_CONFIG_MISSING(64001)`, `PROVIDER_NOT_SUPPORTED(64002)`, `API_KEY_MISSING(64003)`, `MODEL_NAME_MISSING(64004)` |
+
+使用方式：
+
+```python
+from app.core.exceptions import AgentRuntimeError
+from app.core.error_codes import AgentErrorCode
+
+raise AgentRuntimeError("模型调用超时", code=AgentErrorCode.MODEL_TIMEOUT)
+```
+
+### 日志规范（强制）
+
+#### 请求追踪
+
+- 每个 gRPC 请求入口生成 `trace_id`（优先从 Java 传入的 `x-trace-id` metadata 取，否则自动生成 UUID）
+- 使用 `contextvars` 贯穿整个请求生命周期，所有日志自动携带 `trace_id`
+- gRPC Server Interceptor 负责注入 `trace_id` 并记录请求开始/结束日志
+
+#### 日志格式
+
+```
+{asctime} | {levelname} | {name} | trace_id={trace_id} | {message}
+```
+
+#### 请求日志（必须）
+
+```python
+# gRPC 请求开始 — INFO
+logger.info("gRPC request start | method=%s agentRunId=%s", method, agent_run_id)
+
+# gRPC 请求结束 — INFO
+logger.info("gRPC request end | method=%s duration_ms=%.0f", method, duration_ms)
+
+# gRPC 请求异常 — ERROR（含堆栈）
+logger.error("gRPC request error | method=%s duration_ms=%.0f error=%s", method, duration_ms, e, exc_info=True)
+```
+
+#### AI 链路日志（必须，使用 log_utils 工具函数）
+
+```python
+from app.core.log_utils import log_prompt, log_response, log_model_call, log_tool_call
+
+# 提示词 — INFO 记录长度，DEBUG 记录前 200 字
+log_prompt(logger, prompt, label="system_prompt")
+
+# AI 返回 — INFO 记录长度，DEBUG 记录前 200 字
+log_response(logger, response, label="ai_response")
+
+# 模型调用 — INFO 记录 provider/model/耗时/token 数
+log_model_call(logger, provider, model, duration_ms, input_tokens, output_tokens)
+
+# 工具调用 — INFO 记录 name/耗时/结果状态
+log_tool_call(logger, tool_name, duration_ms, args_length, result_length, status)
+```
+
+#### 敏感数据日志策略
+
+| 数据类型 | 默认日志级别 | 说明 |
+|----------|-------------|------|
+| 请求元数据（appId, modelConfigId, codeGenType） | INFO | 始终记录 |
+| 提示词完整内容 | DEBUG | 默认不输出，DEBUG 时输出前 200 字 + 总长度 |
+| AI 完整返回 | DEBUG | 默认不输出，DEBUG 时输出前 200 字 + 总长度 |
+| AI 返回摘要（长度、token 数、是否含 tool_calls） | INFO | 始终记录 |
+| 工具调用完整参数和结果 | DEBUG | 默认不输出 |
+| 工具调用摘要（name, 耗时, 结果状态） | INFO | 始终记录 |
+| 关联数据 ID（sessionId, messageId, versionId） | INFO | 始终记录，方便从数据库查完整内容 |
+| 错误详情 | ERROR | 始终完整记录 |
+
+### gRPC 交互规范
+
+#### Python → Java（gRPC Client）
+
+| 客户端 | 目标服务 | 用途 |
+|--------|----------|------|
+| `GrpcPlatformClient` | Java PlatformService :9090 | 获取模型配置、构建项目、部署应用、完成 AgentRun、创建 AppVersion、获取聊天历史 |
+| `GrpcToolClient` | Java ToolService :9090 | 文件读写删改（当 Python 本地文件工具不可用时降级使用） |
+
+- 所有 gRPC 调用必须携带 `x-internal-secret` metadata 认证
+- gRPC 调用失败必须记录 ERROR 日志（含 trace_id、目标方法、错误详情）
+- `get_model_config` 自动重试 2 次（间隔 1s），构建/部署操作不重试
+
+#### Java → Python（gRPC Server）
+
+| RPC 方法 | 类型 | 说明 |
+|----------|------|------|
+| `StreamGenerate` | unary-stream | 代码生成流式主入口 |
+| `StreamModify` | unary-stream | 代码修改流式入口 |
+| `RouteCodeGenType` | unary-unary | AI 路由（根据 prompt 判断 codeGenType） |
+| `ValidatePrompt` | unary-unary | 提示词校验 |
+| `EnhancePrompt` | unary-unary | 提示词增强 |
+
+- gRPC Server Interceptor 注入 trace_id、记录请求开始/结束日志、埋点 Prometheus 指标
+- 流式方法（StreamGenerate/StreamModify）的每个事件必须携带 `agent_run_id` 和递增 `seq`
+
+### 工具执行架构
+
+| 工具类型 | 执行位置 | 说明 |
+|----------|----------|------|
+| 文件操作（read_file, write_file, modify_file, delete_file, read_dir） | Python 直接执行 | 高频调用、开发迭代快；Workspace 类提供路径穿越保护 |
+| 构建/部署（build_vue_project, deploy_app） | gRPC → Java | 涉及 Node.js 环境、对象存储、权限管理 |
+| 平台状态（complete_agent_run, create_app_version） | gRPC → Java | 数据库持久化由 Java 统一管理 |
+
+### 数据存储规范
+
+- **Python 不直接连接数据库**，所有持久化通过 gRPC 桥接到 Java
+- **AI 对话记录**：Python 通过 `GrpcPlatformClient.get_chat_history()` 读取历史，通过 `CompleteAgentRun` 上报运行结果
+- **业务指标**（token 用量、模型名、耗时）：请求完成后通过 `CompleteAgentRun` 上报，Java 存入 `agent_run` 表
+- **运维指标**（QPS、延迟 P99、错误率）：Python 暴露 `/metrics` 端点，Prometheus 直接抓取，不进数据库
+
+### 模型配置获取
+
+Java 发起 gRPC 请求时携带 `model_config_id` + `config_version`，Python 通过 `GrpcPlatformClient.get_model_config()` 回调 Java 获取完整配置（provider, modelName, baseUrl, apiKey），再用 `ChatModelFactory.create()` 构建模型实例。Python 不存储模型配置，只消费。
+
+### 运维指标（Prometheus）
+
+Python 暴露 `/metrics` 端点（Prometheus 格式），定义的指标：
+
+| 指标名 | 类型 | 说明 |
+|--------|------|------|
+| `agent_requests_total` | Counter | 请求总数（按 method, code_gen_type） |
+| `agent_request_duration_seconds` | Histogram | 请求耗时分布 |
+| `model_call_duration_seconds` | Histogram | 模型调用耗时（按 provider, model） |
+| `model_call_tokens_total` | Counter | token 使用量（按 model, direction） |
+| `tool_call_duration_seconds` | Histogram | 工具调用耗时（按 tool_name） |
+| `tool_call_total` | Counter | 工具调用次数（按 tool_name, status） |
+| `grpc_client_calls_total` | Counter | Python→Java gRPC 调用次数（按 method, status） |
+
+### 健康检查
+
+| 端点 | 说明 |
+|------|------|
+| `GET /health` | 存活探针，返回 status + runtime + gRPC channel 连通性 |
+| `GET /health/ready` | 就绪探针，检查 gRPC channel 连通 + internal_secret 配置，不满足返回 503 |
+
+### 配置项
+
+| 配置 | 默认值 | 说明 |
+|------|--------|------|
+| `java_platform_base_url` | `http://localhost:8700/api` | Java 平台 HTTP 地址 |
+| `agent_runtime_name` | `python-langgraph` | 运行时标识 |
+| `agent_internal_secret` | `""` | gRPC 内部认证密钥（启动时未配置会 WARN） |
+| `model_request_timeout` | `120` | 模型请求超时（秒） |
+| `default_model_provider` | `openai` | 默认模型提供商 |
+| `grpc_server_port` | `9091` | Python gRPC 服务端口 |
+| `java_grpc_target` | `localhost:9090` | Java gRPC 目标地址 |
+
 ## 前端代码风格（Vue 3 + TypeScript）
 
 ### 目录结构
