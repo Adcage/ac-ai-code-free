@@ -1,16 +1,25 @@
-package com.adcage.acaicodefree.core.parser;
+package com.adcage.acaicodefree.legacy.core;
 
+import com.adcage.acaicodefree.legacy.ai.model.SingleCodeResult;
 import com.adcage.acaicodefree.legacy.ai.model.MultiFileCodeResult;
+import com.adcage.acaicodefree.common.ErrorCode;
+import com.adcage.acaicodefree.exception.BusinessException;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MultiFileParser implements CodePaser<MultiFileCodeResult>{
+/**
+ * 代码解析器
+ *
+ * @author adcage
+ * @description CodeParserOld
+ */
+public class CodeParserOld {
 
     /**
      * SINGLE_FILE 代码块匹配模式 (```html ... ```)
      */
-    private static final Pattern HTML_CODE_PATTERN = Pattern.compile("```html\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HTML_CODE_PATTERN = Pattern.compile("```(?:html|single_file)\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
 
     /**
      * CSS 代码块匹配模式 (```css ... ```)
@@ -22,6 +31,27 @@ public class MultiFileParser implements CodePaser<MultiFileCodeResult>{
      */
     private static final Pattern JS_CODE_PATTERN = Pattern.compile("```(?:js|javascript)\\s*\\n([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
 
+    /**
+     * 解析单文件代码（仅提取 SINGLE_FILE）
+     *
+     * @param content AI 生成的原始内容
+     * @return 包含 SINGLE_FILE 代码的解析结果
+     * @throws BusinessException 如果未找到 SINGLE_FILE 代码则抛出异常
+     */
+    public static SingleCodeResult parseSingleCode(String content) {
+        SingleCodeResult result = new SingleCodeResult();
+        // 提取 SINGLE_FILE 代码
+        String htmlCode = processCode(extractHtmlCode(content));
+        if (htmlCode == null) {
+            htmlCode = processCode(extractHtmlFallback(content));
+        }
+        if (htmlCode == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "未找到 HTML 代码块");
+        }
+        result.setHtmlCode(htmlCode);
+        return result;
+    }
+
 
     /**
      * 解析多文件代码
@@ -29,8 +59,7 @@ public class MultiFileParser implements CodePaser<MultiFileCodeResult>{
      * @param content AI生成的原始内容
      * @return 解析后的代码结果
      */
-    @Override
-    public MultiFileCodeResult parseCode(String content) {
+    public static MultiFileCodeResult extractMutiFileCode(String content) {
         if (content == null || content.trim().isEmpty()) {
             return null;
         }
@@ -64,6 +93,32 @@ public class MultiFileParser implements CodePaser<MultiFileCodeResult>{
         Matcher matcher = HTML_CODE_PATTERN.matcher(content);
         if (matcher.find()) {
             return matcher.group(1);
+        }
+        return null;
+    }
+
+    private static String extractHtmlFallback(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        String lowerContent = content.toLowerCase();
+        int doctypeIndex = lowerContent.indexOf("<!doctype html");
+        if (doctypeIndex >= 0) {
+            return content.substring(doctypeIndex);
+        }
+        int htmlTagIndex = lowerContent.indexOf("<html");
+        if (htmlTagIndex >= 0) {
+            return content.substring(htmlTagIndex);
+        }
+        String fence = "```html";
+        int fenceIndex = lowerContent.indexOf(fence);
+        if (fenceIndex >= 0) {
+            String codeBody = content.substring(fenceIndex + fence.length()).trim();
+            int closeFenceIndex = codeBody.indexOf("```");
+            if (closeFenceIndex >= 0) {
+                codeBody = codeBody.substring(0, closeFenceIndex).trim();
+            }
+            return codeBody.isBlank() ? null : codeBody;
         }
         return null;
     }

@@ -3,9 +3,8 @@ package com.adcage.acaicodefree.core.handler;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.adcage.acaicodefree.ai.tools.BaseTool;
-import com.adcage.acaicodefree.ai.tools.ToolManager;
 import com.adcage.acaicodefree.ai.model.message.StreamMessageTypeEnum;
+import com.adcage.acaicodefree.service.FileOperationService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -17,7 +16,7 @@ import java.util.Set;
 public class JsonMessageStreamHandler {
 
     @Resource
-    private ToolManager toolManager;
+    private FileOperationService fileOperationService;
 
     public Flux<String> handle(Flux<String> stream, StringBuilder readableOutput) {
         Set<String> printedToolRequestIds = new HashSet<>();
@@ -81,9 +80,11 @@ public class JsonMessageStreamHandler {
     }
 
     private String buildToolRequestText(String toolName, JSONObject arguments) {
-        BaseTool tool = toolManager == null ? null : toolManager.getTool(toolName);
-        if (tool != null) {
-            return StrUtil.nullToEmpty(tool.generateToolRequestResponse(arguments));
+        if (fileOperationService != null) {
+            String text = fileOperationService.generateToolRequestResponse(toolName, arguments);
+            if (StrUtil.isNotBlank(text)) {
+                return text;
+            }
         }
         String path = extractPath(arguments);
         if (StrUtil.isNotBlank(path)) {
@@ -93,9 +94,11 @@ public class JsonMessageStreamHandler {
     }
 
     private String buildToolExecutedText(String toolName, JSONObject arguments, String result) {
-        BaseTool tool = toolManager == null ? null : toolManager.getTool(toolName);
-        if (tool != null) {
-            return StrUtil.nullToEmpty(tool.generateToolExecutedResult(arguments, result));
+        if (fileOperationService != null) {
+            String text = fileOperationService.generateToolExecutedResult(toolName, arguments, result);
+            if (StrUtil.isNotBlank(text)) {
+                return text;
+            }
         }
         String path = extractPath(arguments);
         if (StrUtil.isNotBlank(path)) {
