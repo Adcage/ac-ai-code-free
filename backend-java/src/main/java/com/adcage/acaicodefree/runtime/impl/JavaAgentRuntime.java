@@ -4,10 +4,12 @@ import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.workflow.service.WorkflowCodeGeneratorService;
 import jakarta.annotation.Resource;
-import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
-@Component
+/**
+ * @deprecated Java AI runtime 已禁用，AI 核心执行必须通过 Python Agent Runtime。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 public class JavaAgentRuntime implements CodeGenerationRuntime {
 
     private static final String NAME = "java-agent";

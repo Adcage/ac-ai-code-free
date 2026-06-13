@@ -24,9 +24,11 @@ import java.io.File;
 /**
  * AI代码生成门面类,组合代码生成和保存功能
  *
+ * @deprecated Java AI 代码生成门面已禁用，代码生成核心必须通过 Python Agent Runtime。
  * @author adcage
  * @description AiCodeGeneratorFacade
  */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Service
 public class AiCodeGeneratorFacade {
 

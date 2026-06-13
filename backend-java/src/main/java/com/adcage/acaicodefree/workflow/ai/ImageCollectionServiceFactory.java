@@ -9,6 +9,10 @@ import com.adcage.acaicodefree.workflow.tool.UndrawIllustrationTool;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
+/**
+ * @deprecated Java workflow 图片采集 AI 工厂已禁用，保留仅用于历史迁移参考。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Component
 public class ImageCollectionServiceFactory {
 

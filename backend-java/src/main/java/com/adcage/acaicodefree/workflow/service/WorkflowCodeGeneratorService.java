@@ -33,6 +33,10 @@ import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
 
+/**
+ * @deprecated Java workflow AI 入口已禁用，保留仅用于历史迁移参考。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Slf4j
 @Service
 public class WorkflowCodeGeneratorService {

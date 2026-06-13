@@ -10,10 +10,13 @@ import reactor.core.publisher.Flux;
 
 /**
  * AI生成服务
+ *
+ * @deprecated Java AI 代码生成服务已禁用，代码生成核心必须通过 Python Agent Runtime。
  * @author adcage
  * @description AiCodeGeneratorService
  * @createDate 2025/9/19 13:21
  */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 public interface AiCodeGeneratorService {
 
     /**

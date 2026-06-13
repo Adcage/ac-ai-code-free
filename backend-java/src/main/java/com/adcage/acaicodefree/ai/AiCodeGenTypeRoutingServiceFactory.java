@@ -5,6 +5,10 @@ import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
+/**
+ * @deprecated Java LangChain4j 路由服务已禁用，保留仅用于历史代码参考。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Component
 public class AiCodeGenTypeRoutingServiceFactory {
 

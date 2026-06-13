@@ -19,6 +19,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @deprecated Java LangChain4j 代码生成服务工厂已禁用，保留仅用于历史迁移参考。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Component
 public class AiCodeGenServiceFactory {
 

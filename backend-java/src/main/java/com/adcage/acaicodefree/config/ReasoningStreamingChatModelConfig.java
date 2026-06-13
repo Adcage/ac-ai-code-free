@@ -9,6 +9,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 
+/**
+ * @deprecated Java LangChain4j 推理模型配置已禁用，模型调用必须通过 Python Agent Runtime。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Configuration
 public class ReasoningStreamingChatModelConfig {
 

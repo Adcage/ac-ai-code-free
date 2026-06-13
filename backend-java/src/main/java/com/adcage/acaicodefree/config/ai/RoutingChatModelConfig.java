@@ -6,6 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * @deprecated Java LangChain4j 路由模型配置已禁用，AI 路由必须迁移到 Python Agent Runtime。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Configuration
 public class RoutingChatModelConfig {
 

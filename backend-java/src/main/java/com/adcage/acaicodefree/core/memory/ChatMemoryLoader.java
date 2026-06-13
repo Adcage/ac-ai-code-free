@@ -15,6 +15,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * @deprecated Java LangChain4j chat memory 已随 Java AI 核心禁用，保留仅用于历史迁移参考。
+ */
+@Deprecated(since = "2026-06-13", forRemoval = false)
 @Component
 public class ChatMemoryLoader {
 
