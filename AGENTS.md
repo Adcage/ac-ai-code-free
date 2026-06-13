@@ -2,7 +2,36 @@
 
 ## 项目概述
 
-ac-ai-code-free 是基于 Spring Boot 3.5.5 + Vue 3 的 AI 编程辅助平台，前后端分离架构。后端使用 MyBatis-Flex ORM、LangChain4j AI 集成、Caffeine 缓存；前端使用 Ant Design Vue、Pinia、Axios。
+ac-ai-code-free 是基于 Spring Boot 3.5.5 + Vue 3 + Python Agent Runtime 的 AI 编程辅助平台，前后端分离并通过 gRPC 连接 Java 平台层与 Python AI Runtime。Java 后端负责 API、权限、平台状态、模型配置、会话、构建部署、文件工具和 gRPC bridge；Python Agent Runtime 负责所有 AI 核心能力，包括模型调用、Agent Graph、提示词增强、代码生成、工具调用决策和 AI 路由。前端使用 Ant Design Vue、Pinia、Axios。
+
+## AI Runtime 边界（强制）
+
+### Python 负责所有 AI 核心能力
+
+所有新增或维护的 AI 核心功能必须放在 `agent-runtime-python/` 中，包括：
+
+- 模型调用、模型流式响应、AI 路由、提示词增强、Agent Graph、工具调用决策
+- 代码生成、代码修改、对话式生成、工作流式 AI 编排
+- 需要 `SystemMessage`、`UserMessage`、LLM function/tool calling、LangGraph/LangChain 推理的能力
+
+### Java 只保留平台层和 Python 需要调用的能力
+
+Java 后端可以继续维护：
+
+- 用户、应用、会话、模型配置、AgentRun、AppVersion、权限、限流、日志、缓存
+- 文件读写、目录读取、项目构建、部署、截图、对象存储、工作区路径管理
+- `GrpcPythonAgentRuntime`、`GrpcPlatformService`、`GrpcToolService`、`GrpcInternalAuthInterceptor`
+- SSE/API 入口和 gRPC bridge，但实际 AI 推理必须委托 Python
+- `ai/model/message` 这类 SSE/协议 DTO，只要不负责模型推理，可以继续使用
+
+### Java AI legacy 禁止新增入口
+
+Java 中原 LangChain4j AI 核心已经遗弃：
+
+- 禁止新增 Java LangChain4j `AiServices`、`@SystemMessage`、`@UserMessage`、模型推理 Bean、Java agent workflow
+- 禁止让 `java-agent`、`WorkflowCodeGeneratorService`、Java prompt enhancer 或 Java AI routing 成为可用入口或 fallback
+- 旧 Java AI 文件只能作为 deprecated legacy 保留，必须标记 `@Deprecated`，不得新增调用方
+- 如果需要恢复或新增智能路由、提示词增强、图片采集规划等 AI 能力，必须在 Python Runtime 实现，再由 Java 通过 gRPC/HTTP bridge 调用
 
 ## 构建/测试/开发命令
 
@@ -36,7 +65,7 @@ npm run openapi                        # 从后端 OpenAPI 生成 TypeScript 类
 
 ```
 backend-java/src/main/java/com/adcage/acaicodefree/
-├── ai/              # LangChain4j AI 集成（声明式服务接口、工厂、工具）
+├── ai/              # deprecated legacy Java AI 代码（禁止新增入口；协议 DTO 除外）
 ├── annotation/      # 自定义注解 (@AuthCheck)
 ├── aop/             # AOP 切面 (AuthInterceptor, LogInterceptor)
 ├── common/          # 通用类 (BaseResponse, ErrorCode, ResultUtils, PageRequest, DeleteRequest)
@@ -51,12 +80,14 @@ backend-java/src/main/java/com/adcage/acaicodefree/
 │   └── saver/        # 文件保存模板方法 (AbstractCodeFileSaver 及子类)
 ├── exception/       # 异常 (BusinessException, GlobalExceptionHandler, ThrowUtils)
 ├── generator/       # MyBatis-Flex 代码生成器 (独立 main 方法)
+├── grpc/            # Java <-> Python gRPC bridge、PlatformService、ToolService
 ├── mapper/          # MyBatis-Flex Mapper 接口（继承 BaseMapper）
 ├── model/
 │   ├── dto/          # 请求 DTO（按领域分子包: app/, chat/, user/）
 │   ├── entity/       # 数据库实体 (@Table, @Id, @Column)
 │   ├── enums/        # 枚举 (CodeGenTypeEnum, UserRoleEnum)
 │   └── vo/          # 响应 VO（按领域分子包）
+├── runtime/         # 代码生成运行时抽象；默认只能选择 python-agent
 └── service/          # 服务层接口 + impl/ 实现
 ```
 
@@ -241,4 +272,4 @@ frontend-vue/src/
 5. **路径分隔符**：所有文件路径统一使用正斜杠 `/`，禁止反斜杠 `\`
 6. **MyBatis-Flex 代码生成**：运行 `generator.MyBatisCodegen` 的 main 方法可从数据库表生成 Entity/Mapper/Service/Controller
 7. **API 类型同步**：修改后端接口后，在前端目录执行 `npm run openapi` 重新生成 TypeScript 类型
-8. **AI 服务**：使用 LangChain4j 声明式接口（`@SystemMessage`, `@UserMessage`），通过 `AiCodeGenServiceFactory` 获取缓存的服务实例
+8. **AI 服务**：AI 核心统一在 Python Agent Runtime 中实现；Java 不再新增 LangChain4j AI 服务，只保留 deprecated legacy 和 Python bridge
