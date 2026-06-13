@@ -17,5 +17,8 @@ class Settings(BaseSettings):
     model_request_timeout: int = 120
     default_model_provider: str = "openai"
 
+    grpc_server_port: int = 9091
+    java_grpc_target: str = "localhost:9090"
+
 
 settings = Settings()

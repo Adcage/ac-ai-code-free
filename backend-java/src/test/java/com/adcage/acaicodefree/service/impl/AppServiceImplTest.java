@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.service.impl;
 import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingService;
 import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingServiceFactory;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
+import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
@@ -41,6 +42,7 @@ class AppServiceImplTest {
     private ChatHistoryMapper chatHistoryMapper;
     private AiCodeGenTypeRoutingServiceFactory routingServiceFactory;
     private AiCodeGenTypeRoutingService routingService;
+    private StreamHandlerExecutor streamHandlerExecutor;
 
     @BeforeEach
     void setUp() {
@@ -55,6 +57,7 @@ class AppServiceImplTest {
         chatHistoryMapper = mock(ChatHistoryMapper.class);
         routingServiceFactory = mock(AiCodeGenTypeRoutingServiceFactory.class);
         routingService = mock(AiCodeGenTypeRoutingService.class);
+        streamHandlerExecutor = mock(StreamHandlerExecutor.class);
 
         ReflectionTestUtils.setField(appService, "modelConfigService", modelConfigService);
         ReflectionTestUtils.setField(appService, "agentRunService", agentRunService);
@@ -63,9 +66,11 @@ class AppServiceImplTest {
         ReflectionTestUtils.setField(appService, "chatSessionMapper", chatSessionMapper);
         ReflectionTestUtils.setField(appService, "chatHistoryMapper", chatHistoryMapper);
         ReflectionTestUtils.setField(appService, "aiCodeGenTypeRoutingServiceFactory", routingServiceFactory);
+        ReflectionTestUtils.setField(appService, "streamHandlerExecutor", streamHandlerExecutor);
 
         when(mockRuntime.getName()).thenReturn("python-agent");
         when(mockRuntime.stream(any())).thenReturn(Flux.empty());
+        when(streamHandlerExecutor.handle(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
         when(codeGenerationRuntimeRouter.select()).thenReturn(mockRuntime);
         when(routingServiceFactory.createService()).thenReturn(routingService);
     }

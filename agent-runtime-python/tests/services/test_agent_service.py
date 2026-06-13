@@ -24,6 +24,11 @@ class FakeChatModelFactory(ChatModelFactory):
         return self._fake_model
 
 
+class FailingPlatformClient:
+    async def get_model_config(self, model_config_id: int, config_version: int):
+        raise RuntimeError("grpc unavailable in unit test")
+
+
 @pytest.mark.asyncio
 async def test_agent_service_with_model_config(tmp_path: Path):
     fake_model = FakeChatModel()
@@ -37,7 +42,13 @@ async def test_agent_service_with_model_config(tmp_path: Path):
     chat_model_factory = FakeChatModelFactory(fake_model)
     prompt_builder = PromptBuilder()
 
-    service = AgentService(model_config_client, chat_model_factory, prompt_builder)
+    service = AgentService(
+        model_config_client,
+        chat_model_factory,
+        prompt_builder,
+        tool_client_factory=lambda request: None,
+        platform_client_factory=FailingPlatformClient,
+    )
     request = CodeGenerationRequest(
         agentRunId="1",
         appId=2,
@@ -83,7 +94,13 @@ async def test_agent_service_model_config_integration(tmp_path: Path):
     chat_model_factory.create = create_spy
     prompt_builder = PromptBuilder()
 
-    service = AgentService(model_config_client, chat_model_factory, prompt_builder)
+    service = AgentService(
+        model_config_client,
+        chat_model_factory,
+        prompt_builder,
+        tool_client_factory=lambda request: None,
+        platform_client_factory=FailingPlatformClient,
+    )
     request = CodeGenerationRequest(
         agentRunId="10",
         appId=20,
@@ -111,7 +128,13 @@ async def test_agent_service_without_model_config(tmp_path: Path):
     chat_model_factory = ChatModelFactory()
     prompt_builder = PromptBuilder()
 
-    service = AgentService(model_config_client, chat_model_factory, prompt_builder)
+    service = AgentService(
+        model_config_client,
+        chat_model_factory,
+        prompt_builder,
+        tool_client_factory=lambda request: None,
+        platform_client_factory=FailingPlatformClient,
+    )
     request = CodeGenerationRequest(
         agentRunId="2",
         appId=3,

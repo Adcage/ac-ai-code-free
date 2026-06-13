@@ -37,6 +37,13 @@ async def test_graph_writes_app_vue_with_fake_model(tmp_path: Path):
     assert app_vue.exists()
     content = app_vue.read_text(encoding="utf-8")
     assert "Portfolio" in content
+    assert (tmp_path / "package.json").exists()
+    assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "vite.config.js").exists()
+    assert (tmp_path / "src" / "main.js").exists()
+    package_json = (tmp_path / "package.json").read_text(encoding="utf-8")
+    assert '"vite": "^5.' in package_json
+    assert '"@vitejs/plugin-vue": "^5.' in package_json
 
     event_types = [e.eventType for e in result["events"]]
     assert "ai_response" in event_types
@@ -70,6 +77,13 @@ async def test_graph_fallback_without_model(tmp_path: Path):
     })
 
     assert (tmp_path / "src" / "App.vue").exists()
+    assert (tmp_path / "package.json").exists()
+    assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "vite.config.js").exists()
+    assert (tmp_path / "src" / "main.js").exists()
+    package_json = (tmp_path / "package.json").read_text(encoding="utf-8")
+    assert '"vite": "^5.' in package_json
+    assert '"@vitejs/plugin-vue": "^5.' in package_json
     event_types = [e.eventType for e in result["events"]]
     assert "ai_response" in event_types
     ai_events = [e for e in result["events"] if e.eventType == "ai_response"]

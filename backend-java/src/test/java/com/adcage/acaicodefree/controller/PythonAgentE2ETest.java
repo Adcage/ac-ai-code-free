@@ -2,6 +2,10 @@ package com.adcage.acaicodefree.controller;
 
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.constant.UserConstant;
+import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
+import com.adcage.acaicodefree.ai.model.message.ToolExecutedMessage;
+import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
+import com.adcage.acaicodefree.grpc.client.GrpcPythonAgentRuntime;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.User;
@@ -10,12 +14,11 @@ import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.mapper.UserMapper;
-import com.adcage.acaicodefree.runtime.impl.PythonAgentRuntime;
+import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
-import com.sun.net.httpserver.HttpServer;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -28,13 +31,10 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import reactor.core.publisher.Flux;
 
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -84,14 +84,12 @@ class PythonAgentE2ETest {
     @MockBean
     private UserService userService;
 
-    @Resource
-    private PythonAgentRuntime pythonAgentRuntime;
+    @MockBean
+    private GrpcPythonAgentRuntime grpcPythonAgentRuntime;
 
     private User loginUser;
 
     private App testApp;
-
-    private HttpServer mockPythonServer;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -100,36 +98,13 @@ class PythonAgentE2ETest {
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
         when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
-
-        mockPythonServer = HttpServer.create(new InetSocketAddress(0), 0);
-        int port = mockPythonServer.getAddress().getPort();
-
-        mockPythonServer.createContext("/agent/code-generation/stream", exchange -> {
-            String sseResponse = """
-                    event: ai_response
-                    data: {"agentRunId":"1","seq":1,"eventType":"ai_response","data":{"content":"开始生成 Vue 工程"}}
-
-                    event: tool_request
-                    data: {"agentRunId":"1","seq":2,"eventType":"tool_request","data":{"id":"tool-1","name":"write_file","arguments":{"path":"src/App.vue"}}}
-
-                    event: tool_executed
-                    data: {"agentRunId":"1","seq":3,"eventType":"tool_executed","data":{"id":"tool-1","name":"write_file","arguments":{"path":"src/App.vue"},"result":"写入成功: src/App.vue"}}
-
-                    event: done
-                    data: {"agentRunId":"1","seq":4,"eventType":"done","data":{"message":"completed"}}
-
-                    """;
-            exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
-            byte[] responseBytes = sseResponse.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(200, responseBytes.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(responseBytes);
-            }
-        });
-        mockPythonServer.start();
-
-        String pythonBaseUrl = "http://localhost:" + port;
-        ReflectionTestUtils.setField(pythonAgentRuntime, "pythonBaseUrl", pythonBaseUrl);
+        when(grpcPythonAgentRuntime.getName()).thenReturn("python-agent");
+        when(grpcPythonAgentRuntime.stream(any(CodeGenerationRequest.class))).thenReturn(Flux.just(
+                JSONUtil.toJsonStr(new AiResponseMessage("开始生成 Vue 工程")),
+                JSONUtil.toJsonStr(new ToolRequestMessage("tool-1", "write_file", "{\"path\":\"src/App.vue\"}")),
+                JSONUtil.toJsonStr(new ToolExecutedMessage("tool-1", "write_file", "{\"path\":\"src/App.vue\"}", "写入成功: src/App.vue")),
+                JSONUtil.toJsonStr(new AiResponseMessage("completed"))
+        ));
 
         String suffix = String.valueOf(System.nanoTime());
         User user = User.builder()
@@ -166,9 +141,6 @@ class PythonAgentE2ETest {
 
     @AfterEach
     void tearDown() {
-        if (mockPythonServer != null) {
-            mockPythonServer.stop(0);
-        }
         if (testApp != null && testApp.getId() != null) {
             chatHistoryMapper.deleteByQuery(QueryWrapper.create().eq("appId", testApp.getId()));
             chatSessionMapper.deleteByQuery(QueryWrapper.create().eq("appId", testApp.getId()));

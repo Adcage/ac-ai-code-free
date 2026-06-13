@@ -14,6 +14,7 @@ import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.mapper.UserMapper;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.ModelConfigService;
+import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Assertions;
@@ -82,6 +83,9 @@ class AppChatE2ETest {
     @MockBean
     private ModelConfigService modelConfigService;
 
+    @MockBean
+    private UserService userService;
+
     private User loginUser;
 
     private App testApp;
@@ -105,6 +109,9 @@ class AppChatE2ETest {
                 .build();
         userMapper.insert(user);
         this.loginUser = user;
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(userService.getLoginUserPermitNull(any())).thenReturn(loginUser);
+        when(userService.getById(loginUser.getId())).thenReturn(loginUser);
 
         App app = App.builder()
                 .appName("E2E会话应用")

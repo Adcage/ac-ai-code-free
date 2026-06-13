@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package com.adcage.acaicodefree;
+
+option java_multiple_files = true;
+option java_package = "com.adcage.acaicodefree.grpc.common";
+
+enum CodeGenType {
+  CODE_GEN_TYPE_UNSPECIFIED = 0;
+  SINGLE_FILE = 1;
+  MULTI_FILE = 2;
+  VUE_PROJECT = 3;
+}
+
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  AGENT_START = 1;
+  AI_RESPONSE = 2;
+  TOOL_REQUEST = 3;
+  TOOL_EXECUTED = 4;
+  ERROR = 5;
+  DONE = 6;
+}
+
+message AiResponseData {
+  string text = 1;
+  bool fallback = 2;
+}
+
+message ToolRequestData {
+  string id = 1;
+  string name = 2;
+  string arguments = 3;
+}
+
+message ToolExecutedData {
+  string id = 1;
+  string name = 2;
+  string arguments = 3;
+  string result = 4;
+}
+
+message ErrorData {
+  string message = 1;
+  int32 code = 2;
+}
+
+message DoneData {
+  string message = 1;
+}

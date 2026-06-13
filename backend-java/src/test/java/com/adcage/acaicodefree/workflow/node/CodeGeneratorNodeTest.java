@@ -1,11 +1,13 @@
 package com.adcage.acaicodefree.workflow.node;
 
+import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.workflow.state.WorkflowContext;
 import org.bsc.langgraph4j.state.AgentState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import reactor.core.publisher.Flux;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -35,7 +37,7 @@ class CodeGeneratorNodeTest {
         WorkflowContext updated = (WorkflowContext) result.get(WorkflowContext.STATE_KEY);
 
         assertEquals("code_generator", updated.getCurrentStep());
-        assertEquals(generatedDir.toString(), updated.getGeneratedCodeDir());
+        assertEquals(AppConstant.getMultiFileOutputDir(1L).toString(), updated.getGeneratedCodeDir());
         assertEquals(CodeGenTypeEnum.MULTI_FILE, ((StubAiCodeGeneratorFacade) facade).lastType);
         assertEquals("增强提示词", ((StubAiCodeGeneratorFacade) facade).lastPrompt);
     }
@@ -67,10 +69,10 @@ class CodeGeneratorNodeTest {
         }
 
         @Override
-        public File generateAndSaveCode(String userMessage, CodeGenTypeEnum codeGenType, Long appId) {
+        public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenType, Long appId) {
             this.lastPrompt = userMessage;
             this.lastType = codeGenType;
-            return file;
+            return Flux.just(file.toString());
         }
     }
 }
