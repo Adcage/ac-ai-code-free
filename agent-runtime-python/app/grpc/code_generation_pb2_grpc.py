@@ -5,7 +5,7 @@ import warnings
 
 import code_generation_pb2 as code__generation__pb2
 
-GRPC_GENERATED_VERSION = '1.81.0'
+GRPC_GENERATED_VERSION = '1.81.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -54,6 +54,11 @@ class CodeGenerationServiceStub:
                 request_serializer=code__generation__pb2.ValidatePromptRequest.SerializeToString,
                 response_deserializer=code__generation__pb2.ValidatePromptResponse.FromString,
                 _registered_method=True)
+        self.EnhancePrompt = channel.unary_unary(
+                '/com.adcage.acaicodefree.CodeGenerationService/EnhancePrompt',
+                request_serializer=code__generation__pb2.EnhancePromptRequest.SerializeToString,
+                response_deserializer=code__generation__pb2.EnhancePromptResponse.FromString,
+                _registered_method=True)
 
 
 class CodeGenerationServiceServicer:
@@ -83,6 +88,12 @@ class CodeGenerationServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def EnhancePrompt(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_CodeGenerationServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +116,11 @@ def add_CodeGenerationServiceServicer_to_server(servicer, server):
                     servicer.ValidatePrompt,
                     request_deserializer=code__generation__pb2.ValidatePromptRequest.FromString,
                     response_serializer=code__generation__pb2.ValidatePromptResponse.SerializeToString,
+            ),
+            'EnhancePrompt': grpc.unary_unary_rpc_method_handler(
+                    servicer.EnhancePrompt,
+                    request_deserializer=code__generation__pb2.EnhancePromptRequest.FromString,
+                    response_serializer=code__generation__pb2.EnhancePromptResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +231,33 @@ class CodeGenerationService:
             '/com.adcage.acaicodefree.CodeGenerationService/ValidatePrompt',
             code__generation__pb2.ValidatePromptRequest.SerializeToString,
             code__generation__pb2.ValidatePromptResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EnhancePrompt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.adcage.acaicodefree.CodeGenerationService/EnhancePrompt',
+            code__generation__pb2.EnhancePromptRequest.SerializeToString,
+            code__generation__pb2.EnhancePromptResponse.FromString,
             options,
             channel_credentials,
             insecure,
