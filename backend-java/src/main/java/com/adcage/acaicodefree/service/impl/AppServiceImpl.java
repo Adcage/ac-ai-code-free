@@ -10,13 +10,10 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.common.ErrorCode;
-import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingService;
-import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingServiceFactory;
 import com.adcage.acaicodefree.config.properties.ScreenshotProperties;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
-import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
@@ -44,8 +41,6 @@ import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.adcage.acaicodefree.service.ScreenshotService;
-import com.adcage.acaicodefree.workflow.config.WorkflowProperties;
-import com.adcage.acaicodefree.workflow.service.WorkflowCodeGeneratorService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.adcage.acaicodefree.model.entity.App;
@@ -98,9 +93,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private UserService userService;
 
     @Resource
-    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
-
-    @Resource
     private ChatSessionMapper chatSessionMapper;
 
     @Resource
@@ -113,16 +105,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private VueProjectBuildService vueProjectBuildService;
 
     @Resource
-    private AiCodeGenTypeRoutingServiceFactory aiCodeGenTypeRoutingServiceFactory;
-
-    @Resource
     private ScreenshotService screenshotService;
-
-    @Resource
-    private WorkflowCodeGeneratorService workflowCodeGeneratorService;
-
-    @Resource
-    private WorkflowProperties workflowProperties;
 
     @Resource
     private ScreenshotProperties screenshotProperties;
@@ -648,38 +631,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "代码生成类型错误");
             return codeGenTypeEnum;
         }
-        try {
-            AiCodeGenTypeRoutingService routingService = aiCodeGenTypeRoutingServiceFactory.createService();
-            CodeGenTypeEnum routed = routingService.routeCodeGenType(initPrompt);
-            if (routed != null) {
-                return routed;
-            }
-        } catch (Exception e) {
-            if (isAiSafetyRejection(e)) {
-                log.warn("AI 路由被模型服务拒绝，终止创建应用, prompt={}, reason={}", initPrompt, e.getMessage());
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "AI 模型服务拒绝处理本次提示词，请调整描述后重试");
-            }
-            log.warn("AI 路由失败，将使用兜底模式, prompt={}", initPrompt, e);
-        }
         return CodeGenTypeEnum.MULTI_FILE;
-    }
-
-    private boolean isAiSafetyRejection(Throwable throwable) {
-        Throwable current = throwable;
-        while (current != null) {
-            String message = current.getMessage();
-            if (StrUtil.isNotBlank(message)) {
-                String lowerMessage = message.toLowerCase();
-                if (lowerMessage.contains("high risk")
-                        || lowerMessage.contains("request was rejected")
-                        || lowerMessage.contains("content policy")
-                        || lowerMessage.contains("safety")) {
-                    return true;
-                }
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 
     private CodeGenTypeEnum parseCodeGenType(String valueOrName) {
