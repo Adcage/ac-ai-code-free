@@ -5,6 +5,7 @@ from grpc import aio
 from app.grpc import platform_service_pb2
 from app.grpc import platform_service_pb2_grpc
 from app.grpc_client.channel import get_channel, get_internal_metadata
+from app.grpc_client.retry import retry_async
 
 logger = logging.getLogger("app.grpc_client.platform_client")
 
@@ -20,18 +21,26 @@ class GrpcPlatformClient:
         return self._stub
 
     async def get_model_config(self, model_config_id: int, config_version: int) -> dict:
-        stub = await self._get_stub()
-        request = platform_service_pb2.GetModelConfigRequest(
-            model_config_id=model_config_id,
-            config_version=config_version,
+        async def _call():
+            stub = await self._get_stub()
+            request = platform_service_pb2.GetModelConfigRequest(
+                model_config_id=model_config_id,
+                config_version=config_version,
+            )
+            response = await stub.GetModelConfig(request, metadata=get_internal_metadata())
+            return {
+                "provider": response.provider,
+                "modelName": response.model_name,
+                "baseUrl": response.base_url,
+                "apiKey": response.api_key,
+            }
+
+        return await retry_async(
+            _call,
+            max_retries=2,
+            delay_seconds=1.0,
+            label=f"get_model_config(id={model_config_id}, version={config_version})",
         )
-        response = await stub.GetModelConfig(request, metadata=get_internal_metadata())
-        return {
-            "provider": response.provider,
-            "modelName": response.model_name,
-            "baseUrl": response.base_url,
-            "apiKey": response.api_key,
-        }
 
     async def build_vue_project(self, app_id: int) -> dict:
         stub = await self._get_stub()

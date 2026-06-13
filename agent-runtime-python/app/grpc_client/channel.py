@@ -1,4 +1,5 @@
 import asyncio
+
 from grpc import aio
 
 from app.core.config import settings
@@ -6,12 +7,18 @@ from app.core.config import settings
 _channel: aio.Channel | None = None
 _channel_loop: asyncio.AbstractEventLoop | None = None
 
+_CHANNEL_OPTIONS = [
+    ("grpc.keepalive_time_ms", 30000),
+    ("grpc.keepalive_timeout_ms", 10000),
+    ("grpc.http2.max_pings_without_data", 0),
+]
+
 
 async def get_channel() -> aio.Channel:
     global _channel, _channel_loop
     current_loop = asyncio.get_running_loop()
     if _channel is None or _channel_loop is None or _channel_loop is not current_loop or _channel_loop.is_closed():
-        _channel = aio.insecure_channel(settings.java_grpc_target)
+        _channel = aio.insecure_channel(settings.java_grpc_target, options=_CHANNEL_OPTIONS)
         _channel_loop = current_loop
     return _channel
 
