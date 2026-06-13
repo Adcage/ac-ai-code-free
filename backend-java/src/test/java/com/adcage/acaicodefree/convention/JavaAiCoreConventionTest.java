@@ -20,13 +20,14 @@ class JavaAiCoreConventionTest {
     );
 
     private static final List<String> LEGACY_AI_PATH_PREFIXES = List.of(
-            "com/adcage/acaicodefree/ai/",
-            "com/adcage/acaicodefree/workflow/ai/"
+            "com/adcage/acaicodefree/legacy/ai/",
+            "com/adcage/acaicodefree/legacy/workflow/ai/",
+            "com/adcage/acaicodefree/legacy/config/"
     );
 
     private static final List<String> LEGACY_AI_FILES = List.of(
-            "com/adcage/acaicodefree/core/AiCodeGeneratorFacade.java",
-            "com/adcage/acaicodefree/core/memory/ChatMemoryLoader.java"
+            "com/adcage/acaicodefree/legacy/core/AiCodeGeneratorFacade.java",
+            "com/adcage/acaicodefree/legacy/core/memory/ChatMemoryLoader.java"
     );
 
     @Test

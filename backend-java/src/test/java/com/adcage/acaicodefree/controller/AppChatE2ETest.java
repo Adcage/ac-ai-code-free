@@ -3,7 +3,7 @@ package com.adcage.acaicodefree.controller;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
-import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
+import com.adcage.acaicodefree.legacy.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.User;
