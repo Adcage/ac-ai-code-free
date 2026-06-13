@@ -4,7 +4,10 @@ import logging
 from app.grpc import code_generation_pb2
 from app.grpc import code_generation_pb2_grpc
 from app.grpc import common_pb2
+from app.grpc_client.platform_client import GrpcPlatformClient
 from app.schemas.code_generation import CodeGenerationRequest as PyCodeGenRequest
+from app.services.chat_model_factory import ChatModelFactory
+from app.services.prompt_enhancer import PromptEnhancerService
 
 logger = logging.getLogger("app.grpc_server.code_generation_servicer")
 
@@ -149,6 +152,29 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
             if kw in lower:
                 return code_generation_pb2.ValidatePromptResponse(valid=False, reason="提示词包含不允许的内容")
         return code_generation_pb2.ValidatePromptResponse(valid=True)
+
+    async def EnhancePrompt(self, request, context):
+        prompt = request.prompt
+        model_config_id = request.model_config_id
+        config_version = request.config_version
+
+        if not prompt or not prompt.strip():
+            return code_generation_pb2.EnhancePromptResponse(
+                success=False, error_message="提示词不能为空"
+            )
+
+        try:
+            platform_client = GrpcPlatformClient()
+            model_config = await platform_client.get_model_config(model_config_id, config_version)
+            chat_model_factory = ChatModelFactory()
+            enhancer = PromptEnhancerService(chat_model_factory)
+            enhanced = await enhancer.enhance(prompt, model_config)
+            return code_generation_pb2.EnhancePromptResponse(success=True, enhanced_prompt=enhanced)
+        except Exception as e:
+            logger.error("EnhancePrompt failed: %s", e, exc_info=True)
+            return code_generation_pb2.EnhancePromptResponse(
+                success=False, error_message=str(e)
+            )
 
 
 def _grpc_code_gen_type_to_str(code_gen_type_value: int) -> str:
