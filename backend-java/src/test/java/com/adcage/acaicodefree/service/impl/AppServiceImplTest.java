@@ -1,7 +1,5 @@
 package com.adcage.acaicodefree.service.impl;
 
-import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingService;
-import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingServiceFactory;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
@@ -40,8 +38,6 @@ class AppServiceImplTest {
     private CodeGenerationRuntime mockRuntime;
     private ChatSessionMapper chatSessionMapper;
     private ChatHistoryMapper chatHistoryMapper;
-    private AiCodeGenTypeRoutingServiceFactory routingServiceFactory;
-    private AiCodeGenTypeRoutingService routingService;
     private StreamHandlerExecutor streamHandlerExecutor;
 
     @BeforeEach
@@ -55,8 +51,6 @@ class AppServiceImplTest {
         mockRuntime = mock(CodeGenerationRuntime.class);
         chatSessionMapper = mock(ChatSessionMapper.class);
         chatHistoryMapper = mock(ChatHistoryMapper.class);
-        routingServiceFactory = mock(AiCodeGenTypeRoutingServiceFactory.class);
-        routingService = mock(AiCodeGenTypeRoutingService.class);
         streamHandlerExecutor = mock(StreamHandlerExecutor.class);
 
         ReflectionTestUtils.setField(appService, "modelConfigService", modelConfigService);
@@ -65,28 +59,31 @@ class AppServiceImplTest {
         ReflectionTestUtils.setField(appService, "codeGenerationRuntimeRouter", codeGenerationRuntimeRouter);
         ReflectionTestUtils.setField(appService, "chatSessionMapper", chatSessionMapper);
         ReflectionTestUtils.setField(appService, "chatHistoryMapper", chatHistoryMapper);
-        ReflectionTestUtils.setField(appService, "aiCodeGenTypeRoutingServiceFactory", routingServiceFactory);
         ReflectionTestUtils.setField(appService, "streamHandlerExecutor", streamHandlerExecutor);
 
         when(mockRuntime.getName()).thenReturn("python-agent");
         when(mockRuntime.stream(any())).thenReturn(Flux.empty());
         when(streamHandlerExecutor.handle(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
         when(codeGenerationRuntimeRouter.select()).thenReturn(mockRuntime);
-        when(routingServiceFactory.createService()).thenReturn(routingService);
     }
 
     @Test
-    void createApp_shouldStopWhenRoutingModelRejectsPrompt() {
+    void createApp_withoutCodeGenTypeShouldUseFallbackAndNotCallJavaAiRouting() {
         AppAddRequest request = new AppAddRequest();
         request.setInitPrompt("做一个登录界面");
         User loginUser = User.builder().id(100L).build();
-        when(routingService.routeCodeGenType(request.getInitPrompt()))
-                .thenThrow(new RuntimeException("Unknown enum value: The request was rejected because it was considered high risk"));
+        doAnswer(invocation -> {
+            App app = invocation.getArgument(0);
+            app.setId(1000L);
+            return true;
+        }).when(appService).save(any(App.class));
 
-        BusinessException exception = assertThrows(BusinessException.class, () -> appService.createApp(request, loginUser));
+        Long appId = appService.createApp(request, loginUser);
 
-        assertTrue(exception.getMessage().contains("AI 模型服务拒绝处理"));
-        verify(appService, never()).save(any(App.class));
+        assertNotNull(appId);
+        ArgumentCaptor<App> appCaptor = ArgumentCaptor.forClass(App.class);
+        verify(appService).save(appCaptor.capture());
+        assertEquals(CodeGenTypeEnum.MULTI_FILE.getValue(), appCaptor.getValue().getCodeGenType());
     }
 
     @Test

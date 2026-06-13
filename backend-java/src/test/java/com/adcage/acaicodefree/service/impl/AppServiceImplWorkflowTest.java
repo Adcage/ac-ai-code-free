@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.service.impl;
 import com.adcage.acaicodefree.constant.UserConstant;
 import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
+import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
@@ -11,6 +12,8 @@ import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
+import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.service.AgentRunService;
@@ -32,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -41,7 +45,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest
+@SpringBootTest(properties = "grpc.server.port=0")
 class AppServiceImplWorkflowTest {
 
     @Resource
@@ -92,7 +96,9 @@ class AppServiceImplWorkflowTest {
         ensureChatSchema();
         workflowProperties.setEnabled(false);
         workflowProperties.setMode("legacy");
-        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-agent");
+        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "python-agent");
+        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimes",
+                List.of(new StubRuntime("python-agent", Flux.just("python_start", "python_completed"))));
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
         when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
@@ -148,29 +154,38 @@ class AppServiceImplWorkflowTest {
     }
 
     @Test
-    void chatToGenCodeWhenJavaAgentShouldUseWorkflowService() {
-        when(workflowCodeGeneratorService.executeWorkflowWithFlux(anyLong(), anyString()))
-                .thenReturn(Flux.just("workflow_start", "workflow_completed"));
+    void chatToGenCodeWhenJavaAgentShouldFailFast() {
+        ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-agent");
 
-        List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个官网", loginUser)
-                .collectList()
-                .block();
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个官网", loginUser));
 
-        assertEquals(List.of("workflow_start", "workflow_completed"), result);
-        verify(workflowCodeGeneratorService).executeWorkflowWithFlux(testApp.getId(), "帮我做一个官网");
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("Java AI runtime 已禁用"));
+        verify(workflowCodeGeneratorService, never()).executeWorkflowWithFlux(anyLong(), anyString());
     }
 
     @Test
     void chatToGenCodeWhenPythonAgentShouldNotUseWorkflowService() {
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "python-agent");
 
-        // python-agent runtime is not injected in this test context, so selecting it should throw
         List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个单页", loginUser)
                 .collectList()
                 .block();
 
-        // The result should contain an error message since python-agent is not available
+        assertEquals(List.of("python_start", "python_completed"), result);
         verify(workflowCodeGeneratorService, never()).executeWorkflowWithFlux(anyLong(), anyString());
+    }
+
+    private record StubRuntime(String name, Flux<String> stream) implements CodeGenerationRuntime {
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public Flux<String> stream(CodeGenerationRequest request) {
+            return stream;
+        }
     }
 
     private void ensureChatSchema() {

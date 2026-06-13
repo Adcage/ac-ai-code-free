@@ -1,37 +1,18 @@
 package com.adcage.acaicodefree.runtime.impl;
 
-import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
-import com.adcage.acaicodefree.workflow.service.WorkflowCodeGeneratorService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.test.util.ReflectionTestUtils;
-import reactor.core.publisher.Flux;
-import reactor.test.StepVerifier;
+import org.springframework.stereotype.Component;
 
 class JavaAgentRuntimeTest {
 
     @Test
-    void stream_shouldDelegateToWorkflowService() {
-        WorkflowCodeGeneratorService workflowService = Mockito.mock(WorkflowCodeGeneratorService.class);
-        JavaAgentRuntime runtime = new JavaAgentRuntime();
-        ReflectionTestUtils.setField(runtime, "workflowCodeGeneratorService", workflowService);
-        Mockito.when(workflowService.executeWorkflowWithFlux(1L, "build app"))
-                .thenReturn(Flux.just("workflow-start", "workflow-done"));
-
-        CodeGenerationRequest request = CodeGenerationRequest.builder()
-                .appId(1L)
-                .message("build app")
-                .build();
-
-        StepVerifier.create(runtime.stream(request))
-                .expectNext("workflow-start")
-                .expectNext("workflow-done")
-                .verifyComplete();
+    void javaAgentRuntime_shouldBeDeprecatedLegacyOnly() {
+        Assertions.assertTrue(JavaAgentRuntime.class.isAnnotationPresent(Deprecated.class));
     }
 
     @Test
-    void getName_shouldReturnJavaAgent() {
-        Assertions.assertEquals("java-agent", new JavaAgentRuntime().getName());
+    void javaAgentRuntime_shouldNotBeSpringComponent() {
+        Assertions.assertFalse(JavaAgentRuntime.class.isAnnotationPresent(Component.class));
     }
 }
