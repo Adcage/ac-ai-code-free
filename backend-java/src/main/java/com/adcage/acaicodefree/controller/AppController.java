@@ -29,6 +29,7 @@ import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.ratelimit.annotation.RateLimit;
 import com.adcage.acaicodefree.ratelimit.enums.RateLimitType;
 import com.adcage.acaicodefree.service.AppService;
+import com.adcage.acaicodefree.service.PythonPromptEnhanceService;
 import com.adcage.acaicodefree.service.ProjectDownloadService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -42,9 +43,6 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import com.adcage.acaicodefree.workflow.ai.PromptEnhancerService;
-import com.adcage.acaicodefree.workflow.ai.PromptEnhancerServiceFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -70,7 +68,7 @@ public class AppController {
     private ProjectDownloadService projectDownloadService;
 
     @Resource
-    private PromptEnhancerServiceFactory promptEnhancerServiceFactory;
+    private PythonPromptEnhanceService pythonPromptEnhanceService;
 
     /**
      * 创建应用
@@ -102,9 +100,7 @@ public class AppController {
         ThrowUtils.throwIf(StrUtil.isBlank(prompt), ErrorCode.PARAMS_ERROR, "提示词不能为空");
         User loginUser = userService.getLoginUser(request);
         log.info("优化提示词, userId={}, promptLength={}", loginUser.getId(), prompt.length());
-        PromptEnhancerService enhancerService = promptEnhancerServiceFactory.createService();
-        String enhancedPrompt = enhancerService.enhancePrompt(prompt, "");
-        return ResultUtils.success(enhancedPrompt);
+        return ResultUtils.success(pythonPromptEnhanceService.enhancePrompt(prompt, loginUser.getId()));
     }
 
     /**
