@@ -830,14 +830,20 @@ const doChat = async () => {
 const doEnhanceInput = async () => {
   const prompt = inputText.value.trim()
   if (!prompt) return
+  if (looksLikeRiskRejection(prompt)) {
+    message.error('当前输入包含安全拦截信息，请重新输入需求描述')
+    return
+  }
   enhancingInput.value = true
   try {
     const res = await enhancePrompt({ prompt })
     if (res.data?.code === 0) {
       const enhanced = res.data?.data
-      if (enhanced && enhanced.trim()) {
+      if (enhanced && enhanced.trim() && !looksLikeRiskRejection(enhanced)) {
         inputText.value = enhanced
         message.success('提示词优化完成')
+      } else if (enhanced && looksLikeRiskRejection(enhanced)) {
+        message.error('提示词被内容安全策略拦截，请修改后重试')
       } else {
         message.warning('AI 未返回有效的优化结果，请重试或直接发送')
       }
@@ -919,6 +925,16 @@ const hasFileWriteSignal = (messageItem: ChatMessage) => {
     return true
   }
   return messageItem.content.includes('[工具完成]') || messageItem.content.includes('已写入文件')
+}
+
+const looksLikeRiskRejection = (content: string) => {
+  const lowerContent = content.toLowerCase()
+  return (
+    lowerContent.includes('the request was rejected') ||
+    lowerContent.includes('considered high risk') ||
+    lowerContent.includes('内容安全') ||
+    lowerContent.includes('内容违规')
+  )
 }
 
 const looksLikeGenerationFailure = (content: string) => {

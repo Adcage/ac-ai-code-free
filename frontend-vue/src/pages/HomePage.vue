@@ -258,10 +258,24 @@ const doGenerate = async () => {
   }
 }
 
+const RISK_REJECTION_KEYWORDS = [
+  'the request was rejected',
+  'considered high risk',
+  '内容安全',
+  '内容违规',
+]
+
+const looksLikeRiskRejection = (text: string) =>
+  RISK_REJECTION_KEYWORDS.some((kw) => text.toLowerCase().includes(kw.toLowerCase()))
+
 const doEnhance = async () => {
   const prompt = searchText.value.trim()
   if (!prompt) {
     message.warning('请先输入需求描述')
+    return
+  }
+  if (looksLikeRiskRejection(prompt)) {
+    message.error('当前输入包含安全拦截信息，请重新输入需求描述')
     return
   }
   enhancing.value = true
@@ -269,9 +283,11 @@ const doEnhance = async () => {
     const res = await enhancePrompt({ prompt })
     if (res.data?.code === 0) {
       const enhanced = res.data?.data
-      if (enhanced && enhanced.trim()) {
+      if (enhanced && enhanced.trim() && !looksLikeRiskRejection(enhanced)) {
         searchText.value = enhanced
         message.success('提示词优化完成')
+      } else if (enhanced && looksLikeRiskRejection(enhanced)) {
+        message.error('提示词被内容安全策略拦截，请修改后重试')
       } else {
         message.warning('AI 未返回有效的优化结果，请重试或直接发送')
       }
