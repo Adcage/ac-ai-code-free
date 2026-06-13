@@ -34,7 +34,9 @@
         <div class="session-panel">
           <div class="session-panel-header">
             <span>会话记录</span>
-            <a-button type="link" size="small" :loading="sessionLoading" @click="handleCreateSession">新建会话</a-button>
+            <a-button type="link" size="small" :loading="sessionLoading" @click="handleCreateSession"
+              >新建会话</a-button
+            >
           </div>
           <div class="session-list">
             <div
@@ -43,8 +45,26 @@
               :class="['session-item', normalizeId(session.id) === currentSessionId ? 'active' : '']"
               @click="handleSwitchSession(session.id)"
             >
-              <div class="session-title">{{ session.title || `会话 ${index + 1}` }}</div>
+              <div class="session-title" v-if="!editingSessionId || normalizeId(session.id) !== editingSessionId">
+                {{ session.title || `会话 ${index + 1}` }}
+              </div>
+              <input
+                v-else
+                class="session-edit-input"
+                v-model="editingTitle"
+                @keydown.enter="confirmRename(session)"
+                @blur="confirmRename(session)"
+                @click.stop
+              />
               <div class="session-time">{{ formatSessionTime(session.lastMessageTime) }}</div>
+              <div class="session-actions" @click.stop>
+                <a-button type="text" size="small" class="session-action-btn" @click="startRename(session)">
+                  <template #icon><EditOutlined /></template>
+                </a-button>
+                <a-button type="text" size="small" class="session-action-btn" @click="confirmDeleteSession(session)">
+                  <template #icon><DeleteOutlined /></template>
+                </a-button>
+              </div>
             </div>
           </div>
         </div>
@@ -58,7 +78,10 @@
             <div class="message-body">
               <div class="message-content">
                 <template v-if="msg.role === 'ai'">
-                  <template v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]" :key="`parsed-${index}`">
+                  <template
+                    v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]"
+                    :key="`parsed-${index}`"
+                  >
                     <div v-if="parsed.aiText" class="message-text" v-html="renderMarkdown(parsed.aiText)"></div>
                     <details v-if="parsed.toolEvents.length" class="tool-call-card">
                       <summary class="tool-call-summary">
@@ -94,7 +117,9 @@
                           </div>
                           <div class="workflow-step-content">
                             <div class="workflow-step-name">{{ step.message }}</div>
-                            <div v-if="step.status === 'error'" class="workflow-step-error">{{ step.errorMessage || step.message }}</div>
+                            <div v-if="step.status === 'error'" class="workflow-step-error">
+                              {{ step.errorMessage || step.message }}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -105,9 +130,7 @@
               </div>
             </div>
           </div>
-          <div v-if="generating" class="generating-indicator">
-            <loading-outlined /> AI 正在思考并生成代码...
-          </div>
+          <div v-if="generating" class="generating-indicator"><loading-outlined /> AI 正在思考并生成代码...</div>
         </div>
 
         <div v-if="streamWarning" class="stream-warning">
@@ -142,16 +165,20 @@
             />
             <div class="input-footer">
               <a-space>
-                <a-button type="text" size="small"><template #icon><paper-clip-outlined /></template>上传</a-button>
-                <a-button type="text" size="small"><template #icon><thunderbolt-outlined /></template>优化</a-button>
+                <a-button type="text" size="small" disabled>
+                  <template #icon><paper-clip-outlined /></template>上传
+                </a-button>
+                <a-button
+                  type="text"
+                  size="small"
+                  :disabled="!inputText.trim()"
+                  :loading="enhancingInput"
+                  @click="doEnhanceInput"
+                >
+                  <template #icon><thunderbolt-outlined /></template>优化
+                </a-button>
               </a-space>
-              <a-button 
-                type="primary" 
-                shape="circle" 
-                size="small" 
-                :disabled="generating || !inputText" 
-                @click="doChat"
-              >
+              <a-button type="primary" shape="circle" size="small" :disabled="generating || !inputText" @click="doChat">
                 <template #icon><arrow-up-outlined /></template>
               </a-button>
             </div>
@@ -169,6 +196,10 @@
             <a-radio-button value="mobile">移动端</a-radio-button>
           </a-radio-group>
           <a-space>
+            <a-button size="small" @click="showVersionPanel = !showVersionPanel">
+              <template #icon><HistoryOutlined /></template>
+              版本
+            </a-button>
             <a-button size="small" :type="editMode ? 'primary' : 'default'" @click="toggleEditMode">
               {{ editMode ? '退出编辑模式' : '进入编辑模式' }}
             </a-button>
@@ -178,18 +209,12 @@
             </a-button>
           </a-space>
         </div>
-        <a-alert
-          v-if="previewWarning"
-          class="preview-warning"
-          type="warning"
-          show-icon
-          :message="previewWarning"
-        />
+        <a-alert v-if="previewWarning" class="preview-warning" type="warning" show-icon :message="previewWarning" />
         <div :class="['preview-body', previewType]">
-          <iframe 
-            v-if="iframeUrl" 
-            :src="iframeUrl" 
-            frameborder="0" 
+          <iframe
+            v-if="iframeUrl"
+            :src="iframeUrl"
+            frameborder="0"
             class="preview-iframe"
             ref="iframeRef"
             @load="handleIframeLoad"
@@ -201,29 +226,64 @@
             </div>
           </div>
         </div>
+
+        <div v-if="showVersionPanel" class="version-panel">
+          <div class="version-panel-header">
+            <span>版本历史</span>
+            <a-button type="text" size="small" @click="showVersionPanel = false">
+              <template #icon><CloseCircleOutlined /></template>
+            </a-button>
+          </div>
+          <div class="version-panel-body">
+            <div v-if="versionLoading" class="version-loading"><LoadingOutlined /> 加载中...</div>
+            <div v-else-if="versionList.length === 0" class="version-empty">暂无版本记录</div>
+            <div v-else class="version-list">
+              <div v-for="v in versionList" :key="v.id" class="version-item">
+                <div class="version-no">v{{ v.versionNo }}</div>
+                <div class="version-info">
+                  <span :class="['version-status', v.status]">{{ v.status === 'created' ? '已创建' : v.status }}</span>
+                  <span class="version-time">{{ formatVersionTime(v.createTime) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   LeftOutlined,
   CloudUploadOutlined,
   DownloadOutlined,
   ReloadOutlined,
-  PaperClipOutlined, 
-  ThunderboltOutlined, 
+  PaperClipOutlined,
+  ThunderboltOutlined,
   ArrowUpOutlined,
   LoadingOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons-vue'
-import { createChatSession, deployApp, getAppVoById, listChatHistoryByPage, listChatSession } from '@/api/appController'
+import {
+  createChatSession,
+  deployApp,
+  getAppVoById,
+  listChatHistoryByPage,
+  listChatSession,
+  renameSession,
+  deleteSession,
+  enhancePrompt,
+} from '@/api/appController'
+import { listAppVersions } from '@/api/appVersionController'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import { createVisualEditor, type ElementInfo } from '@/utils/visualEditor'
 
@@ -253,12 +313,16 @@ const sessions = ref<API.ChatSessionVO[]>([])
 const currentSessionId = ref<string>()
 const inputText = ref('')
 const generating = ref(false)
+const enhancingInput = ref(false)
 const workflowSteps = ref<WorkflowStep[]>([])
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
 const sessionLoading = ref(false)
 const sessionInitializing = ref(false)
 const previewType = ref('desktop')
+const showVersionPanel = ref(false)
+const versionLoading = ref(false)
+const versionList = ref<API.AppVersionVO[]>([])
 const iframeUrl = ref('')
 const iframeRef = ref<HTMLIFrameElement>()
 const messageListRef = ref<HTMLElement>()
@@ -272,6 +336,8 @@ const resizeStartX = ref(0)
 const resizeStartWidth = ref(450)
 const selectedElement = ref<ElementInfo | null>(null)
 const editMode = ref(false)
+const editingSessionId = ref<string>('')
+const editingTitle = ref('')
 
 const isOwner = computed(() => {
   const loginUserId = loginUserStore.loginUser?.id
@@ -458,7 +524,7 @@ const startSSE = (userMsg: string, sessionId: string) => {
   const baseUrl = import.meta.env.VITE_API_BASE_URL
   const eventSource = new EventSource(
     `${baseUrl}/app/chat/gen/code/stream?appId=${appId}&sessionId=${sessionId}&message=${encodeURIComponent(userMsg)}`,
-    { withCredentials: true }
+    { withCredentials: true },
   )
 
   eventSource.addEventListener('meta', (event: MessageEvent) => {
@@ -519,7 +585,7 @@ const startSSE = (userMsg: string, sessionId: string) => {
       stopGenerating(true)
       return
     }
-    
+
     try {
       const data = JSON.parse(rawData)
       if (data.d === '[DONE]') {
@@ -591,14 +657,13 @@ const appendStreamChunk = (aiMsgIndex: number, chunk: string, structuredToolMode
       return
     }
     if (type === 'tool_request') {
-      const text = `\n[工具调用] ${formatToolText(messageObj.name, messageObj.arguments, 'request')}`
-      messages.value[aiMsgIndex].content += text
+      const text = formatToolText(messageObj.name, messageObj.arguments, 'request')
+      appendToolEvent(aiMsgIndex, { type: 'request', text })
       return
     }
     if (type === 'tool_executed') {
       const executedText = formatToolText(messageObj.name, messageObj.arguments, 'executed', messageObj.result)
-      const text = `\n[工具完成] ${executedText}`
-      messages.value[aiMsgIndex].content += text
+      appendToolEvent(aiMsgIndex, { type: 'executed', text: executedText })
       return
     }
     if (type === 'workflow_event') {
@@ -609,6 +674,17 @@ const appendStreamChunk = (aiMsgIndex: number, chunk: string, structuredToolMode
   } catch {
     messages.value[aiMsgIndex].content += chunk
   }
+}
+
+const appendToolEvent = (aiMsgIndex: number, eventItem: ToolEvent) => {
+  const targetMessage = messages.value[aiMsgIndex]
+  if (!targetMessage) {
+    return
+  }
+  if (!targetMessage.toolEvents) {
+    targetMessage.toolEvents = []
+  }
+  targetMessage.toolEvents.push(eventItem)
 }
 
 const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
@@ -624,7 +700,7 @@ const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
 
   if (eventType === 'step_started') {
     const stepName = data.step
-    workflowSteps.value.forEach(step => {
+    workflowSteps.value.forEach((step) => {
       if (step.step === stepName) {
         step.status = 'running'
       } else if (step.status === 'running') {
@@ -636,7 +712,7 @@ const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
 
   if (eventType === 'step_completed') {
     const stepName = data.step
-    const stepIndex = workflowSteps.value.findIndex(s => s.step === stepName)
+    const stepIndex = workflowSteps.value.findIndex((s) => s.step === stepName)
     if (stepIndex >= 0) {
       workflowSteps.value[stepIndex].status = 'completed'
       if (stepIndex + 1 < workflowSteps.value.length) {
@@ -647,7 +723,7 @@ const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
   }
 
   if (eventType === 'workflow_completed') {
-    workflowSteps.value.forEach(step => {
+    workflowSteps.value.forEach((step) => {
       if (step.status !== 'completed') {
         step.status = 'completed'
       }
@@ -663,7 +739,7 @@ const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
   }
 
   if (eventType === 'workflow_error') {
-    workflowSteps.value.forEach(step => {
+    workflowSteps.value.forEach((step) => {
       if (step.status === 'running') {
         step.status = 'error'
         step.errorMessage = data.message || '执行失败'
@@ -685,7 +761,12 @@ const parsePathFromArguments = (argumentsText?: string) => {
   }
 }
 
-const formatToolText = (toolName?: string, argumentsText?: string, stage: 'request' | 'executed' = 'request', result?: string) => {
+const formatToolText = (
+  toolName?: string,
+  argumentsText?: string,
+  stage: 'request' | 'executed' = 'request',
+  result?: string,
+) => {
   const path = parsePathFromArguments(argumentsText)
   const requestMap: Record<string, string> = {
     writeFile: path ? `准备写入文件 ${path}` : '准备写入文件',
@@ -710,7 +791,7 @@ const formatToolText = (toolName?: string, argumentsText?: string, stage: 'reque
   if (result && String(result).startsWith('禁止删除关键文件')) {
     return result
   }
-  return executedMap[toolName || ''] || (result || `工具执行成功 ${toolName || ''}`.trim())
+  return executedMap[toolName || ''] || result || `工具执行成功 ${toolName || ''}`.trim()
 }
 
 const ensureSessionReady = async () => {
@@ -744,6 +825,25 @@ const doChat = async () => {
   messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
   inputText.value = ''
   startSSE(promptMessage, sessionId)
+}
+
+const doEnhanceInput = async () => {
+  const prompt = inputText.value.trim()
+  if (!prompt) return
+  enhancingInput.value = true
+  try {
+    const res = await enhancePrompt({ prompt })
+    if (res.data?.code === 0 && res.data?.data) {
+      inputText.value = res.data.data
+      message.success('提示词优化完成')
+    } else {
+      message.error('优化失败，' + (res.data?.message ?? '未知错误'))
+    }
+  } catch (e: unknown) {
+    message.error('优化失败，' + (e instanceof Error ? e.message : String(e)))
+  } finally {
+    enhancingInput.value = false
+  }
 }
 
 const handleEnter = (e: KeyboardEvent) => {
@@ -802,11 +902,15 @@ const hasPreviewCandidate = () => {
 
 const hasLatestGenerationFailure = () => {
   const latestAiMessage = [...messages.value].reverse().find((item) => item.role === 'ai')
-  return !!latestAiMessage && (latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content))
+  return (
+    !!latestAiMessage && (latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content))
+  )
 }
 
 const hasFileWriteSignal = (messageItem: ChatMessage) => {
-  if (messageItem.toolEvents?.some((eventItem) => eventItem.type === 'executed' && eventItem.text.includes('写入文件'))) {
+  if (
+    messageItem.toolEvents?.some((eventItem) => eventItem.type === 'executed' && eventItem.text.includes('写入文件'))
+  ) {
     return true
   }
   return messageItem.content.includes('[工具完成]') || messageItem.content.includes('已写入文件')
@@ -888,7 +992,8 @@ const handleIframeLoad = () => {
           ? `预览资源不存在，AI 服务响应超时导致本次代码未完整生成。建议重试一次，或先缩短需求范围后再次生成。最近一次失败原因：${latestFailureReason}`
           : `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
       } else {
-        previewWarning.value = '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。请先查看最新 AI 消息中的构建结果。'
+        previewWarning.value =
+          '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。请先查看最新 AI 消息中的构建结果。'
       }
       return
     }
@@ -954,6 +1059,83 @@ const handleSwitchSession = async (sessionId?: string | number) => {
   await updatePreview()
 }
 
+const startRename = (session: API.ChatSessionVO) => {
+  editingSessionId.value = normalizeId(session.id)
+  editingTitle.value = session.title || ''
+  nextTick(() => {
+    const input = document.querySelector('.session-edit-input') as HTMLInputElement
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
+}
+
+const confirmRename = async (session: API.ChatSessionVO) => {
+  const sid = normalizeId(session.id)
+  if (editingSessionId.value !== sid) {
+    return
+  }
+  const newTitle = editingTitle.value.trim()
+  editingSessionId.value = ''
+  if (!newTitle || newTitle === session.title) {
+    return
+  }
+  try {
+    const res = await renameSession({ sessionId: session.id as number, title: newTitle })
+    if (res.data?.code === 0) {
+      session.title = newTitle
+      message.success('重命名成功')
+    } else {
+      message.error('重命名失败，' + (res.data?.message || '请稍后重试'))
+    }
+  } catch {
+    message.error('重命名失败')
+  }
+}
+
+const confirmDeleteSession = (session: API.ChatSessionVO) => {
+  const sid = normalizeId(session.id)
+  if (!sid) {
+    return
+  }
+  Modal.confirm({
+    title: '确认删除会话',
+    content: `确定要删除「${session.title || '未命名会话'}」吗？删除后不可恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const res = await deleteSession({ id: session.id as number })
+        if (res.data?.code === 0) {
+          message.success('会话已删除')
+          if (currentSessionId.value === sid) {
+            const remaining = sessions.value.filter((s) => normalizeId(s.id) !== sid)
+            if (remaining.length > 0 && remaining[0].id) {
+              currentSessionId.value = normalizeId(remaining[0].id)
+              await loadRemoteHistory(currentSessionId.value)
+            } else {
+              currentSessionId.value = undefined
+              messages.value = []
+              const newSessionId = await createSession()
+              if (newSessionId) {
+                currentSessionId.value = newSessionId
+              }
+            }
+            await updatePreview()
+          }
+          await loadSessions()
+        } else {
+          message.error('删除失败，' + (res.data?.message || '请稍后重试'))
+        }
+      } catch {
+        message.error('删除失败')
+      }
+    },
+  })
+}
+
 const formatSessionTime = (time?: string) => {
   if (!time) {
     return '暂无消息'
@@ -963,6 +1145,33 @@ const formatSessionTime = (time?: string) => {
     return '暂无消息'
   }
   return date.toLocaleString()
+}
+
+const formatVersionTime = (time?: string) => {
+  if (!time) return ''
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}分钟前`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}小时前`
+  return date.toLocaleDateString()
+}
+
+const loadVersions = async () => {
+  if (!appId) return
+  versionLoading.value = true
+  try {
+    const res = await listAppVersions({ appId: Number(appId) })
+    if (res.data?.code === 0) {
+      versionList.value = res.data?.data || []
+    }
+  } finally {
+    versionLoading.value = false
+  }
 }
 
 /**
@@ -1096,7 +1305,10 @@ const renderMarkdown = (text: string) => {
     .replace(/`(.*?)`/g, '<code>$1</code>')
 }
 
-const parseAiMessage = (content: string, presetToolEvents: ToolEvent[] = []): { aiText: string; toolEvents: ToolEvent[] } => {
+const parseAiMessage = (
+  content: string,
+  presetToolEvents: ToolEvent[] = [],
+): { aiText: string; toolEvents: ToolEvent[] } => {
   if (presetToolEvents.length > 0) {
     return {
       aiText: stripToolEventLines(content).trim(),
@@ -1169,6 +1381,10 @@ const scrollToBottom = () => {
   })
 }
 
+watch(showVersionPanel, (val) => {
+  if (val) loadVersions()
+})
+
 onMounted(() => {
   const backPath = (window.history.state?.back as string | undefined) || ''
   const forwardPath = (window.history.state?.forward as string | undefined) || ''
@@ -1231,23 +1447,24 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fdfdfd;
+  background: var(--color-background);
 }
 
 .top-nav {
   height: 56px;
   padding: 0 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .app-name {
   font-weight: 600;
   font-size: 16px;
   margin-left: 8px;
+  color: var(--color-text);
 }
 
 .main-content {
@@ -1258,10 +1475,10 @@ onUnmounted(() => {
 
 /* 对话面板 */
 .chat-panel {
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--color-surface);
   min-width: 320px;
   max-width: 70vw;
   flex-shrink: 0;
@@ -1276,12 +1493,12 @@ onUnmounted(() => {
 }
 
 .panel-splitter:hover {
-  background: #f0f0f0;
+  background: var(--color-border);
 }
 
 .session-panel {
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .session-panel-header {
@@ -1290,7 +1507,7 @@ onUnmounted(() => {
   justify-content: space-between;
   margin-bottom: 8px;
   font-size: 13px;
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 .session-list {
@@ -1303,38 +1520,73 @@ onUnmounted(() => {
 .session-item {
   min-width: 140px;
   max-width: 180px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 8px 10px;
   cursor: pointer;
-  transition: all 0.2s;
-  background: #fff;
+  transition: all var(--transition-normal);
+  background: var(--color-surface);
+  position: relative;
 }
 
 .session-item:hover {
-  border-color: #d9d9d9;
+  border-color: var(--color-border-light);
+}
+
+.session-item:hover .session-actions {
+  opacity: 1;
 }
 
 .session-item.active {
-  border-color: #1a1a1a;
-  background: #fafafa;
+  border-color: var(--color-cta);
+  background: var(--color-surface-elevated);
 }
 
 .session-title {
   font-size: 13px;
-  color: #1f1f1f;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-edit-input {
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-cta);
+  border-radius: 4px;
+  padding: 2px 6px;
+  width: 100%;
+  outline: none;
 }
 
 .session-time {
   margin-top: 4px;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.session-action-btn {
+  color: var(--color-text-muted) !important;
+  font-size: 12px !important;
+}
+
+.session-action-btn:hover {
+  color: var(--color-cta) !important;
 }
 
 .message-list {
@@ -1370,21 +1622,22 @@ onUnmounted(() => {
 }
 
 .user-msg .message-content {
-  background: #f5f5f5;
-  color: #1a1a1a;
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
 }
 
 .ai-msg .message-content {
-  background: #fff;
-  border: 1px solid #f0f0f0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: var(--color-text);
 }
 
 .tool-call-card {
   margin-top: 10px;
-  border: 1px solid #e7e9ee;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--color-surface);
   overflow: hidden;
 }
 
@@ -1406,17 +1659,17 @@ onUnmounted(() => {
 .tool-call-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-text);
 }
 
 .tool-call-hint {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .tool-call-list {
-  border-top: 1px solid #e7e9ee;
-  background: #fff;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background);
 }
 
 .tool-call-item {
@@ -1424,7 +1677,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .tool-call-item:last-child {
@@ -1441,26 +1694,26 @@ onUnmounted(() => {
 }
 
 .tool-call-tag.request {
-  color: #1d4ed8;
-  background: #dbeafe;
-  border-color: #bfdbfe;
+  color: var(--color-info);
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .tool-call-tag.executed {
-  color: #047857;
-  background: #d1fae5;
-  border-color: #a7f3d0;
+  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .tool-call-text {
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-secondary);
   word-break: break-all;
 }
 
 .generating-indicator {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--color-text-muted);
   margin-top: -12px;
   margin-left: 44px;
 }
@@ -1469,15 +1722,15 @@ onUnmounted(() => {
   margin-top: 12px;
   margin-left: 44px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--color-surface-elevated);
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-border);
 }
 
 .workflow-steps-title {
   font-size: 12px;
   font-weight: 600;
-  color: #8c8c8c;
+  color: var(--color-text-muted);
   margin-bottom: 8px;
 }
 
@@ -1492,19 +1745,19 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--color-text-muted);
 }
 
 .workflow-step-item.running {
-  color: #1890ff;
+  color: var(--color-info);
 }
 
 .workflow-step-item.completed {
-  color: #52c41a;
+  color: var(--color-success);
 }
 
 .workflow-step-item.error {
-  color: #ff4d4f;
+  color: var(--color-error);
 }
 
 .workflow-step-icon {
@@ -1526,7 +1779,7 @@ onUnmounted(() => {
 
 .workflow-step-error {
   font-size: 11px;
-  color: #ff4d4f;
+  color: var(--color-error);
   margin-top: 2px;
 }
 
@@ -1550,25 +1803,26 @@ onUnmounted(() => {
   display: grid;
   gap: 4px;
   font-size: 12px;
-  color: #334155;
+  color: var(--color-text-secondary);
   word-break: break-all;
 }
 
 .input-area {
   padding: 20px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border);
 }
 
 .input-wrapper {
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
   padding: 8px;
   transition: all 0.3s;
+  background: var(--color-background);
 }
 
 .input-wrapper:focus-within {
-  border-color: #1a1a1a;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.02);
+  border-color: var(--color-cta);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
 }
 
 .input-wrapper :deep(textarea) {
@@ -1587,11 +1841,12 @@ onUnmounted(() => {
 /* 预览面板 */
 .preview-panel {
   flex: 1;
-  background: #f7f8fa;
+  background: var(--color-background);
   display: flex;
   flex-direction: column;
   padding: 20px;
   overflow: hidden;
+  position: relative;
 }
 
 .preview-header {
@@ -1609,13 +1864,13 @@ onUnmounted(() => {
 
 .preview-body {
   flex: 1;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
   position: relative;
   transition: all 0.3s;
-  height: 0; /* 强制子元素计算高度 */
+  height: 0;
 }
 
 .preview-body.mobile {
@@ -1635,7 +1890,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #bfbfbf;
+  color: var(--color-text-muted);
 }
 
 .empty-content {
@@ -1649,11 +1904,102 @@ onUnmounted(() => {
 
 .deploy-btn {
   border-radius: 20px;
-  background: #1a1a1a;
-  border-color: #1a1a1a;
+  background: var(--color-cta);
+  border-color: var(--color-cta);
+}
+
+.deploy-btn:hover {
+  background: var(--color-cta-hover) !important;
+  border-color: var(--color-cta-hover) !important;
 }
 
 .download-btn {
   border-radius: 20px;
+}
+
+.version-panel {
+  position: absolute;
+  top: 40px;
+  right: 8px;
+  width: 260px;
+  max-height: 360px;
+  background: var(--color-bg-elevated, #1e293b);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.version-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #f1f5f9);
+}
+
+.version-panel-body {
+  overflow-y: auto;
+  padding: 8px;
+  flex: 1;
+}
+
+.version-loading,
+.version-empty {
+  text-align: center;
+  padding: 24px 0;
+  color: var(--color-text-tertiary, #94a3b8);
+  font-size: 13px;
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s;
+}
+
+.version-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.version-no {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-cta, #22c55e);
+}
+
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-status {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.version-time {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #94a3b8);
 }
 </style>

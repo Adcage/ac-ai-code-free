@@ -8,7 +8,7 @@
     <template #cover>
       <div class="card-cover-wrapper" :style="{ height: coverHeight + 'px' }">
         <img :src="app.cover || defaultCover" class="card-cover" />
-        
+
         <!-- 封面右上角标签插槽 -->
         <div v-if="tagPosition === 'top-right'" class="tag-overlay">
           <slot name="tags">
@@ -21,13 +21,7 @@
           <a-space direction="vertical" :size="12">
             <template v-for="action in computedActions" :key="action">
               <!-- 查看对话 (核心功能，始终为主按钮) -->
-              <a-button
-                v-if="action === 'chat'"
-                type="primary"
-                shape="round"
-                class="action-btn"
-                @click.stop="goToApp"
-              >
+              <a-button v-if="action === 'chat'" type="primary" shape="round" class="action-btn" @click.stop="goToApp">
                 <template #icon><MessageOutlined /></template>
                 查看对话
               </a-button>
@@ -44,12 +38,7 @@
               </a-button>
 
               <!-- 编辑 (次要按钮) -->
-              <a-button
-                v-if="action === 'edit' && canEdit"
-                shape="round"
-                class="action-btn"
-                @click.stop="goToEdit"
-              >
+              <a-button v-if="action === 'edit' && canEdit" shape="round" class="action-btn" @click.stop="goToEdit">
                 <template #icon><EditOutlined /></template>
                 编辑应用
               </a-button>
@@ -87,7 +76,9 @@
       <div class="card-info-bottom">
         <div class="status-tags">
           <a-tag color="blue" size="small" v-if="app.codeGenType">{{ formatCodeGenType(app.codeGenType) }}</a-tag>
-          <a-tag :color="isOwner ? 'green' : 'default'" size="small">{{ isOwner ? '可下载源码' : '仅作者可下载' }}</a-tag>
+          <a-tag :color="isOwner ? 'green' : 'default'" size="small">{{
+            isOwner ? '可下载源码' : '仅作者可下载'
+          }}</a-tag>
           <slot name="tags" v-if="tagPosition === 'bottom-left'">
             <a-tag color="success" v-if="app.deployKey" size="small">已部署</a-tag>
           </slot>
@@ -100,12 +91,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { 
-  EyeOutlined, 
-  MessageOutlined, 
-  EditOutlined, 
-  DeleteOutlined 
-} from '@ant-design/icons-vue'
+import { EyeOutlined, MessageOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import UserAvatar from '@/components/UserAvatar.vue'
 import dayjs from 'dayjs'
@@ -193,9 +179,11 @@ const formatCodeGenType = (codeGenType?: string) => {
 
 <style scoped>
 .app-card {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: all 0.3s;
+  background: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  transition: all var(--transition-normal);
 }
 
 .app-card.no-border {
@@ -203,19 +191,23 @@ const formatCodeGenType = (codeGenType?: string) => {
   box-shadow: none;
 }
 
-/* 尺寸预设 */
-.size-small { width: 240px; }
-.size-large { width: 320px; }
+.size-small {
+  width: 240px;
+}
+
+.size-large {
+  width: 320px;
+}
 
 .app-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-cover-wrapper {
   position: relative;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--color-surface-elevated);
 }
 
 .card-cover {
@@ -238,12 +230,12 @@ const formatCodeGenType = (codeGenType?: string) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(15, 23, 42, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.3s;
+  transition: all var(--transition-normal);
 }
 
 .action-btn {
@@ -286,7 +278,7 @@ const formatCodeGenType = (codeGenType?: string) => {
 .card-title {
   flex: 1;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-text);
   font-size: 15px;
   line-height: 1.4;
   white-space: nowrap;
@@ -295,7 +287,7 @@ const formatCodeGenType = (codeGenType?: string) => {
 }
 
 .user-name {
-  color: #8c8c8c;
+  color: var(--color-text-muted);
   font-size: 12px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -311,7 +303,7 @@ const formatCodeGenType = (codeGenType?: string) => {
 
 .time {
   flex-shrink: 0;
-  color: #bfbfbf;
+  color: var(--color-text-muted);
   font-size: 11px;
 }
 </style>

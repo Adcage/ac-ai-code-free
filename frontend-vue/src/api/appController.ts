@@ -80,6 +80,18 @@ export async function createChatSession(body: API.ChatSessionCreateRequest, opti
   })
 }
 
+/** 此处后端没有提供注释 POST /app/chat/session/delete */
+export async function deleteSession(body: API.DeleteRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseBoolean>('/app/chat/session/delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/chat/session/list */
 export async function listChatSession(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -91,6 +103,18 @@ export async function listChatSession(
     params: {
       ...params,
     },
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 POST /app/chat/session/rename */
+export async function renameSession(body: API.ChatSessionRenameRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseBoolean>('/app/chat/session/rename', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
     ...(options || {}),
   })
 }
@@ -127,6 +151,20 @@ export async function deployApp(body: API.AppDeployRequest, options?: { [key: st
       'Content-Type': 'application/json',
     },
     data: body,
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 GET /app/download/${param0} */
+export async function downloadAppProject(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.downloadAppProjectParams,
+  options?: { [key: string]: any }
+) {
+  const { appId: param0, ...queryParams } = params
+  return request<any>(`/app/download/${param0}`, {
+    method: 'GET',
+    params: { ...queryParams },
     ...(options || {}),
   })
 }
@@ -212,6 +250,18 @@ export async function listMyAppVoByPage(body: API.AppQueryRequest, options?: { [
 /** 此处后端没有提供注释 POST /app/update */
 export async function updateApp(body: API.AppAdminUpdateRequest, options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/app/update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 优化提示词 POST /app/enhance-prompt */
+export async function enhancePrompt(body: { prompt: string }, options?: { [key: string]: any }) {
+  return request<API.BaseResponseString>('/app/enhance-prompt', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

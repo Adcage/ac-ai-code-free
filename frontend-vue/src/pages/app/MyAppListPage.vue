@@ -1,46 +1,63 @@
 <template>
-  <div id="myAppListPage" class="container-page">
-    <div class="header-section">
-      <h2 class="page-title">我的作品</h2>
-      <p class="page-desc">这里记录了你所有的 AI 创作结晶</p>
-    </div>
+  <div class="my-app-page">
+    <div class="page-container">
+      <div class="page-header">
+        <div class="header-left">
+          <h1 class="page-title">我的作品</h1>
+          <p class="page-desc">管理你的所有 AI 创作项目</p>
+        </div>
+        <a-button type="primary" class="create-btn" @click="goToCreate">
+          <template #icon><Plus :size="16" /></template>
+          创建新应用
+        </a-button>
+      </div>
 
-    <a-list
-      :grid="{ gutter: 24, xs: 1, sm: 2, md: 3, lg: 4, xl: 4, xxl: 4 }"
-      :data-source="dataList"
-      :loading="loading"
-      class="app-list"
-    >
-      <template #renderItem="{ item }">
-        <a-list-item>
-          <AppCard 
-            :app="item" 
+      <div v-if="loading" class="loading-state">
+        <a-spin size="large" />
+      </div>
+
+      <div v-else-if="dataList.length === 0" class="empty-state">
+        <div class="empty-icon"><FolderOpen :size="64" /></div>
+        <h3 class="empty-title">还没有作品</h3>
+        <p class="empty-desc">开始创作吧，AI 帮你把想法变成现实</p>
+        <a-button type="primary" class="create-btn" @click="goToCreate">
+          <template #icon><Plus :size="16" /></template>
+          创建新应用
+        </a-button>
+      </div>
+
+      <template v-else>
+        <div class="app-grid">
+          <AppCard
+            v-for="item in dataList"
+            :key="item.id"
+            :app="item"
             :actions="['view', 'chat', 'edit', 'delete']"
             @delete="handleDeleteApp"
             @edit="handleEditApp"
           />
-        </a-list-item>
+        </div>
+
+        <div class="list-footer" v-if="total > dataList.length">
+          <a-button class="load-more-btn" @click="loadMore" :loading="loading"> 加载更多 </a-button>
+        </div>
       </template>
-    </a-list>
-
-    <!-- 编辑模态框 -->
-    <AppEditModal ref="editModalRef" @success="loadData" />
-
-    <div class="list-footer" v-if="total > dataList.length">
-      <a-button @click="loadMore" :loading="loading">加载更多</a-button>
     </div>
 
-    <a-empty v-if="!loading && dataList.length === 0" description="暂无作品，快去主页创作一个吧" />
+    <AppEditModal ref="editModalRef" @success="loadData" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { Plus, FolderOpen } from '@lucide/vue'
 import { listMyAppVoByPage, deleteApp } from '@/api/appController'
 import AppCard from '@/components/AppCard.vue'
 import AppEditModal from '@/components/AppEditModal.vue'
 
+const router = useRouter()
 const loading = ref(false)
 const dataList = ref<API.AppVO[]>([])
 const total = ref(0)
@@ -74,9 +91,10 @@ const loadMore = () => {
   loadData(true)
 }
 
-/**
- * 处理删除应用
- */
+const goToCreate = () => {
+  router.push('/')
+}
+
 const handleDeleteApp = async (id: number) => {
   if (!id) return
   const hide = message.loading('正在删除...', 0)
@@ -88,16 +106,13 @@ const handleDeleteApp = async (id: number) => {
     } else {
       message.error('删除失败，' + res.data?.message)
     }
-  } catch (error) {
+  } catch {
     message.error('删除失败，请稍后重试')
   } finally {
     hide()
   }
 }
 
-/**
- * 处理编辑应用
- */
 const handleEditApp = (app: API.AppVO) => {
   editModalRef.value?.open(app)
 }
@@ -108,31 +123,146 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.container-page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 24px;
+.my-app-page {
   min-height: calc(100vh - 64px);
+  background: var(--color-background);
 }
 
-.header-section {
-  margin-bottom: 40px;
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-2xl) var(--space-lg);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-2xl);
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 
 .page-title {
-  font-size: 28px;
+  font-family: var(--font-heading);
+  font-size: 32px;
   font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 8px;
+  color: var(--color-text);
+  margin: 0;
 }
 
 .page-desc {
-  color: #8c8c8c;
+  font-size: 15px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.create-btn {
+  background: var(--color-cta) !important;
+  border-color: var(--color-cta) !important;
+  font-weight: 600;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.create-btn:hover {
+  background: var(--color-cta-hover) !important;
+  border-color: var(--color-cta-hover) !important;
+  transform: translateY(-1px);
+}
+
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+}
+
+.empty-icon {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-lg);
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-sm);
+}
+
+.empty-desc {
   font-size: 16px;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xl);
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
 }
 
 .list-footer {
   text-align: center;
-  margin-top: 40px;
+  margin-top: var(--space-2xl);
+}
+
+.load-more-btn {
+  background: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
+  transition: all var(--transition-normal);
+  cursor: pointer;
+}
+
+.load-more-btn:hover {
+  border-color: var(--color-cta) !important;
+  color: var(--color-cta) !important;
+}
+
+@media (max-width: 1024px) {
+  .app-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: var(--space-md);
+    align-items: flex-start;
+  }
+
+  .app-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
 }
 </style>

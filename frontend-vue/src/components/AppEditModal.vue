@@ -5,6 +5,7 @@
     :confirm-loading="confirmLoading"
     :maskClosable="false"
     @cancel="handleCancel"
+    class="app-edit-modal"
   >
     <a-form :model="formState" layout="vertical" ref="formRef">
       <a-form-item
@@ -12,7 +13,7 @@
         name="appName"
         :rules="[
           { required: true, message: '请输入应用名称' },
-          { max: 80, message: '应用名称不能超过 80 个字符' }
+          { max: 80, message: '应用名称不能超过 80 个字符' },
         ]"
       >
         <a-input v-model:value="formState.appName" placeholder="请输入应用名称" />
@@ -22,18 +23,16 @@
         <a-input v-model:value="formState.cover" placeholder="请输入封面图 URL" />
       </a-form-item>
 
-      <a-form-item
-        v-if="isAdmin"
-        label="应用优先级"
-        name="priority"
-        extra="数值越大，在精选列表中排名越靠前"
-      >
+      <a-form-item v-if="isAdmin" label="应用优先级" name="priority" extra="数值越大，在精选列表中排名越靠前">
         <a-input-number v-model:value="formState.priority" :min="0" style="width: 100%" />
       </a-form-item>
 
       <a-divider />
 
-      <!-- 只读展示字段 -->
+      <a-form-item label="风格模板" name="styleTemplate" v-if="formState.styleTemplate">
+        <a-tag color="green">{{ formatStyleTemplate(formState.styleTemplate) }}</a-tag>
+      </a-form-item>
+
       <a-form-item label="初始提示词" name="initPrompt" extra="初始提示词不可修改">
         <a-textarea v-model:value="formState.initPrompt" disabled :auto-size="{ minRows: 2, maxRows: 4 }" />
       </a-form-item>
@@ -73,11 +72,22 @@ const router = useRouter()
 const visible = ref(false)
 const confirmLoading = ref(false)
 const formRef = ref()
-const initialData = ref<API.AppVO>() // 用于重置
+const initialData = ref<API.AppVO>()
+
+interface FormState {
+  id: number
+  appName: string
+  cover: string
+  priority: number
+  initPrompt: string
+  codeGenType: string
+  deployKey: string
+  styleTemplate: string
+}
 
 const isAdmin = computed(() => loginUserStore.loginUser?.userRole === 'admin')
 
-const formState = reactive<any>({
+const formState = reactive<FormState>({
   id: 0,
   appName: '',
   cover: '',
@@ -85,24 +95,29 @@ const formState = reactive<any>({
   initPrompt: '',
   codeGenType: '',
   deployKey: '',
+  styleTemplate: '',
 })
 
+const styleTemplateMap: Record<string, string> = {
+  minimal: '极简风格',
+  business: '商务风格',
+  tech: '科技风格',
+  playful: '活泼风格',
+  dark: '暗黑风格',
+}
+
+const formatStyleTemplate = (template?: string) => {
+  if (!template) return ''
+  return styleTemplateMap[template] || template
+}
+
 const formatCodeGenType = (codeGenType?: string) => {
-  if (codeGenType === 'single_file') {
-    return '单文件模式'
-  }
-  if (codeGenType === 'multi-file') {
-    return '多文件模式'
-  }
-  if (codeGenType === 'vue_project') {
-    return 'Vue 项目模式'
-  }
+  if (codeGenType === 'single_file') return '单文件模式'
+  if (codeGenType === 'multi-file') return '多文件模式'
+  if (codeGenType === 'vue_project') return 'Vue 项目模式'
   return codeGenType || '未知模式'
 }
 
-/**
- * 暴露给父组件的打开方法
- */
 const open = (app: API.AppVO) => {
   initialData.value = { ...app }
   formState.id = app.id || 0
@@ -112,42 +127,33 @@ const open = (app: API.AppVO) => {
   formState.initPrompt = app.initPrompt || ''
   formState.codeGenType = app.codeGenType || ''
   formState.deployKey = app.deployKey || ''
+  formState.styleTemplate = app.styleTemplate || ''
   visible.value = true
 }
 
 defineExpose({ open })
 
-/**
- * 重置表单
- */
 const handleReset = () => {
   if (initialData.value) {
     open(initialData.value)
   }
 }
 
-/**
- * 进入对话
- */
 const goToApp = () => {
   visible.value = false
   router.push(`/app/generate/${formState.id}`)
 }
 
-/**
- * 提交表单
- */
 const handleOk = async () => {
   if (!formRef.value) return
-  
+
   try {
     await formRef.value.validate()
     confirmLoading.value = true
-    
-    // 管理员使用 updateApp，普通用户使用 editApp
-    const res = isAdmin.value 
-      ? await updateApp(formState) 
-      : await editApp({ id: formState.id, appName: formState.appName })
+
+    const res = isAdmin.value
+      ? await updateApp({ ...formState, id: formState.id as number })
+      : await editApp({ id: formState.id as number, appName: formState.appName })
 
     if (res.data?.code === 0) {
       message.success('更新成功')
@@ -156,16 +162,13 @@ const handleOk = async () => {
     } else {
       message.error('更新失败，' + res.data?.message)
     }
-  } catch (error) {
-    // 校验失败
+  } catch {
+    // validation failed
   } finally {
     confirmLoading.value = false
   }
 }
 
-/**
- * 取消处理
- */
 const handleCancel = () => {
   visible.value = false
   formRef.value?.resetFields()
@@ -173,15 +176,6 @@ const handleCancel = () => {
 </script>
 
 <style scoped>
-.tip {
-  margin-top: 16px;
-  color: #bfbfbf;
-  font-size: 12px;
-  background: #fafafa;
-  padding: 8px 12px;
-  border-radius: 8px;
-}
-
 .modal-footer {
   display: flex;
   justify-content: space-between;
@@ -191,6 +185,6 @@ const handleCancel = () => {
 
 .footer-left {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 </style>
