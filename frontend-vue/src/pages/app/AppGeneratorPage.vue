@@ -833,9 +833,14 @@ const doEnhanceInput = async () => {
   enhancingInput.value = true
   try {
     const res = await enhancePrompt({ prompt })
-    if (res.data?.code === 0 && res.data?.data) {
-      inputText.value = res.data.data
-      message.success('提示词优化完成')
+    if (res.data?.code === 0) {
+      const enhanced = res.data?.data
+      if (enhanced && enhanced.trim()) {
+        inputText.value = enhanced
+        message.success('提示词优化完成')
+      } else {
+        message.warning('AI 未返回有效的优化结果，请重试或直接发送')
+      }
     } else {
       message.error('优化失败，' + (res.data?.message ?? '未知错误'))
     }
