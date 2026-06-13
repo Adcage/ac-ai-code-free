@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, PlainTextResponse
+from prometheus_client import generate_latest
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -15,19 +17,46 @@ from app.core.exceptions import AgentRuntimeError
 from app.core.logging import setup_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.response import success
+from app.grpc_client.channel import close_channel, get_channel
 from app.grpc_server.server import create_grpc_server
 
 logger = logging.getLogger("app.main")
 
 
+def _validate_config() -> None:
+    if not settings.agent_internal_secret:
+        logger.warning("agent_internal_secret is not set; gRPC calls to Java may fail")
+    if not settings.java_grpc_target:
+        logger.warning("java_grpc_target is not set; gRPC channel to Java will not work")
+
+
+async def _check_grpc_channel() -> str:
+    try:
+        channel = await get_channel()
+        state = channel.get_state()
+        if state.name == "READY" or state.name == "IDLE":
+            return "connected"
+        return f"state={state.name}"
+    except Exception as e:
+        return f"error={e}"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_config()
+
     grpc_server = await create_grpc_server()
     await grpc_server.start()
     logger.info("gRPC server started on port %s", settings.grpc_server_port)
+    logger.info("application started | runtime=%s env=%s", settings.agent_runtime_name, settings.app_env)
+
     yield
+
+    logger.info("application shutting down...")
     await grpc_server.stop(grace=5)
     logger.info("gRPC server stopped")
+    await close_channel()
+    logger.info("gRPC channel closed, shutdown complete")
 
 
 def create_app() -> FastAPI:
@@ -45,11 +74,38 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["health"])
     async def health(request: Request) -> dict:
-        return success(data={"status": "ok", "runtime": settings.agent_runtime_name}, request=request)
+        grpc_status = await _check_grpc_channel()
+        return success(
+            data={"status": "ok", "runtime": settings.agent_runtime_name, "grpc_channel": grpc_status},
+            request=request,
+        )
 
-    @app.get("/health/warmup", tags=["health"])
-    async def warmup(request: Request) -> dict:
-        return success(data={"status": "warmed"}, request=request)
+    @app.get("/health/ready", tags=["health"])
+    async def readiness(request: Request):
+        checks: dict[str, str] = {}
+        ok = True
+
+        grpc_status = await _check_grpc_channel()
+        checks["grpc_channel"] = grpc_status
+        if grpc_status != "connected":
+            ok = False
+
+        if not settings.agent_internal_secret:
+            checks["internal_secret"] = "missing"
+            ok = False
+        else:
+            checks["internal_secret"] = "configured"
+
+        if ok:
+            return success(data={"status": "ready", "checks": checks}, request=request)
+        return JSONResponse(
+            status_code=503,
+            content={"code": 5030, "message": "Not Ready", "data": {"status": "not_ready", "checks": checks}},
+        )
+
+    @app.get("/metrics", tags=["monitoring"])
+    async def metrics():
+        return PlainTextResponse(generate_latest(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
     return app
 

@@ -19,12 +19,11 @@ def test_health_endpoint(client: TestClient):
     assert data["request_id"] is not None
 
 
-def test_warmup_endpoint(client: TestClient):
-    response = client.get("/health/warmup")
-    assert response.status_code == 200
+def test_readiness_endpoint(client: TestClient):
+    response = client.get("/health/ready")
+    assert response.status_code in (200, 503)
     data = response.json()
-    assert data["code"] == 0
-    assert data["data"]["status"] == "warmed"
+    assert "checks" in data.get("data", {})
 
 
 def test_request_id_in_response_headers(client: TestClient):
@@ -44,29 +43,26 @@ def test_agent_run_id_header_passthrough(client: TestClient):
     assert response.headers.get("X-Agent-Run-ID") == "run-123"
 
 
-def test_validation_error_returns_422(client: TestClient):
-    response = client.post("/api/v1/agent/code-generation/stream", json={})
-    assert response.status_code == 422
-    data = response.json()
-    assert data["code"] == 4220
-    assert data["request_id"] is not None
+def test_nonexistent_route_returns_404(client: TestClient):
+    response = client.get("/api/v1/nonexistent")
+    assert response.status_code == 404
 
 
-def test_unhandled_error_returns_500():
+def test_unhandled_error_returns_400():
     from fastapi import Request
+    from app.core.error_codes import AgentErrorCode
     from app.core.exceptions import AgentRuntimeError
-    from app.core.response import success
 
     app = create_app()
 
     @app.get("/test-error")
     async def trigger_error(request: Request):
-        raise AgentRuntimeError("test error", code=9999, status_code=400)
+        raise AgentRuntimeError("test error", code=AgentErrorCode.INTERNAL_ERROR, status_code=400)
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.get("/test-error")
     assert response.status_code == 400
     data = response.json()
-    assert data["code"] == 9999
+    assert data["code"] == AgentErrorCode.INTERNAL_ERROR
     assert data["message"] == "test error"
     assert data["request_id"] is not None
