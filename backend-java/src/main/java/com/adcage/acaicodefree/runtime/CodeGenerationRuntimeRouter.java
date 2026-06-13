@@ -11,13 +11,18 @@ import java.util.List;
 @Component
 public class CodeGenerationRuntimeRouter {
 
+    private static final String DISABLED_JAVA_AGENT_RUNTIME = "java-agent";
+
     @Resource
     private List<CodeGenerationRuntime> runtimes;
 
-    @Value("${agent.runtime:java-agent}")
+    @Value("${agent.runtime:python-agent}")
     private String runtimeName;
 
     public CodeGenerationRuntime select() {
+        if (DISABLED_JAVA_AGENT_RUNTIME.equalsIgnoreCase(runtimeName)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Java AI runtime 已禁用，请使用 python-agent");
+        }
         return runtimes.stream()
                 .filter(runtime -> runtime.getName().equalsIgnoreCase(runtimeName))
                 .findFirst()
