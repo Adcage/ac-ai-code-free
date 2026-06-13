@@ -135,9 +135,7 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
             )
 
     async def RouteCodeGenType(self, request, context):
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("RouteCodeGenType not yet implemented")
-        await context.abort()
+        await context.abort(grpc.StatusCode.UNIMPLEMENTED, "RouteCodeGenType not yet implemented")
 
     async def ValidatePrompt(self, request, context):
         prompt = request.prompt

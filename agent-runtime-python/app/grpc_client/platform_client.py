@@ -4,7 +4,7 @@ from grpc import aio
 
 from app.grpc import platform_service_pb2
 from app.grpc import platform_service_pb2_grpc
-from app.grpc_client.channel import get_channel
+from app.grpc_client.channel import get_channel, get_internal_metadata
 
 logger = logging.getLogger("app.grpc_client.platform_client")
 
@@ -25,7 +25,7 @@ class GrpcPlatformClient:
             model_config_id=model_config_id,
             config_version=config_version,
         )
-        response = await stub.GetModelConfig(request)
+        response = await stub.GetModelConfig(request, metadata=get_internal_metadata())
         return {
             "provider": response.provider,
             "modelName": response.model_name,
@@ -36,7 +36,7 @@ class GrpcPlatformClient:
     async def build_vue_project(self, app_id: int) -> dict:
         stub = await self._get_stub()
         request = platform_service_pb2.BuildVueProjectRequest(app_id=app_id)
-        response = await stub.BuildVueProject(request)
+        response = await stub.BuildVueProject(request, metadata=get_internal_metadata())
         return {
             "success": response.success,
             "distPath": response.dist_path,
@@ -48,7 +48,7 @@ class GrpcPlatformClient:
     async def deploy_app(self, app_id: int, user_id: int) -> dict:
         stub = await self._get_stub()
         request = platform_service_pb2.DeployAppRequest(app_id=app_id, user_id=user_id)
-        response = await stub.DeployApp(request)
+        response = await stub.DeployApp(request, metadata=get_internal_metadata())
         return {"success": response.success, "url": response.url, "errorMessage": response.error_message}
 
     async def complete_agent_run(
@@ -67,7 +67,7 @@ class GrpcPlatformClient:
             latency_ms=latency_ms,
             error_message=error_message,
         )
-        response = await stub.CompleteAgentRun(request)
+        response = await stub.CompleteAgentRun(request, metadata=get_internal_metadata())
         return response.ok
 
     async def create_app_version(
@@ -80,19 +80,19 @@ class GrpcPlatformClient:
             source_path=source_path,
             build_path=build_path,
         )
-        response = await stub.CreateAppVersion(request)
+        response = await stub.CreateAppVersion(request, metadata=get_internal_metadata())
         return response.version_id
 
     async def get_chat_history(self, session_id: int, limit: int = 50) -> list[dict]:
         stub = await self._get_stub()
         request = platform_service_pb2.GetChatHistoryRequest(session_id=session_id, limit=limit)
-        response = await stub.GetChatHistory(request)
+        response = await stub.GetChatHistory(request, metadata=get_internal_metadata())
         return [{"id": e.id, "role": e.role, "content": e.content} for e in response.entries]
 
     async def get_app_detail(self, app_id: int) -> dict:
         stub = await self._get_stub()
         request = platform_service_pb2.GetAppDetailRequest(app_id=app_id)
-        response = await stub.GetAppDetail(request)
+        response = await stub.GetAppDetail(request, metadata=get_internal_metadata())
         return {
             "id": response.id,
             "name": response.name,

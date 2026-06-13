@@ -34,6 +34,7 @@ public class AppVersion implements Serializable {
     @Column("agentRunId")
     private Long agentRunId;
 
+    @Column("versionNo")
     private Integer versionNo;
 
     @Column("sourcePath")

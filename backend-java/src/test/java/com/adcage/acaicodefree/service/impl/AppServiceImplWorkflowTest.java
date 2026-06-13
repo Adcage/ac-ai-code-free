@@ -96,6 +96,7 @@ class AppServiceImplWorkflowTest {
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
         when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
+        when(streamHandlerExecutor.handle(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
         String suffix = String.valueOf(System.nanoTime());
         loginUser = User.builder()

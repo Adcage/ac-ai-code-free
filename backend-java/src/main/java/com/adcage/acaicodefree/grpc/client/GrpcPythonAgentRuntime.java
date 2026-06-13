@@ -12,9 +12,12 @@ import cn.hutool.json.JSONUtil;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.client.inject.GrpcClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -24,6 +27,9 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
 
     @GrpcClient("python-agent")
     private CodeGenerationServiceGrpc.CodeGenerationServiceStub codeGenServiceStub;
+
+    @Value("${agent.grpc.stream-deadline-seconds:300}")
+    private int streamDeadlineSeconds;
 
     @Override
     public String getName() {
@@ -36,7 +42,7 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
 
         com.adcage.acaicodefree.grpc.codegen.CodeGenerationRequest grpcRequest = buildGrpcRequest(request);
 
-        codeGenServiceStub.streamGenerate(grpcRequest, new StreamObserver<>() {
+        prepareStreamGenerateStub().streamGenerate(grpcRequest, new StreamObserver<>() {
             @Override
             public void onNext(CodeGenerationEvent event) {
                 String json = mapEventToStreamMessageJson(event);
@@ -59,6 +65,12 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
         });
 
         return sink.asFlux();
+    }
+
+    CodeGenerationServiceGrpc.CodeGenerationServiceStub prepareStreamGenerateStub() {
+        return codeGenServiceStub
+                .withWaitForReady()
+                .withDeadlineAfter(streamDeadlineSeconds, TimeUnit.SECONDS);
     }
 
     private com.adcage.acaicodefree.grpc.codegen.CodeGenerationRequest buildGrpcRequest(CodeGenerationRequest request) {

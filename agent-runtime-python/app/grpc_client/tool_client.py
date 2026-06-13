@@ -5,7 +5,7 @@ from grpc import aio
 from app.grpc import common_pb2
 from app.grpc import tool_service_pb2
 from app.grpc import tool_service_pb2_grpc
-from app.grpc_client.channel import get_channel
+from app.grpc_client.channel import get_channel, get_internal_metadata
 
 logger = logging.getLogger("app.grpc_client.tool_client")
 
@@ -38,7 +38,7 @@ class GrpcToolClient:
             code_gen_type=_map_code_gen_type(self._code_gen_type),
             relative_path=relative_path,
         )
-        response = await stub.ReadFile(request)
+        response = await stub.ReadFile(request, metadata=get_internal_metadata())
         return response.content
 
     async def write_file(self, relative_path: str, content: str) -> str:
@@ -49,7 +49,7 @@ class GrpcToolClient:
             relative_path=relative_path,
             content=content,
         )
-        response = await stub.WriteFile(request)
+        response = await stub.WriteFile(request, metadata=get_internal_metadata())
         return response.message
 
     async def modify_file(self, relative_path: str, old_content: str, new_content: str) -> str:
@@ -61,7 +61,7 @@ class GrpcToolClient:
             old_content=old_content,
             new_content=new_content,
         )
-        response = await stub.ModifyFile(request)
+        response = await stub.ModifyFile(request, metadata=get_internal_metadata())
         return response.message
 
     async def delete_file(self, relative_path: str) -> str:
@@ -71,7 +71,7 @@ class GrpcToolClient:
             code_gen_type=_map_code_gen_type(self._code_gen_type),
             relative_path=relative_path,
         )
-        response = await stub.DeleteFile(request)
+        response = await stub.DeleteFile(request, metadata=get_internal_metadata())
         return response.message
 
     async def read_dir(self, relative_path: str = ".") -> str:
@@ -81,5 +81,5 @@ class GrpcToolClient:
             code_gen_type=_map_code_gen_type(self._code_gen_type),
             relative_path=relative_path,
         )
-        response = await stub.ReadDir(request)
+        response = await stub.ReadDir(request, metadata=get_internal_metadata())
         return response.entries
