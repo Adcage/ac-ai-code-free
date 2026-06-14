@@ -219,7 +219,7 @@ public class FileOperationService {
             case MULTI_FILE -> AppConstant.MULTI_FILE_OUTPUT_PREFIX;
             case VUE_PROJECT -> AppConstant.VUE_PROJECT_OUTPUT_PREFIX;
         };
-        return codeOutputRootPath.resolve(prefix + appId).normalize();
+        return codeOutputRootPath.resolve(prefix).resolve(String.valueOf(appId)).normalize();
     }
 
     private Path resolveRelativePath(String relativeFilePath, Long appId, CodeGenTypeEnum codeGenType) {

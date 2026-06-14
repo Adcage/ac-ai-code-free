@@ -31,7 +31,7 @@ public class VueProjectBuildService {
     private int buildTimeoutSeconds;
 
     public BuildResult buildVueProject(Long appId) {
-        Path projectDir = outputRootPath.resolve(AppConstant.VUE_PROJECT_OUTPUT_PREFIX + appId);
+        Path projectDir = outputRootPath.resolve(AppConstant.VUE_PROJECT_OUTPUT_PREFIX).resolve(String.valueOf(appId));
         if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Vue 工程目录不存在");
         }

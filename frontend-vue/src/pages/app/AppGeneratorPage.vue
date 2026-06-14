@@ -898,9 +898,9 @@ const updatePreview = async () => {
 
 const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string) => {
   if (codeGenType === 'vue_project') {
-    return `${deployUrlPrefix}/vue_project_${appId}/dist/index.html?t=${Date.now()}`
+    return `${deployUrlPrefix}/vue_project/${appId}/dist/index.html?t=${Date.now()}`
   }
-  return `${deployUrlPrefix}/${codeGenType}_${appId}/index.html?t=${Date.now()}`
+  return `${deployUrlPrefix}/${codeGenType}/${appId}/index.html?t=${Date.now()}`
 }
 
 const hasPreviewCandidate = () => {

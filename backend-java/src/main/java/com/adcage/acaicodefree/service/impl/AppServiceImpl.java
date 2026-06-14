@@ -283,7 +283,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         Integer configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
         Long agentRunId = agentRunService.createAgentRun(appId, sessionId, loginUser.getId(), runtime.getName(),
                 modelConfigId, configVersion, null);
-        String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" + agentRunId + "/source";
+        String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" + getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId;
         agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
@@ -806,6 +806,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             return type;
         }
         return "";
+    }
+
+    private String getCodeGenOutputPrefix(CodeGenTypeEnum codeGenType) {
+        return switch (codeGenType) {
+            case SINGLE_FILE -> AppConstant.SINGLE_FILE_OUTPUT_PREFIX;
+            case MULTI_FILE -> AppConstant.MULTI_FILE_OUTPUT_PREFIX;
+            case VUE_PROJECT -> AppConstant.VUE_PROJECT_OUTPUT_PREFIX;
+        };
     }
 
 }
