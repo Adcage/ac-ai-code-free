@@ -2,6 +2,7 @@ package com.adcage.acaicodefree.service;
 
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.vo.modelconfig.ModelConfigVO;
 import com.mybatisflex.core.service.IService;
 
@@ -24,4 +25,6 @@ public interface ModelConfigService extends IService<ModelConfig> {
     void toggleEnabled(Long id, User loginUser);
 
     void setDefault(Long id, User loginUser);
+
+    RuntimeModelBundle resolveRuntimeModelBundle(Long userId, Long appId, Long agentRunId, String codeGenType);
 }

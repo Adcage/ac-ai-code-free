@@ -1,11 +1,12 @@
 import logging
 
-from grpc import aio
-
 from app.grpc import platform_service_pb2
 from app.grpc import platform_service_pb2_grpc
+from app.grpc import common_pb2
 from app.grpc_client.channel import get_channel, get_internal_metadata
 from app.grpc_client.retry import retry_async
+from app.modeling.roles import ModelRole
+from app.modeling.resolver import ResolvedModelConfig
 
 logger = logging.getLogger("app.grpc_client.platform_client")
 
@@ -109,3 +110,48 @@ class GrpcPlatformClient:
             "codeGenType": response.code_gen_type,
             "userId": response.user_id,
         }
+
+    async def resolve_runtime_model_bundle(
+        self,
+        user_id: int,
+        app_id: int,
+        agent_run_id: int,
+        code_gen_type: str,
+    ) -> dict[ModelRole, ResolvedModelConfig]:
+        stub = await self._get_stub()
+        code_gen_type_proto = _map_code_gen_type(code_gen_type)
+        request = platform_service_pb2.ResolveRuntimeModelBundleRequest(
+            user_id=user_id,
+            app_id=app_id,
+            agent_run_id=agent_run_id,
+            code_gen_type=code_gen_type_proto,
+        )
+        response = await stub.ResolveRuntimeModelBundle(request, metadata=get_internal_metadata())
+
+        if not response.success:
+            raise RuntimeError(f"resolve_runtime_model_bundle failed: {response.error_message}")
+
+        bundle: dict[ModelRole, ResolvedModelConfig] = {}
+        for config in response.configs:
+            role = ModelRole(config.role)
+            bundle[role] = ResolvedModelConfig(
+                role=role,
+                provider=config.provider,
+                model_name=config.model_name,
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model_config_id=config.model_config_id,
+                config_version=config.config_version,
+                source=config.source,
+                billing_mode=config.billing_mode,
+            )
+        return bundle
+
+
+def _map_code_gen_type(code_gen_type: str) -> int:
+    mapping = {
+        "single_file": common_pb2.SINGLE_FILE,
+        "multi-file": common_pb2.MULTI_FILE,
+        "vue_project": common_pb2.VUE_PROJECT,
+    }
+    return mapping.get(code_gen_type, common_pb2.VUE_PROJECT)

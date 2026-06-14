@@ -10,6 +10,9 @@ import com.adcage.acaicodefree.exception.ThrowUtils;
 import com.adcage.acaicodefree.mapper.ModelConfigMapper;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelRole;
 import com.adcage.acaicodefree.model.vo.modelconfig.ModelConfigVO;
 import com.adcage.acaicodefree.service.ModelConfigEventPublisher;
 import com.adcage.acaicodefree.service.ModelConfigService;
@@ -165,5 +168,55 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
         setUpdate.setIsDefault(1);
         boolean result = this.updateById(setUpdate);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "设置默认配置失败");
+    }
+
+    @Override
+    public RuntimeModelBundle resolveRuntimeModelBundle(Long userId, Long appId, Long agentRunId, String codeGenType) {
+        ModelConfig modelConfig = getDefaultEnabledModelConfig(userId);
+        if (modelConfig == null) {
+            return RuntimeModelBundle.builder()
+                    .success(false)
+                    .errorMessage("没有可用的模型配置")
+                    .configs(new ArrayList<>())
+                    .policyVersion("v1")
+                    .billingContext("")
+                    .build();
+        }
+
+        String source = determineSource(modelConfig, userId);
+        String billingMode = "USER".equals(source) ? "USER_OWNED" : "SYSTEM_FREE_FALLBACK";
+        Long configId = modelConfig.getId() != null ? modelConfig.getId() : 0L;
+        Integer configVersion = modelConfig.getConfigVersion() != null ? modelConfig.getConfigVersion() : 0;
+
+        List<RuntimeModelConfig> configs = new ArrayList<>();
+        for (RuntimeModelRole role : RuntimeModelRole.values()) {
+            configs.add(RuntimeModelConfig.builder()
+                    .role(role.getValue())
+                    .modelConfigId(configId)
+                    .configVersion(configVersion)
+                    .provider(modelConfig.getProvider())
+                    .modelName(modelConfig.getModelName())
+                    .baseUrl(modelConfig.getBaseUrl())
+                    .apiKey(modelConfig.getApiKeyCipher())
+                    .source(source)
+                    .billingMode(billingMode)
+                    .build());
+        }
+
+        return RuntimeModelBundle.builder()
+                .success(true)
+                .errorMessage("")
+                .configs(configs)
+                .policyVersion("v1")
+                .billingContext("")
+                .build();
+    }
+
+    private String determineSource(ModelConfig modelConfig, Long userId) {
+        if (modelConfig.getId() != null && modelConfig.getUserId() != null
+                && modelConfig.getUserId().equals(userId)) {
+            return "USER";
+        }
+        return "SYSTEM";
     }
 }

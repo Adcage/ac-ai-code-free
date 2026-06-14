@@ -7,6 +7,8 @@ import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.service.AgentRunService;
@@ -37,6 +39,55 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     private UserService userService;
     @Resource
     private VueProjectBuildService vueProjectBuildService;
+
+    @Override
+    public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
+                                          StreamObserver<ResolveRuntimeModelBundleResponse> responseObserver) {
+        try {
+            String codeGenTypeStr = mapGrpcCodeGenTypeToString(request.getCodeGenType());
+            RuntimeModelBundle bundle = modelConfigService.resolveRuntimeModelBundle(
+                    request.getUserId(),
+                    request.getAppId(),
+                    request.getAgentRunId(),
+                    codeGenTypeStr
+            );
+
+            ResolveRuntimeModelBundleResponse.Builder builder = ResolveRuntimeModelBundleResponse.newBuilder()
+                    .setSuccess(bundle.isSuccess())
+                    .setPolicyVersion(bundle.getPolicyVersion() != null ? bundle.getPolicyVersion() : "")
+                    .setBillingContext(bundle.getBillingContext() != null ? bundle.getBillingContext() : "");
+
+            if (bundle.getErrorMessage() != null) {
+                builder.setErrorMessage(bundle.getErrorMessage());
+            }
+
+            if (bundle.getConfigs() != null) {
+                for (RuntimeModelConfig config : bundle.getConfigs()) {
+                    builder.addConfigs(com.adcage.acaicodefree.grpc.platform.RuntimeModelConfig.newBuilder()
+                            .setRole(config.getRole() != null ? config.getRole() : "")
+                            .setModelConfigId(config.getModelConfigId() != null ? config.getModelConfigId() : 0L)
+                            .setConfigVersion(config.getConfigVersion() != null ? config.getConfigVersion() : 0)
+                            .setProvider(config.getProvider() != null ? config.getProvider() : "")
+                            .setModelName(config.getModelName() != null ? config.getModelName() : "")
+                            .setBaseUrl(config.getBaseUrl() != null ? config.getBaseUrl() : "")
+                            .setApiKey(config.getApiKey() != null ? config.getApiKey() : "")
+                            .setSource(config.getSource() != null ? config.getSource() : "")
+                            .setBillingMode(config.getBillingMode() != null ? config.getBillingMode() : "")
+                            .build());
+                }
+            }
+
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("gRPC resolveRuntimeModelBundle failed", e);
+            responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
+                    .setSuccess(false)
+                    .setErrorMessage(e.getMessage() != null ? e.getMessage() : "unknown error")
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
 
     @Override
     public void getModelConfig(GetModelConfigRequest request, StreamObserver<GetModelConfigResponse> responseObserver) {
@@ -328,6 +379,15 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             case MULTI_FILE -> CodeGenTypeEnum.MULTI_FILE;
             case VUE_PROJECT -> CodeGenTypeEnum.VUE_PROJECT;
             default -> null;
+        };
+    }
+
+    private String mapGrpcCodeGenTypeToString(CodeGenType grpcType) {
+        return switch (grpcType) {
+            case SINGLE_FILE -> "single_file";
+            case MULTI_FILE -> "multi-file";
+            case VUE_PROJECT -> "vue_project";
+            default -> "vue_project";
         };
     }
 
