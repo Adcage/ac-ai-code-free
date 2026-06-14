@@ -1,4 +1,5 @@
 import logging
+
 from app.capabilities.design_systems.types import DesignSystemDefinition
 
 logger = logging.getLogger("app.capabilities.design_systems.registry")
@@ -17,3 +18,6 @@ class DesignSystemRegistry:
         if design_system_id not in self._design_systems:
             raise KeyError(f"Design system not found: {design_system_id}")
         return self._design_systems[design_system_id]
+
+    def all(self) -> tuple[DesignSystemDefinition, ...]:
+        return tuple(self._design_systems.values())

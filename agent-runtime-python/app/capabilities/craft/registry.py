@@ -17,3 +17,6 @@ class CraftRegistry:
         if craft_id not in self._crafts:
             raise KeyError(f"Craft not found: {craft_id}")
         return self._crafts[craft_id]
+
+    def all(self) -> tuple[CraftDefinition, ...]:
+        return tuple(self._crafts.values())

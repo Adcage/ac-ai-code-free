@@ -1,19 +1,32 @@
 import logging
 import time
 
+from app.capabilities.common.asset_index import create_default_asset_manager
+from app.capabilities.craft.prompt_module import CraftRulesModule
+from app.capabilities.design_systems.prompt_module import DesignSystemModule
+from app.capabilities.seeds.prompt_module import SeedModule
+from app.capabilities.skills.prompt_module import SelectedSkillModule
+from app.capabilities.templates.prompt_module import TemplateReferenceModule
 from app.core.error_codes import AgentErrorCode
 from app.core.exceptions import AgentRuntimeError
-from app.graph.definitions import GENERATION_V1, MODIFICATION_V1
+from app.graph.definitions import GENERATION_V2, MODIFICATION_V2
 from app.graph.workflow import WorkflowEngine
 from app.modeling.policy import ModelPolicy
 from app.modeling.resolver import ModelResolver
+from app.artifacts.writer import ArtifactWriter
 from app.nodes.prepare_context import PrepareContextNode
 from app.nodes.classify_task import ClassifyTaskNode
+from app.nodes.load_assets import LoadAssetsNode
+from app.nodes.select_capabilities import SelectCapabilitiesNode
 from app.nodes.resolve_model import ResolveModelNode
 from app.nodes.compose_prompt import ComposePromptNode
 from app.nodes.call_model import CallModelNode
 from app.nodes.execute_tools import ExecuteToolsNode
+from app.nodes.collect_artifacts import CollectArtifactsNode
+from app.nodes.structure_check import StructureCheckNode
 from app.nodes.finalize import FinalizeNode
+from app.quality.structure_checker import StructureChecker
+from app.prompts.asset_modules import ArtifactOutputContractModule
 from app.prompts.default_modules import DEFAULT_PROMPT_MODULES
 from app.registries.node_registry import NodeRegistry
 from app.registries.prompt_module_registry import PromptModuleRegistry
@@ -45,6 +58,9 @@ class RuntimeOrchestrator:
         self._chat_model_factory = ChatModelFactory()
         self._model_policy = ModelPolicy()
         self._model_resolver = ModelResolver(self._platform_client)
+        self._asset_manager = create_default_asset_manager()
+        self._quality_checker = StructureChecker()
+        self._artifact_writer = ArtifactWriter()
         self._node_registry = self._build_node_registry()
         self._prompt_module_registry = self._build_prompt_module_registry()
         self._tool_registry = ToolRegistry()
@@ -55,10 +71,14 @@ class RuntimeOrchestrator:
         registry = NodeRegistry()
         registry.register(PrepareContextNode())
         registry.register(ClassifyTaskNode())
+        registry.register(LoadAssetsNode())
+        registry.register(SelectCapabilitiesNode())
         registry.register(ResolveModelNode())
         registry.register(ComposePromptNode())
         registry.register(CallModelNode())
         registry.register(ExecuteToolsNode())
+        registry.register(CollectArtifactsNode())
+        registry.register(StructureCheckNode())
         registry.register(FinalizeNode())
         return registry
 
@@ -66,6 +86,12 @@ class RuntimeOrchestrator:
         registry = PromptModuleRegistry()
         for module_cls in DEFAULT_PROMPT_MODULES:
             registry.register(module_cls())
+        registry.register(SelectedSkillModule())
+        registry.register(DesignSystemModule())
+        registry.register(SeedModule())
+        registry.register(TemplateReferenceModule())
+        registry.register(CraftRulesModule())
+        registry.register(ArtifactOutputContractModule())
         return registry
 
     def _build_services(self, event_bus: EventBus) -> RuntimeServices:
@@ -80,6 +106,9 @@ class RuntimeOrchestrator:
             tool_registry=self._tool_registry,
             event_bus=event_bus,
             node_registry=self._node_registry,
+            asset_manager=self._asset_manager,
+            quality_checker=self._quality_checker,
+            artifact_writer=self._artifact_writer,
         )
 
     async def _build_context(self, request, run_mode: RunMode) -> ExecutionContext:
@@ -132,11 +161,11 @@ class RuntimeOrchestrator:
         )
 
     async def stream_generate(self, request):
-        async for event in self._run_workflow(request, RunMode.GENERATE, GENERATION_V1):
+        async for event in self._run_workflow(request, RunMode.GENERATE, GENERATION_V2):
             yield event
 
     async def stream_modify(self, request):
-        async for event in self._run_workflow(request, RunMode.MODIFY, MODIFICATION_V1):
+        async for event in self._run_workflow(request, RunMode.MODIFY, MODIFICATION_V2):
             yield event
 
     async def _run_workflow(self, request, run_mode: RunMode, definition: list[str]):

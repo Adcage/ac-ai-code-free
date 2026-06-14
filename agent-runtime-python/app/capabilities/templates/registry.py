@@ -1,4 +1,5 @@
 import logging
+
 from app.capabilities.templates.types import TemplateDefinition
 
 logger = logging.getLogger("app.capabilities.templates.registry")
@@ -17,3 +18,6 @@ class TemplateRegistry:
         if template_id not in self._templates:
             raise KeyError(f"Template not found: {template_id}")
         return self._templates[template_id]
+
+    def all(self) -> tuple[TemplateDefinition, ...]:
+        return tuple(self._templates.values())

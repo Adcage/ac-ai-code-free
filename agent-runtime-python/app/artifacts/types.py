@@ -3,6 +3,14 @@ from typing import Any
 
 
 @dataclass
+class ArtifactCheckResult:
+    id: str
+    status: str
+    message: str
+    severity: str
+
+
+@dataclass
 class ArtifactManifest:
     version: int
     kind: str
@@ -15,4 +23,6 @@ class ArtifactManifest:
     source_seed_id: str = ""
     source_template_id: str = ""
     design_system_id: str = ""
+    craft_ids: list[str] = field(default_factory=list)
+    checks: list[ArtifactCheckResult] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)

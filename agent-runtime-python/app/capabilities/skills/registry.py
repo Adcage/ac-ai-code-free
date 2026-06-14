@@ -17,3 +17,6 @@ class SkillRegistry:
         if skill_id not in self._skills:
             raise KeyError(f"Skill not found: {skill_id}")
         return self._skills[skill_id]
+
+    def all(self) -> tuple[SkillDefinition, ...]:
+        return tuple(self._skills.values())

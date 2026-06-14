@@ -1,11 +1,15 @@
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class SeedDefinition:
     id: str
     name: str
     description: str
-    file_patterns: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    code_gen_type: str
+    triggers: tuple[str, ...]
+    entry: str
+    files_dir: Path
+    copy_mode: str
+    source_path: Path

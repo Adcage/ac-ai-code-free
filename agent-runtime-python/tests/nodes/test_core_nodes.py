@@ -180,3 +180,59 @@ class TestFinalizeNode:
             events.append(e)
         done_events = [e for e in events if e.event.event_type == RuntimeEventType.DONE]
         assert len(done_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_summary_includes_file_count_and_manifest(self):
+        node = FinalizeNode()
+        ctx = _make_context()
+        state = ExecutionState(
+            files_touched=["a.vue", "b.vue"],
+            selected_skill_id="dashboard",
+            selected_design_system_id="default",
+            artifact_manifest_path="/tmp/.acai/artifact-manifest.json",
+        )
+        mock_platform = AsyncMock()
+        services = _make_services(platform_client=mock_platform)
+        result = await node.run(ctx, state, services)
+        assert "2 个文件" in result.final_summary
+        assert "Skill: dashboard" in result.final_summary
+        assert "Design System: default" in result.final_summary
+        assert "Manifest" in result.final_summary
+
+    @pytest.mark.asyncio
+    async def test_summary_includes_quality_results(self):
+        node = FinalizeNode()
+        ctx = _make_context()
+        state = ExecutionState(
+            files_touched=["a.vue"],
+            quality_results=[
+                {"id": "entry_exists", "status": "pass", "severity": "error", "message": "OK"},
+                {"id": "placeholder_text", "status": "warn", "severity": "warning", "message": "Found"},
+                {"id": "non_empty_files", "status": "fail", "severity": "error", "message": "Empty"},
+            ],
+        )
+        mock_platform = AsyncMock()
+        services = _make_services(platform_client=mock_platform)
+        result = await node.run(ctx, state, services)
+        assert "质量检查" in result.final_summary
+        assert "1 pass" in result.final_summary
+        call_args = mock_platform.complete_agent_run.call_args
+        assert call_args.kwargs["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_warnings_only_still_success(self):
+        node = FinalizeNode()
+        ctx = _make_context()
+        state = ExecutionState(
+            files_touched=["a.vue"],
+            quality_results=[
+                {"id": "entry_exists", "status": "pass", "severity": "error", "message": "OK"},
+                {"id": "placeholder_text", "status": "warn", "severity": "warning", "message": "Found"},
+            ],
+        )
+        mock_platform = AsyncMock()
+        services = _make_services(platform_client=mock_platform)
+        result = await node.run(ctx, state, services)
+        assert "质量警告" in result.final_summary
+        call_args = mock_platform.complete_agent_run.call_args
+        assert call_args.kwargs["success"] is True

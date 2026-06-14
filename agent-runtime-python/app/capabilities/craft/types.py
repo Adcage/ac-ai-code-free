@@ -1,11 +1,13 @@
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class CraftDefinition:
     id: str
     name: str
     description: str
-    steps: list[dict[str, Any]] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    applies_to: tuple[str, ...]
+    priority: int
+    body: str
+    source_path: Path

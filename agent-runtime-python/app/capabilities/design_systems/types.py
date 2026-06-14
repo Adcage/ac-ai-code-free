@@ -1,11 +1,24 @@
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
+class DesignSystemFiles:
+    design: Path
+    tokens: Path | None = None
+    design_tokens: Path | None = None
+    components_manifest: Path | None = None
+    components: Path | None = None
+    usage: Path | None = None
+
+
+@dataclass(frozen=True)
 class DesignSystemDefinition:
     id: str
     name: str
+    category: str
     description: str
-    tokens: dict[str, Any] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    import_mode: str
+    files: DesignSystemFiles
+    suggested_craft: tuple[str, ...] = ()
+    source_path: Path = Path(".")

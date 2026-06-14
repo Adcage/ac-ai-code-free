@@ -14,3 +14,6 @@ class RuntimeServices:
     prompt_module_registry: Any = None
     event_bus: Any = None
     node_registry: Any = None
+    asset_manager: Any = None
+    quality_checker: Any = None
+    artifact_writer: Any = None
