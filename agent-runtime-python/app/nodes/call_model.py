@@ -1,7 +1,7 @@
 import logging
 import time
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 
 from app.core.error_codes import AgentErrorCode
 from app.core.exceptions import AgentRuntimeError
@@ -36,6 +36,7 @@ class CallModelNode(RuntimeNode):
         if services.tool_registry is not None:
             from app.tools.langchain_tools import create_file_tools
             from app.tools.file_tools import Workspace, FileTools
+
             workspace = Workspace(context.workspace_path)
             file_tools = FileTools(workspace)
             lc_tools = create_file_tools(file_tools)
@@ -52,38 +53,71 @@ class CallModelNode(RuntimeNode):
 
         start_ms = time.monotonic()
         try:
-            response = await chat_model.ainvoke(lc_messages)
+            text_content, tool_calls, response_obj = await self._stream_invoke(
+                chat_model, lc_messages, services.event_bus
+            )
             duration_ms = (time.monotonic() - start_ms) * 1000
         except Exception as e:
             duration_ms = (time.monotonic() - start_ms) * 1000
-            log_model_call(logger, state.resolved_model.get("provider", ""),
-                           state.resolved_model.get("modelName", ""), duration_ms)
-            raise AgentRuntimeError(f"模型调用失败: {e}", code=AgentErrorCode.MODEL_CALL_FAILED) from e
+            log_model_call(
+                logger,
+                state.resolved_model.get("provider", ""),
+                state.resolved_model.get("modelName", ""),
+                duration_ms,
+            )
+            raise AgentRuntimeError(
+                f"模型调用失败: {e}", code=AgentErrorCode.MODEL_CALL_FAILED
+            ) from e
 
-        log_model_call(logger, state.resolved_model.get("provider", ""),
-                       state.resolved_model.get("modelName", ""), duration_ms)
+        log_model_call(
+            logger,
+            state.resolved_model.get("provider", ""),
+            state.resolved_model.get("modelName", ""),
+            duration_ms,
+        )
 
         state.model_lc_messages = lc_messages
-        state.model_response_obj = response
-
-        text_content = response.content or ""
+        state.model_response_obj = response_obj
         state.model_response_text = text_content
 
-        if response.tool_calls:
-            state.model_tool_calls = [
-                {"id": tc["id"], "name": tc["name"], "arguments": tc["args"]}
-                for tc in response.tool_calls
-            ]
-            logger.info("call_model | tool_calls=%d textLen=%d duration_ms=%.0f",
-                         len(response.tool_calls), len(text_content), duration_ms)
-        else:
-            await services.event_bus.emit(
-                RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content})
+        if tool_calls:
+            state.model_tool_calls = tool_calls
+            logger.info(
+                "call_model | tool_calls=%d textLen=%d duration_ms=%.0f",
+                len(tool_calls),
+                len(text_content),
+                duration_ms,
             )
+        else:
             log_response(logger, text_content, label="model_response")
             logger.info("call_model | textLen=%d duration_ms=%.0f", len(text_content), duration_ms)
 
-        if not text_content and not response.tool_calls:
+        if not text_content and not tool_calls:
             raise AgentRuntimeError("模型返回为空", code=AgentErrorCode.MODEL_RESPONSE_EMPTY)
 
         return state
+
+    async def _stream_invoke(self, chat_model, lc_messages, event_bus):
+        collected_chunks: list[AIMessageChunk] = []
+        async for chunk in chat_model.astream(lc_messages):
+            collected_chunks.append(chunk)
+            delta = chunk.content or ""
+            if delta:
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": delta}))
+
+        if not collected_chunks:
+            return "", [], None
+
+        full_response = collected_chunks[0]
+        for c in collected_chunks[1:]:
+            full_response = full_response + c
+
+        text_content = full_response.content or ""
+        tool_calls = []
+        if full_response.tool_calls:
+            tool_calls = [
+                {"id": tc["id"], "name": tc["name"], "arguments": tc["args"]}
+                for tc in full_response.tool_calls
+            ]
+
+        return text_content, tool_calls, full_response

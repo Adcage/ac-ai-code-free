@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -174,43 +175,71 @@ class RuntimeOrchestrator:
         services = self._build_services(event_bus)
         start_time = time.monotonic()
 
-        try:
-            context = await self._build_context(request, run_mode)
-            state = ExecutionState()
-            state = await self._workflow_engine.execute(definition, context, state, services)
-        except AgentRuntimeError as e:
-            logger.error("orchestrator error | agentRunId=%s error=%s", agent_run_id, e)
-            await event_bus.emit(
-                RuntimeEvent(RuntimeEventType.RUNTIME_ERROR, {"message": str(e), "code": int(e.code)})
-            )
-            await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"运行失败: {e}"}))
+        workflow_exception: Exception | None = None
+
+        async def _execute():
+            nonlocal workflow_exception
             try:
-                await self._platform_client.complete_agent_run(
-                    agent_run_id=agent_run_id, success=False, error_message=str(e),
-                    latency_ms=int((time.monotonic() - start_time) * 1000),
+                context = await self._build_context(request, run_mode)
+                state = ExecutionState()
+                await self._workflow_engine.execute(definition, context, state, services)
+            except AgentRuntimeError as e:
+                workflow_exception = e
+                logger.error("orchestrator error | agentRunId=%s error=%s", agent_run_id, e)
+                await event_bus.emit(
+                    RuntimeEvent(
+                        RuntimeEventType.RUNTIME_ERROR, {"message": str(e), "code": int(e.code)}
+                    )
                 )
-            except Exception:
-                pass
-        except Exception as e:
-            logger.error("orchestrator unexpected error | agentRunId=%s error=%s", agent_run_id, e, exc_info=True)
-            await event_bus.emit(
-                RuntimeEvent(RuntimeEventType.RUNTIME_ERROR, {"message": str(e), "code": AgentErrorCode.INTERNAL_ERROR})
-            )
-            await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"运行异常: {e}"}))
-            try:
-                await self._platform_client.complete_agent_run(
-                    agent_run_id=agent_run_id, success=False, error_message=str(e),
-                    latency_ms=int((time.monotonic() - start_time) * 1000),
+                await event_bus.emit(
+                    RuntimeEvent(RuntimeEventType.DONE, {"message": f"运行失败: {e}"})
                 )
-            except Exception:
-                pass
-        finally:
-            await event_bus.close()
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                workflow_exception = e
+                logger.error(
+                    "orchestrator unexpected error | agentRunId=%s error=%s",
+                    agent_run_id,
+                    e,
+                    exc_info=True,
+                )
+                await event_bus.emit(
+                    RuntimeEvent(
+                        RuntimeEventType.RUNTIME_ERROR,
+                        {"message": str(e), "code": AgentErrorCode.INTERNAL_ERROR},
+                    )
+                )
+                await event_bus.emit(
+                    RuntimeEvent(RuntimeEventType.DONE, {"message": f"运行异常: {e}"})
+                )
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                    )
+                except Exception:
+                    pass
+            finally:
+                await event_bus.close()
+
+        workflow_task = asyncio.create_task(_execute())
 
         async for seq_event in self._drain_events(event_bus):
             proto_event = self._event_mapper.map_event(seq_event)
             if proto_event is not None:
                 yield proto_event
+
+        await workflow_task
 
     async def _drain_events(self, event_bus: EventBus):
         while True:
