@@ -49,3 +49,4 @@ class ExecutionState:
     quality_results: list[dict[str, Any]] = field(default_factory=list)
     artifact_manifest_path: str = ""
     asset_counts: dict[str, int] = field(default_factory=dict)
+    internal_summary: str = ""

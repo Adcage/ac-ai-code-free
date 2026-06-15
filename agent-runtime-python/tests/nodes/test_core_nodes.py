@@ -182,7 +182,7 @@ class TestFinalizeNode:
         assert len(done_events) == 1
 
     @pytest.mark.asyncio
-    async def test_summary_includes_file_count_and_manifest(self):
+    async def test_summary_excludes_internal_details(self):
         node = FinalizeNode()
         ctx = _make_context()
         state = ExecutionState(
@@ -195,9 +195,12 @@ class TestFinalizeNode:
         services = _make_services(platform_client=mock_platform)
         result = await node.run(ctx, state, services)
         assert "2 个文件" in result.final_summary
-        assert "Skill: dashboard" in result.final_summary
-        assert "Design System: default" in result.final_summary
-        assert "Manifest" in result.final_summary
+        assert "Skill" not in result.final_summary
+        assert "Design System" not in result.final_summary
+        assert "Manifest" not in result.final_summary
+        assert "Skill: dashboard" in result.internal_summary
+        assert "Design System: default" in result.internal_summary
+        assert "Manifest" in result.internal_summary
 
     @pytest.mark.asyncio
     async def test_summary_includes_quality_results(self):

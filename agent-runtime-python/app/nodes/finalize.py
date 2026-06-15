@@ -36,13 +36,6 @@ class FinalizeNode(RuntimeNode):
         if state.executed_tool_calls:
             summary_parts.append(f"执行 {len(state.executed_tool_calls)} 次工具调用")
 
-        if state.artifact_manifest_path:
-            summary_parts.append(f"Manifest: {state.artifact_manifest_path}")
-        if state.selected_skill_id:
-            summary_parts.append(f"Skill: {state.selected_skill_id}")
-        if state.selected_design_system_id:
-            summary_parts.append(f"Design System: {state.selected_design_system_id}")
-
         if state.quality_results:
             pass_count = sum(1 for r in state.quality_results if r.get("status") == "pass")
             warn_count = sum(1 for r in state.quality_results if r.get("status") == "warn")
@@ -55,6 +48,15 @@ class FinalizeNode(RuntimeNode):
             summary_parts.append(f"发生 {len(state.errors)} 个错误")
 
         state.final_summary = "，".join(summary_parts) if summary_parts else "无操作"
+
+        internal_parts = []
+        if state.artifact_manifest_path:
+            internal_parts.append(f"Manifest: {state.artifact_manifest_path}")
+        if state.selected_skill_id:
+            internal_parts.append(f"Skill: {state.selected_skill_id}")
+        if state.selected_design_system_id:
+            internal_parts.append(f"Design System: {state.selected_design_system_id}")
+        state.internal_summary = "，".join(internal_parts) if internal_parts else ""
 
         failed_checks = [
             r for r in state.quality_results
@@ -87,5 +89,10 @@ class FinalizeNode(RuntimeNode):
             RuntimeEvent(RuntimeEventType.DONE, {"message": done_message})
         )
 
-        logger.info("finalize | success=%s summary=%s", success, state.final_summary)
+        logger.info(
+            "finalize | success=%s summary=%s %s",
+            success,
+            state.final_summary,
+            state.internal_summary,
+        )
         return state

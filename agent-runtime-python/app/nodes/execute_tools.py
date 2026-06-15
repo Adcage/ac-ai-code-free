@@ -16,7 +16,9 @@ logger = logging.getLogger("app.nodes.execute_tools")
 
 
 class ExecuteToolsNode(RuntimeNode):
-    metadata = NodeMetadata(id="execute_tools", name="执行工具", description="执行模型请求的工具调用")
+    metadata = NodeMetadata(
+        id="execute_tools", name="执行工具", description="执行模型请求的工具调用"
+    )
 
     async def run(
         self,
@@ -32,7 +34,9 @@ class ExecuteToolsNode(RuntimeNode):
             if state.model_tool_calls:
                 tool_calls_to_execute = state.model_tool_calls
                 state.model_tool_calls = []
-                state = await self._execute_tool_calls(state, tool_calls_to_execute, services, file_tools)
+                state = await self._execute_tool_calls(
+                    state, tool_calls_to_execute, services, file_tools
+                )
                 if not state.model_lc_messages or not state.model_response_obj:
                     break
                 state = await self._continue_conversation(context, state, services, file_tools)
@@ -60,31 +64,44 @@ class ExecuteToolsNode(RuntimeNode):
             frontend_args = _to_frontend_args(tool_name, tool_args)
 
             await services.event_bus.emit(
-                RuntimeEvent(RuntimeEventType.TOOL_CALL, {
-                    "id": tool_id,
-                    "name": tool_name,
-                    "arguments": json.dumps(frontend_args, ensure_ascii=False),
-                })
+                RuntimeEvent(
+                    RuntimeEventType.TOOL_CALL,
+                    {
+                        "id": tool_id,
+                        "name": tool_name,
+                        "arguments": json.dumps(frontend_args, ensure_ascii=False),
+                    },
+                )
             )
 
             start_ms = time.monotonic()
             try:
                 result = await self._invoke_tool(file_tools, tool_name, tool_args)
                 duration_ms = (time.monotonic() - start_ms) * 1000
-                log_tool_call(logger, tool_name, duration_ms,
-                              args_length=len(json.dumps(tool_args)),
-                              result_length=len(result), status="ok")
+                log_tool_call(
+                    logger,
+                    tool_name,
+                    duration_ms,
+                    args_length=len(json.dumps(tool_args)),
+                    result_length=len(result),
+                    status="ok",
+                )
 
-                record = ToolCallRecord(id=tool_id, name=tool_name, arguments=tool_args, result=result)
+                record = ToolCallRecord(
+                    id=tool_id, name=tool_name, arguments=tool_args, result=result
+                )
                 state.executed_tool_calls.append(record)
 
                 await services.event_bus.emit(
-                    RuntimeEvent(RuntimeEventType.TOOL_RESULT, {
-                        "id": tool_id,
-                        "name": tool_name,
-                        "arguments": json.dumps(frontend_args, ensure_ascii=False),
-                        "result": result,
-                    })
+                    RuntimeEvent(
+                        RuntimeEventType.TOOL_RESULT,
+                        {
+                            "id": tool_id,
+                            "name": tool_name,
+                            "arguments": json.dumps(frontend_args, ensure_ascii=False),
+                            "result": result,
+                        },
+                    )
                 )
 
                 if tool_name == "write_file" and "relative_path" in tool_args:
@@ -94,15 +111,20 @@ class ExecuteToolsNode(RuntimeNode):
                 duration_ms = (time.monotonic() - start_ms) * 1000
                 log_tool_call(logger, tool_name, duration_ms, status="error")
 
-                record = ToolCallRecord(id=tool_id, name=tool_name, arguments=tool_args, error=str(e))
+                record = ToolCallRecord(
+                    id=tool_id, name=tool_name, arguments=tool_args, error=str(e)
+                )
                 state.executed_tool_calls.append(record)
                 state.errors.append(f"工具执行失败 [{tool_name}]: {e}")
 
                 await services.event_bus.emit(
-                    RuntimeEvent(RuntimeEventType.RUNTIME_ERROR, {
-                        "message": f"工具执行失败 [{tool_name}]: {e}",
-                        "code": int(AgentErrorCode.TOOL_CALL_FAILED),
-                    })
+                    RuntimeEvent(
+                        RuntimeEventType.RUNTIME_ERROR,
+                        {
+                            "message": _sanitize_error_message(f"工具执行失败 [{tool_name}]: {e}"),
+                            "code": int(AgentErrorCode.TOOL_CALL_FAILED),
+                        },
+                    )
                 )
                 if tool_name == "write_file":
                     break
@@ -141,36 +163,47 @@ class ExecuteToolsNode(RuntimeNode):
             args = {"relativeFilePath": path, "relative_path": path, "content": content}
 
             await services.event_bus.emit(
-                RuntimeEvent(RuntimeEventType.TOOL_CALL, {
-                    "id": tool_id,
-                    "name": "write_file",
-                    "arguments": json.dumps(args, ensure_ascii=False),
-                })
+                RuntimeEvent(
+                    RuntimeEventType.TOOL_CALL,
+                    {
+                        "id": tool_id,
+                        "name": "write_file",
+                        "arguments": json.dumps(args, ensure_ascii=False),
+                    },
+                )
             )
 
             try:
                 result = await file_tools.write_file(path, content)
 
-                record = ToolCallRecord(id=tool_id, name="write_file", arguments=args, result=result)
+                record = ToolCallRecord(
+                    id=tool_id, name="write_file", arguments=args, result=result
+                )
                 state.executed_tool_calls.append(record)
                 state.files_touched.append(path)
 
                 await services.event_bus.emit(
-                    RuntimeEvent(RuntimeEventType.TOOL_RESULT, {
-                        "id": tool_id,
-                        "name": "write_file",
-                        "arguments": json.dumps({"relativeFilePath": path}, ensure_ascii=False),
-                        "result": result,
-                    })
+                    RuntimeEvent(
+                        RuntimeEventType.TOOL_RESULT,
+                        {
+                            "id": tool_id,
+                            "name": "write_file",
+                            "arguments": json.dumps({"relativeFilePath": path}, ensure_ascii=False),
+                            "result": result,
+                        },
+                    )
                 )
 
             except Exception as e:
                 state.errors.append(f"文件写入失败 [{path}]: {e}")
                 await services.event_bus.emit(
-                    RuntimeEvent(RuntimeEventType.RUNTIME_ERROR, {
-                        "message": f"文件写入失败 [{path}]: {e}",
-                        "code": int(AgentErrorCode.TOOL_CALL_FAILED),
-                    })
+                    RuntimeEvent(
+                        RuntimeEventType.RUNTIME_ERROR,
+                        {
+                            "message": _sanitize_error_message(f"文件写入失败 [{path}]: {e}"),
+                            "code": int(AgentErrorCode.TOOL_CALL_FAILED),
+                        },
+                    )
                 )
                 break
 
@@ -211,14 +244,16 @@ class ExecuteToolsNode(RuntimeNode):
         if not state.model_lc_messages or not state.model_response_obj:
             return state
 
-        from langchain_core.messages import AIMessage, ToolMessage
+        from langchain_core.messages import AIMessageChunk, ToolMessage
         from app.tools.langchain_tools import create_file_tools
 
         lc_messages = list(state.model_lc_messages)
         ai_msg = state.model_response_obj
         lc_messages.append(ai_msg)
 
-        executed = [r for r in state.executed_tool_calls if r.result is not None or r.error is not None]
+        executed = [
+            r for r in state.executed_tool_calls if r.result is not None or r.error is not None
+        ]
         if not executed:
             return state
 
@@ -233,35 +268,67 @@ class ExecuteToolsNode(RuntimeNode):
 
         start_ms = time.monotonic()
         try:
-            response = await chat_model.ainvoke(lc_messages)
+            collected_chunks: list[AIMessageChunk] = []
+            async for chunk in chat_model.astream(lc_messages):
+                collected_chunks.append(chunk)
+                delta = chunk.content or ""
+                if delta:
+                    await services.event_bus.emit(
+                        RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": delta})
+                    )
+
+            if not collected_chunks:
+                raise AgentRuntimeError("模型返回为空", code=AgentErrorCode.MODEL_RESPONSE_EMPTY)
+
+            full_response = collected_chunks[0]
+            for c in collected_chunks[1:]:
+                full_response = full_response + c
+
             duration_ms = (time.monotonic() - start_ms) * 1000
+        except AgentRuntimeError:
+            raise
         except Exception as e:
             duration_ms = (time.monotonic() - start_ms) * 1000
-            log_model_call(logger, state.resolved_model.get("provider", ""),
-                           state.resolved_model.get("modelName", ""), duration_ms)
-            raise AgentRuntimeError(f"模型调用失败: {e}", code=AgentErrorCode.MODEL_CALL_FAILED) from e
+            log_model_call(
+                logger,
+                state.resolved_model.get("provider", ""),
+                state.resolved_model.get("modelName", ""),
+                duration_ms,
+            )
+            raise AgentRuntimeError(
+                f"模型调用失败: {e}", code=AgentErrorCode.MODEL_CALL_FAILED
+            ) from e
 
-        log_model_call(logger, state.resolved_model.get("provider", ""),
-                       state.resolved_model.get("modelName", ""), duration_ms)
+        log_model_call(
+            logger,
+            state.resolved_model.get("provider", ""),
+            state.resolved_model.get("modelName", ""),
+            duration_ms,
+        )
 
-        text_content = response.content or ""
+        text_content = full_response.content or ""
         state.model_response_text = text_content
         state.model_lc_messages = lc_messages
-        state.model_response_obj = response
+        state.model_response_obj = full_response
 
-        if response.tool_calls:
+        if full_response.tool_calls:
             state.model_tool_calls = [
                 {"id": tc["id"], "name": tc["name"], "arguments": tc["args"]}
-                for tc in response.tool_calls
+                for tc in full_response.tool_calls
             ]
-            logger.info("continue_conversation | tool_calls=%d textLen=%d duration_ms=%.0f",
-                         len(response.tool_calls), len(text_content), duration_ms)
-        else:
-            await services.event_bus.emit(
-                RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content})
+            logger.info(
+                "continue_conversation | tool_calls=%d textLen=%d duration_ms=%.0f",
+                len(full_response.tool_calls),
+                len(text_content),
+                duration_ms,
             )
+        else:
             log_response(logger, text_content, label="model_response")
-            logger.info("continue_conversation | textLen=%d duration_ms=%.0f", len(text_content), duration_ms)
+            logger.info(
+                "continue_conversation | textLen=%d duration_ms=%.0f",
+                len(text_content),
+                duration_ms,
+            )
             state.model_tool_calls = []
 
         return state
@@ -276,4 +343,19 @@ def _to_frontend_args(tool_name: str, args: dict) -> dict:
         else:
             mapped["relativeFilePath"] = mapped["relative_path"]
             mapped.pop("relative_path", None)
+    if "content" in mapped:
+        content = mapped["content"]
+        mapped["contentLength"] = len(content) if isinstance(content, str) else 0
+        mapped.pop("content", None)
     return mapped
+
+
+def _sanitize_error_message(message: str) -> str:
+    import re
+    sanitized = re.sub(r'[A-Za-z]:\\[^\s;,\]]+', '[路径已隐藏]', message)
+    sanitized = re.sub(r'/home/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/var/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/tmp/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/opt/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/usr/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    return sanitized

@@ -53,6 +53,26 @@ class TestProtoEventMapper:
         assert result.error.message == "fail"
         assert result.error.code == 60001
 
+    def test_runtime_error_sanitizes_paths(self):
+        seq_event = _make_sequenced(RuntimeEventType.RUNTIME_ERROR, {
+            "message": "读取文件失败: E:\\storage\\workspace\\secret.txt",
+            "code": 60001,
+        })
+        result = self.mapper.map_event(seq_event)
+        assert result is not None
+        assert "storage" not in result.error.message
+        assert "secret.txt" not in result.error.message
+        assert "[路径已隐藏]" in result.error.message
+
+    def test_done_sanitizes_paths(self):
+        seq_event = _make_sequenced(RuntimeEventType.DONE, {
+            "message": "完成 /home/user/workspace/project",
+        })
+        result = self.mapper.map_event(seq_event)
+        assert result is not None
+        assert "workspace" not in result.done.message
+        assert "[路径已隐藏]" in result.done.message
+
     def test_done_maps_to_done(self):
         seq_event = _make_sequenced(RuntimeEventType.DONE, {"message": "completed"})
         result = self.mapper.map_event(seq_event)

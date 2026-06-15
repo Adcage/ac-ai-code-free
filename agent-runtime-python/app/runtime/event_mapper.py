@@ -1,4 +1,5 @@
 import logging
+import re
 
 from app.grpc import code_generation_pb2
 from app.grpc import common_pb2
@@ -6,6 +7,16 @@ from app.runtime.events import RuntimeEventType
 from app.runtime.event_bus import SequencedRuntimeEvent
 
 logger = logging.getLogger("app.runtime.event_mapper")
+
+
+def _sanitize_path_in_message(message: str) -> str:
+    sanitized = re.sub(r'[A-Za-z]:\\[^\s;,\]]+', '[路径已隐藏]', message)
+    sanitized = re.sub(r'/home/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/var/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/tmp/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/opt/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r'/usr/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    return sanitized
 
 _CODE_GEN_TYPE_MAP = {
     1: common_pb2.SINGLE_FILE,
@@ -61,12 +72,12 @@ class ProtoEventMapper:
             )
         elif event.event_type == RuntimeEventType.RUNTIME_ERROR:
             kwargs["error"] = common_pb2.ErrorData(
-                message=data.get("message", ""),
+                message=_sanitize_path_in_message(data.get("message", "")),
                 code=data.get("code", 0),
             )
         elif event.event_type == RuntimeEventType.DONE:
             kwargs["done"] = common_pb2.DoneData(
-                message=data.get("message", ""),
+                message=_sanitize_path_in_message(data.get("message", "")),
             )
 
         return code_generation_pb2.CodeGenerationEvent(**kwargs)
