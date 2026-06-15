@@ -85,9 +85,7 @@ class TestSeedSelector:
 
     def test_vue_basic_default_not_found_returns_none(self):
         registry = SeedRegistry()
-        registry.register(
-            _make_seed("vue-dashboard", "Vue Dashboard", triggers=("dashboard",))
-        )
+        registry.register(_make_seed("vue-dashboard", "Vue Dashboard", triggers=("dashboard",)))
 
         selector = SeedSelector()
         result = selector.select("随便什么", "vue_project", "generate", registry)
@@ -113,3 +111,70 @@ class TestSeedSelector:
         result = selector.select("vue应用", "vue_project", "route", registry)
 
         assert result is None
+
+    def test_recommended_seed_ids_take_priority_over_triggers(self):
+        registry = SeedRegistry()
+        registry.register(_make_seed("vue-basic", "Vue Basic", triggers=("vue",)))
+        registry.register(_make_seed("vue-dashboard", "Vue Dashboard", triggers=("dashboard",)))
+
+        selector = SeedSelector()
+        result = selector.select(
+            "vue应用",
+            "vue_project",
+            "generate",
+            registry,
+            recommended_seed_ids=("vue-dashboard",),
+        )
+
+        assert result is not None
+        assert result.id == "vue-dashboard"
+
+    def test_recommended_seed_ids_first_match_wins(self):
+        registry = SeedRegistry()
+        registry.register(_make_seed("vue-basic", "Vue Basic"))
+        registry.register(_make_seed("vue-dashboard", "Vue Dashboard"))
+
+        selector = SeedSelector()
+        result = selector.select(
+            "随便什么prompt",
+            "vue_project",
+            "generate",
+            registry,
+            recommended_seed_ids=("missing", "vue-dashboard"),
+        )
+
+        assert result is not None
+        assert result.id == "vue-dashboard"
+
+    def test_recommended_seed_ids_code_gen_type_mismatch_ignored(self):
+        registry = SeedRegistry()
+        registry.register(_make_seed("vue-basic", "Vue Basic", code_gen_type="vue_project"))
+        registry.register(_make_seed("html-basic", "HTML Basic", code_gen_type="single_file"))
+
+        selector = SeedSelector()
+        result = selector.select(
+            "vue应用",
+            "vue_project",
+            "generate",
+            registry,
+            recommended_seed_ids=("html-basic", "vue-basic"),
+        )
+
+        assert result is not None
+        assert result.id == "vue-basic"
+
+    def test_recommended_seed_ids_empty_same_as_no_recommendation(self):
+        registry = SeedRegistry()
+        registry.register(_make_seed("vue-basic", "Vue Basic"))
+
+        selector = SeedSelector()
+        result = selector.select(
+            "vue应用",
+            "vue_project",
+            "generate",
+            registry,
+            recommended_seed_ids=(),
+        )
+
+        assert result is not None
+        assert result.id == "vue-basic"

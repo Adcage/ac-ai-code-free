@@ -1,11 +1,9 @@
-import json
-import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from app.artifacts.types import ArtifactCheckResult, ArtifactManifest
+from app.artifacts.types import ArtifactManifest
 from app.artifacts.writer import ArtifactWriter
 from app.nodes.structure_check import StructureCheckNode
 from app.quality.result import CheckResult
@@ -18,9 +16,14 @@ from app.runtime.state import ExecutionState
 
 def _make_context(**overrides) -> ExecutionContext:
     defaults = dict(
-        agent_run_id=1, app_id=1, session_id=1, user_id=1,
-        prompt="生成一个数据看板", code_gen_type=CodeGenType.VUE_PROJECT,
-        workspace_path="", run_mode=RunMode.GENERATE,
+        agent_run_id=1,
+        app_id=1,
+        session_id=1,
+        user_id=1,
+        prompt="生成一个数据看板",
+        code_gen_type=CodeGenType.VUE_PROJECT,
+        workspace_path="",
+        run_mode=RunMode.GENERATE,
     )
     defaults.update(overrides)
     return ExecutionContext(**defaults)
@@ -44,8 +47,11 @@ class TestStructureCheckNode:
     async def test_writes_quality_results(self, tmp_path: Path):
         _setup_vue_project(tmp_path)
         manifest = ArtifactManifest(
-            version=1, kind="vue_project", title="Test",
-            entry="src/App.vue", code_gen_type="vue_project",
+            version=1,
+            kind="vue_project",
+            title="Test",
+            entry="src/App.vue",
+            code_gen_type="vue_project",
             supporting_files=["src/App.vue", "package.json", "src/main.ts"],
         )
         _write_manifest(str(tmp_path), manifest)
@@ -62,15 +68,18 @@ class TestStructureCheckNode:
 
         result = await node.run(context, state, services)
 
-        assert len(result.quality_results) == 6
+        assert len(result.quality_results) == 8
         assert result.quality_results[0]["id"] == "entry_exists"
 
     @pytest.mark.asyncio
     async def test_updates_manifest_checks(self, tmp_path: Path):
         _setup_vue_project(tmp_path)
         manifest = ArtifactManifest(
-            version=1, kind="vue_project", title="Test",
-            entry="src/App.vue", code_gen_type="vue_project",
+            version=1,
+            kind="vue_project",
+            title="Test",
+            entry="src/App.vue",
+            code_gen_type="vue_project",
             supporting_files=["src/App.vue", "package.json", "src/main.ts"],
         )
         _write_manifest(str(tmp_path), manifest)
@@ -89,15 +98,18 @@ class TestStructureCheckNode:
 
         loaded = ArtifactWriter.read(str(tmp_path))
         assert loaded is not None
-        assert len(loaded.checks) == 6
+        assert len(loaded.checks) == 8
         assert loaded.checks[0].id == "entry_exists"
-        assert loaded.status == "complete"
+        assert loaded.status == "complete_with_warnings"
 
     @pytest.mark.asyncio
     async def test_manifest_failed_on_missing_entry(self, tmp_path: Path):
         manifest = ArtifactManifest(
-            version=1, kind="vue_project", title="Test",
-            entry="src/App.vue", code_gen_type="vue_project",
+            version=1,
+            kind="vue_project",
+            title="Test",
+            entry="src/App.vue",
+            code_gen_type="vue_project",
             supporting_files=["src/App.vue"],
         )
         _write_manifest(str(tmp_path), manifest)
@@ -133,8 +145,11 @@ class TestStructureCheckNode:
     async def test_uses_injected_checker(self, tmp_path: Path):
         _setup_vue_project(tmp_path)
         manifest = ArtifactManifest(
-            version=1, kind="vue_project", title="Test",
-            entry="src/App.vue", code_gen_type="vue_project",
+            version=1,
+            kind="vue_project",
+            title="Test",
+            entry="src/App.vue",
+            code_gen_type="vue_project",
             supporting_files=["src/App.vue"],
         )
         _write_manifest(str(tmp_path), manifest)

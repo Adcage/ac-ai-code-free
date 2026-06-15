@@ -144,6 +144,56 @@ class TestTemplateLoader:
         t = registry.get("shared-id")
         assert t.name == "From A"
 
+    def test_load_references_and_checklists(self, template_dir: Path) -> None:
+        tdir = template_dir / "templates" / "web-prototype"
+        tdir.mkdir(parents=True)
+        references_dir = tdir / "references"
+        references_dir.mkdir(parents=True)
+        files_dir = tdir / "files"
+        files_dir.mkdir(parents=True)
+
+        (references_dir / "layout.md").write_text("# Layout\n\n- Hero", encoding="utf-8")
+        (references_dir / "checklist.md").write_text("# Checklist\n\n- P0 rule", encoding="utf-8")
+        (files_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+
+        data = {
+            "schemaVersion": "ac-template/v1",
+            "id": "web-prototype",
+            "name": "Web Prototype",
+            "description": "Web prototype reference",
+            "kind": "html-reference",
+            "codeGenType": "single_file",
+            "triggers": ["prototype"],
+            "entry": "index.html",
+            "maxPromptFiles": 1,
+            "references": ["references/layout.md"],
+            "checklists": ["references/checklist.md"],
+            "files": ["files/index.html"],
+        }
+        (tdir / "template.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        config = AssetPathConfig(bundled_root=template_dir)
+        loader = TemplateLoader()
+        registry = loader.load(config)
+
+        template = registry.get("web-prototype")
+        assert template.kind == "html-reference"
+        assert template.references == (Path("references/layout.md"),)
+        assert template.checklists == (Path("references/checklist.md"),)
+        assert template.files == (Path("files/index.html"),)
+
+    def test_load_missing_references_defaults_to_empty(self, template_dir: Path) -> None:
+        _create_template_json(template_dir)
+
+        config = AssetPathConfig(bundled_root=template_dir)
+        loader = TemplateLoader()
+        registry = loader.load(config)
+
+        template = registry.get("dashboard-analytics")
+        assert template.references == ()
+        assert template.checklists == ()
+        assert template.kind == ""
+
 
 class TestTemplateRegistry:
     def test_all_returns_registered(self, template_dir: Path) -> None:

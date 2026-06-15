@@ -1,9 +1,7 @@
-import os
 from pathlib import Path
 
-import pytest
 
-from app.artifacts.types import ArtifactCheckResult, ArtifactManifest
+from app.artifacts.types import ArtifactManifest
 from app.quality.checks import (
     check_artifact_tags_removed,
     check_entry_exists,
@@ -32,7 +30,14 @@ def _make_manifest(**overrides) -> ArtifactManifest:
 def _setup_vue_project(root: Path) -> None:
     src = root / "src"
     src.mkdir(parents=True, exist_ok=True)
-    (src / "App.vue").write_text("<template><div>Hello World</div></template>", encoding="utf-8")
+    (src / "App.vue").write_text(
+        "<template>\n"
+        '  <div v-if="loading">加载中</div>\n'
+        '  <div v-else-if="error">错误</div>\n'
+        "  <div v-else>Hello World</div>\n"
+        "</template>",
+        encoding="utf-8",
+    )
     (root / "package.json").write_text('{"name": "test", "version": "1.0.0"}', encoding="utf-8")
     (src / "main.ts").write_text('import { createApp } from "vue"', encoding="utf-8")
 
@@ -127,7 +132,9 @@ class TestCheckPlaceholderText:
     def test_warn_for_metric_a(self, tmp_path: Path):
         src = tmp_path / "src"
         src.mkdir(parents=True)
-        (src / "App.vue").write_text("<template><div>Metric A: 100</div></template>", encoding="utf-8")
+        (src / "App.vue").write_text(
+            "<template><div>Metric A: 100</div></template>", encoding="utf-8"
+        )
         manifest = _make_manifest(supporting_files=["src/App.vue"])
         result = check_placeholder_text(str(tmp_path), manifest)
         assert result.status == "warn"
@@ -136,7 +143,9 @@ class TestCheckPlaceholderText:
     def test_warn_for_lorem_ipsum(self, tmp_path: Path):
         src = tmp_path / "src"
         src.mkdir(parents=True)
-        (src / "App.vue").write_text("<template><div>Lorem ipsum dolor</div></template>", encoding="utf-8")
+        (src / "App.vue").write_text(
+            "<template><div>Lorem ipsum dolor</div></template>", encoding="utf-8"
+        )
         manifest = _make_manifest(supporting_files=["src/App.vue"])
         result = check_placeholder_text(str(tmp_path), manifest)
         assert result.status == "warn"
@@ -144,7 +153,9 @@ class TestCheckPlaceholderText:
     def test_warn_for_todo(self, tmp_path: Path):
         src = tmp_path / "src"
         src.mkdir(parents=True)
-        (src / "App.vue").write_text("<template><div>TODO: implement this</div></template>", encoding="utf-8")
+        (src / "App.vue").write_text(
+            "<template><div>TODO: implement this</div></template>", encoding="utf-8"
+        )
         manifest = _make_manifest(supporting_files=["src/App.vue"])
         result = check_placeholder_text(str(tmp_path), manifest)
         assert result.status == "warn"
@@ -160,7 +171,9 @@ class TestCheckArtifactTagsRemoved:
     def test_warn_when_artifact_tags_present(self, tmp_path: Path):
         src = tmp_path / "src"
         src.mkdir(parents=True)
-        (src / "App.vue").write_text("<template><artifact>some code</artifact></template>", encoding="utf-8")
+        (src / "App.vue").write_text(
+            "<template><artifact>some code</artifact></template>", encoding="utf-8"
+        )
         manifest = _make_manifest(supporting_files=["src/App.vue"])
         result = check_artifact_tags_removed(str(tmp_path), manifest)
         assert result.status == "warn"
@@ -173,7 +186,7 @@ class TestStructureChecker:
         manifest = _make_manifest()
         checker = StructureChecker()
         results = checker.run(str(tmp_path), manifest)
-        assert len(results) == 6
+        assert len(results) == 8
         assert all(r.status == "pass" for r in results)
 
     def test_determine_manifest_status_failed(self):

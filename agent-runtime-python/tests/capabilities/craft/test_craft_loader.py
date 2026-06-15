@@ -87,7 +87,7 @@ class TestCraftLoader:
         all_crafts = registry.all()
         assert len(all_crafts) == 3
 
-    def test_load_skips_invalid_craft(self, tmp_path: Path):
+    def test_load_uses_filename_when_name_missing(self, tmp_path: Path):
         craft_dir = tmp_path / "craft"
         craft_dir.mkdir()
         (craft_dir / "broken.md").write_text("---\n---\nBody only", encoding="utf-8")
@@ -96,7 +96,27 @@ class TestCraftLoader:
         loader = CraftLoader()
         registry = loader.load(config)
 
-        assert len(registry.all()) == 0
+        craft = registry.get("broken")
+        assert craft.name == "Broken"
+        assert craft.body == "Body only"
+
+    def test_load_craft_without_frontmatter_uses_filename(self, tmp_path: Path):
+        craft_dir = tmp_path / "craft"
+        craft_dir.mkdir()
+        (craft_dir / "laws-of-ux.md").write_text(
+            "# Laws of UX\n\n- Use proximity.", encoding="utf-8"
+        )
+
+        config = AssetPathConfig(bundled_root=tmp_path)
+        loader = CraftLoader()
+        registry = loader.load(config)
+
+        craft = registry.get("laws-of-ux")
+        assert craft.name == "Laws Of Ux"
+        assert craft.description == ""
+        assert craft.priority == 100
+        assert craft.applies_to == ()
+        assert "Use proximity" in craft.body
 
     def test_load_no_craft_dir(self, tmp_path: Path):
         config = AssetPathConfig(bundled_root=tmp_path)

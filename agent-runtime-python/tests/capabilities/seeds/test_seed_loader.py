@@ -22,7 +22,9 @@ VUE_BASIC_SEED_JSON = {
 
 def _write_seed_json(seed_dir: Path, data: dict) -> None:
     seed_dir.mkdir(parents=True, exist_ok=True)
-    (seed_dir / "seed.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    (seed_dir / "seed.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 class TestSeedLoader:

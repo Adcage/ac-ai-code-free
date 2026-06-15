@@ -2,7 +2,6 @@ import json
 import os
 from pathlib import Path
 
-import pytest
 
 from app.artifacts.types import ArtifactCheckResult, ArtifactManifest
 from app.artifacts.writer import ArtifactWriter
@@ -55,8 +54,15 @@ class TestArtifactWriter:
         writer = ArtifactWriter()
         manifest = _make_manifest(
             checks=[
-                ArtifactCheckResult(id="entry_exists", status="pass", message="Entry exists", severity="error"),
-                ArtifactCheckResult(id="placeholder_text", status="warn", message="Placeholder found", severity="warning"),
+                ArtifactCheckResult(
+                    id="entry_exists", status="pass", message="Entry exists", severity="error"
+                ),
+                ArtifactCheckResult(
+                    id="placeholder_text",
+                    status="warn",
+                    message="Placeholder found",
+                    severity="warning",
+                ),
             ],
         )
         path = writer.write(str(tmp_path), manifest)
@@ -73,14 +79,18 @@ class TestArtifactWriter:
     def test_creates_acai_directory(self, tmp_path: Path):
         writer = ArtifactWriter()
         manifest = _make_manifest()
-        path = writer.write(str(tmp_path), manifest)
+        writer.write(str(tmp_path), manifest)
 
         assert os.path.isdir(os.path.join(str(tmp_path), ".acai"))
 
     def test_read_roundtrip(self, tmp_path: Path):
         writer = ArtifactWriter()
         manifest = _make_manifest(
-            checks=[ArtifactCheckResult(id="entry_exists", status="pass", message="OK", severity="error")],
+            checks=[
+                ArtifactCheckResult(
+                    id="entry_exists", status="pass", message="OK", severity="error"
+                )
+            ],
         )
         writer.write(str(tmp_path), manifest)
 
@@ -112,3 +122,47 @@ class TestArtifactWriter:
 
         assert data["status"] == "complete_with_warnings"
         assert data["metadata"]["agentRunId"] == 123
+
+    def test_serializes_capability_selection_fields(self, tmp_path: Path):
+        manifest = ArtifactManifest(
+            version=1,
+            kind="vue_project",
+            title="Dashboard",
+            entry="src/App.vue",
+            code_gen_type="vue_project",
+            source_skill_id="dashboard",
+            source_skill_ids=["frontend-design", "dashboard"],
+            source_template_id="dashboard",
+            source_template_ids=["dashboard"],
+            selection_source="selector",
+            project_mode="vue_project",
+        )
+
+        path = ArtifactWriter().write(str(tmp_path), manifest)
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+
+        assert data["sourceSkillIds"] == ["frontend-design", "dashboard"]
+        assert data["sourceTemplateIds"] == ["dashboard"]
+        assert data["selectionSource"] == "selector"
+        assert data["projectMode"] == "vue_project"
+
+    def test_reads_capability_selection_fields(self, tmp_path: Path):
+        manifest = ArtifactManifest(
+            version=1,
+            kind="vue_project",
+            title="Dashboard",
+            entry="src/App.vue",
+            code_gen_type="vue_project",
+            source_skill_ids=["frontend-design", "dashboard"],
+            source_template_ids=["dashboard"],
+            selection_source="selector",
+            project_mode="vue_project",
+        )
+
+        ArtifactWriter().write(str(tmp_path), manifest)
+        loaded = ArtifactWriter.read(str(tmp_path))
+
+        assert loaded.source_skill_ids == ["frontend-design", "dashboard"]
+        assert loaded.source_template_ids == ["dashboard"]
+        assert loaded.selection_source == "selector"
+        assert loaded.project_mode == "vue_project"

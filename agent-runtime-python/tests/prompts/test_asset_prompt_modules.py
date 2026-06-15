@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from app.capabilities.common.loader_result import SelectedCapabilities
 from app.capabilities.skills.prompt_module import SelectedSkillModule
 from app.capabilities.skills.types import (
@@ -7,9 +9,7 @@ from app.capabilities.skills.types import (
     SkillPreview,
 )
 from app.prompts.asset_modules import ArtifactOutputContractModule
-from app.prompts.modules import PromptModule
 from app.runtime.state import ExecutionState
-from pathlib import Path
 
 
 class TestArtifactOutputContractModule:
@@ -24,9 +24,9 @@ class TestArtifactOutputContractModule:
     def test_render_content(self):
         m = ArtifactOutputContractModule()
         result = m.render(None, None)
-        assert "Artifact Contract" in result
+        assert "Artifact Output Contract" in result
         assert "entry file exists" in result
-        assert "placeholder cards" in result
+        assert "Card 1" in result
         assert "Metric A" in result
 
 
@@ -43,7 +43,7 @@ class TestSelectedSkillModule:
     def test_disabled_without_skill(self):
         m = SelectedSkillModule()
         state = ExecutionState()
-        state.selected_capabilities = SelectedCapabilities(skill=None)
+        state.selected_capabilities = SelectedCapabilities()
         assert m.enabled(None, state) is False
 
     def test_enabled_with_skill(self):
@@ -63,7 +63,7 @@ class TestSelectedSkillModule:
             source_path=Path("."),
         )
         state = ExecutionState()
-        state.selected_capabilities = SelectedCapabilities(skill=skill)
+        state.selected_capabilities = SelectedCapabilities(skills=[skill])
         assert m.enabled(None, state) is True
 
     def test_render_with_skill(self):
@@ -83,7 +83,7 @@ class TestSelectedSkillModule:
             source_path=Path("."),
         )
         state = ExecutionState()
-        state.selected_capabilities = SelectedCapabilities(skill=skill)
+        state.selected_capabilities = SelectedCapabilities(skills=[skill])
         result = m.render(None, state)
         assert "Selected Skill: dashboard" in result
         assert "Build a dashboard." in result
@@ -107,7 +107,7 @@ class TestSelectedSkillModule:
             source_path=Path("."),
         )
         state = ExecutionState()
-        state.selected_capabilities = SelectedCapabilities(skill=skill)
+        state.selected_capabilities = SelectedCapabilities(skills=[skill])
         result = m.render(None, state)
         assert "Selected Skill: form" in result
         assert "Build a form." in result

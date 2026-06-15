@@ -46,10 +46,10 @@ class TestSkillSelector:
         selector = SkillSelector()
         result = selector.select("帮我生成一个后台数据看板", registry)
 
-        assert result is not None
-        assert result.id == "dashboard"
+        assert len(result) > 0
+        assert result[0].id == "dashboard"
 
-    def test_select_returns_none_when_no_match(self):
+    def test_select_returns_empty_list_when_no_match(self):
         registry = SkillRegistry()
         registry.register(
             _make_skill("dashboard", "Dashboard", ("dashboard", "后台"), scenario="operations")
@@ -58,7 +58,7 @@ class TestSkillSelector:
         selector = SkillSelector()
         result = selector.select("帮我写一首诗", registry)
 
-        assert result is None
+        assert result == []
 
     def test_chinese_trigger_matching(self):
         registry = SkillRegistry()
@@ -69,8 +69,8 @@ class TestSkillSelector:
         selector = SkillSelector()
         result = selector.select("我要一个后台管理界面", registry)
 
-        assert result is not None
-        assert result.id == "dashboard"
+        assert len(result) > 0
+        assert result[0].id == "dashboard"
 
     def test_highest_score_wins(self):
         registry = SkillRegistry()
@@ -80,8 +80,8 @@ class TestSkillSelector:
         selector = SkillSelector()
         result = selector.select("后台dashboard", registry)
 
-        assert result is not None
-        assert result.id == "b-skill"
+        assert len(result) > 0
+        assert result[0].id == "b-skill"
 
     def test_same_score_alphabetical_tiebreak(self):
         registry = SkillRegistry()
@@ -91,8 +91,8 @@ class TestSkillSelector:
         selector = SkillSelector()
         result = selector.select("dashboard", registry)
 
-        assert result is not None
-        assert result.id == "alpha"
+        assert len(result) > 0
+        assert result[0].id == "alpha"
 
     def test_scenario_bonus(self):
         registry = SkillRegistry()
@@ -102,12 +102,26 @@ class TestSkillSelector:
         selector = SkillSelector()
         result = selector.select("dashboard operations", registry)
 
-        assert result is not None
-        assert result.id == "dash-a"
+        assert len(result) > 0
+        assert result[0].id == "dash-a"
 
-    def test_empty_registry_returns_none(self):
+    def test_empty_registry_returns_empty_list(self):
         registry = SkillRegistry()
         selector = SkillSelector()
         result = selector.select("dashboard", registry)
 
-        assert result is None
+        assert result == []
+
+    def test_select_returns_sorted_list_by_relevance(self):
+        registry = SkillRegistry()
+        registry.register(
+            _make_skill("landing", "Landing", ("landing", "page"), scenario="marketing")
+        )
+        registry.register(
+            _make_skill("dashboard", "Dashboard", ("dashboard", "后台"), scenario="operations")
+        )
+
+        selector = SkillSelector()
+        result = selector.select("后台 dashboard page", registry)
+
+        assert [skill.id for skill in result] == ["dashboard", "landing"]

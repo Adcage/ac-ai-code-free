@@ -16,14 +16,20 @@ from app.runtime.event_bus import EventBus
 from app.runtime.events import RuntimeEventType
 from app.runtime.services import RuntimeServices
 from app.runtime.state import ExecutionState
+from app.capabilities.common.capability_selection import CapabilitySelection
 from app.core.exceptions import AgentRuntimeError
 
 
 def _make_context(**overrides) -> ExecutionContext:
     defaults = dict(
-        agent_run_id=1, app_id=1, session_id=1, user_id=1,
-        prompt="生成一个 Vue 页面", code_gen_type=CodeGenType.VUE_PROJECT,
-        workspace_path=tempfile.mkdtemp(), run_mode=RunMode.GENERATE,
+        agent_run_id=1,
+        app_id=1,
+        session_id=1,
+        user_id=1,
+        prompt="生成一个 Vue 页面",
+        code_gen_type=CodeGenType.VUE_PROJECT,
+        workspace_path=tempfile.mkdtemp(),
+        run_mode=RunMode.GENERATE,
     )
     defaults.update(overrides)
     return ExecutionContext(**defaults)
@@ -93,8 +99,11 @@ class TestResolveModelNode:
         mock_resolver = MagicMock()
         mock_resolver.load_bundle = AsyncMock()
         mock_resolver.resolve.return_value = ResolvedModelConfig(
-            role=ModelRole.PRIMARY, provider="openai", model_name="gpt-4o",
-            base_url="https://api.openai.com/v1", api_key="key",
+            role=ModelRole.PRIMARY,
+            provider="openai",
+            model_name="gpt-4o",
+            base_url="https://api.openai.com/v1",
+            api_key="key",
         )
         services = _make_services(model_resolver=mock_resolver)
         result = await node.run(ctx, state, services)
@@ -121,10 +130,18 @@ class TestExecuteToolsNode:
         node = ExecuteToolsNode()
         with tempfile.TemporaryDirectory() as tmpdir:
             ctx = _make_context(workspace_path=tmpdir)
-            state = ExecutionState(model_tool_calls=[
-                {"id": "call_1", "name": "write_file",
-                 "arguments": {"relative_path": "src/App.vue", "content": "<template>Hello</template>"}},
-            ])
+            state = ExecutionState(
+                model_tool_calls=[
+                    {
+                        "id": "call_1",
+                        "name": "write_file",
+                        "arguments": {
+                            "relative_path": "src/App.vue",
+                            "content": "<template>Hello</template>",
+                        },
+                    },
+                ]
+            )
             services = _make_services()
             result = await node.run(ctx, state, services)
             assert len(result.executed_tool_calls) == 1
@@ -136,7 +153,9 @@ class TestExecuteToolsNode:
         node = ExecuteToolsNode()
         with tempfile.TemporaryDirectory() as tmpdir:
             ctx = _make_context(workspace_path=tmpdir)
-            state = ExecutionState(model_response_text='{"message": "done", "files": [{"path": "a.txt", "content": "hi"}]}')
+            state = ExecutionState(
+                model_response_text='{"message": "done", "files": [{"path": "a.txt", "content": "hi"}]}'
+            )
             services = _make_services()
             result = await node.run(ctx, state, services)
             assert "a.txt" in result.files_touched
@@ -210,8 +229,18 @@ class TestFinalizeNode:
             files_touched=["a.vue"],
             quality_results=[
                 {"id": "entry_exists", "status": "pass", "severity": "error", "message": "OK"},
-                {"id": "placeholder_text", "status": "warn", "severity": "warning", "message": "Found"},
-                {"id": "non_empty_files", "status": "fail", "severity": "error", "message": "Empty"},
+                {
+                    "id": "placeholder_text",
+                    "status": "warn",
+                    "severity": "warning",
+                    "message": "Found",
+                },
+                {
+                    "id": "non_empty_files",
+                    "status": "fail",
+                    "severity": "error",
+                    "message": "Empty",
+                },
             ],
         )
         mock_platform = AsyncMock()
@@ -230,7 +259,12 @@ class TestFinalizeNode:
             files_touched=["a.vue"],
             quality_results=[
                 {"id": "entry_exists", "status": "pass", "severity": "error", "message": "OK"},
-                {"id": "placeholder_text", "status": "warn", "severity": "warning", "message": "Found"},
+                {
+                    "id": "placeholder_text",
+                    "status": "warn",
+                    "severity": "warning",
+                    "message": "Found",
+                },
             ],
         )
         mock_platform = AsyncMock()
@@ -239,3 +273,29 @@ class TestFinalizeNode:
         assert "质量警告" in result.final_summary
         call_args = mock_platform.complete_agent_run.call_args
         assert call_args.kwargs["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_internal_summary_includes_capability_selection(self):
+        node = FinalizeNode()
+        ctx = _make_context()
+        state = ExecutionState(
+            files_touched=["a.vue"],
+            capability_selection=CapabilitySelection(
+                skill_ids=("dashboard", "frontend-design"),
+                seed_id="vue-dashboard",
+                template_ids=("dashboard",),
+                design_system_id="ant",
+                craft_ids=("anti-ai-slop", "state-coverage"),
+                selection_source="selector",
+                project_mode="vue_project",
+            ),
+        )
+        mock_platform = AsyncMock()
+        services = _make_services(platform_client=mock_platform)
+        result = await node.run(ctx, state, services)
+        assert "能力选择: selector" in result.internal_summary
+        assert "Skill: dashboard,frontend-design" in result.internal_summary
+        assert "Seed: vue-dashboard" in result.internal_summary
+        assert "Template: dashboard" in result.internal_summary
+        assert "DesignSystem: ant" in result.internal_summary
+        assert "Craft: anti-ai-slop,state-coverage" in result.internal_summary

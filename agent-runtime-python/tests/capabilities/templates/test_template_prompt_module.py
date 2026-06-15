@@ -35,7 +35,7 @@ class TestTemplateReferenceModule:
 
     def test_enabled_when_template_selected(self) -> None:
         module = TemplateReferenceModule()
-        caps = SelectedCapabilities(template=_make_template())
+        caps = SelectedCapabilities(templates=[_make_template()])
         state = type("State", (), {"selected_capabilities": caps})()
         context = object()
 
@@ -44,7 +44,7 @@ class TestTemplateReferenceModule:
     def test_render_includes_template_name(self, tmp_path: Path) -> None:
         template = _make_template_with_files(tmp_path)
         module = TemplateReferenceModule()
-        caps = SelectedCapabilities(template=template)
+        caps = SelectedCapabilities(templates=[template])
         state = type("State", (), {"selected_capabilities": caps})()
         context = object()
 
@@ -55,7 +55,7 @@ class TestTemplateReferenceModule:
     def test_render_includes_file_content(self, tmp_path: Path) -> None:
         template = _make_template_with_files(tmp_path)
         module = TemplateReferenceModule()
-        caps = SelectedCapabilities(template=template)
+        caps = SelectedCapabilities(templates=[template])
         state = type("State", (), {"selected_capabilities": caps})()
         context = object()
 
@@ -65,7 +65,7 @@ class TestTemplateReferenceModule:
     def test_render_truncates_long_file(self, tmp_path: Path) -> None:
         template = _make_template_with_files(tmp_path, content="x" * 5000)
         module = TemplateReferenceModule(file_max_chars=100)
-        caps = SelectedCapabilities(template=template)
+        caps = SelectedCapabilities(templates=[template])
         state = type("State", (), {"selected_capabilities": caps})()
         context = object()
 
@@ -95,13 +95,90 @@ class TestTemplateReferenceModule:
         )
 
         module = TemplateReferenceModule()
-        caps = SelectedCapabilities(template=template)
+        caps = SelectedCapabilities(templates=[template])
         state = type("State", (), {"selected_capabilities": caps})()
         context = object()
 
         result = module.render(context, state)
         assert "App.vue" in result
         assert "main.ts" not in result
+
+    def test_render_includes_references_and_checklists(self, tmp_path: Path) -> None:
+        template_dir = tmp_path / "web-prototype"
+        template_dir.mkdir()
+        references_dir = template_dir / "references"
+        references_dir.mkdir(parents=True)
+        files_dir = template_dir / "files"
+        files_dir.mkdir(parents=True)
+
+        (references_dir / "layout.md").write_text("# Layout\n\n- Hero section", encoding="utf-8")
+        (references_dir / "checklist.md").write_text(
+            "# Checklist\n\n- No raw hex", encoding="utf-8"
+        )
+        (files_dir / "index.html").write_text("<template>HTML</template>", encoding="utf-8")
+
+        source_path = template_dir / "template.json"
+        template = TemplateDefinition(
+            id="web-prototype",
+            name="Web Prototype",
+            description="Prototype reference",
+            code_gen_type="single_file",
+            triggers=("prototype",),
+            entry="index.html",
+            max_prompt_files=1,
+            files=(Path("files/index.html"),),
+            source_path=source_path,
+            references=(Path("references/layout.md"),),
+            checklists=(Path("references/checklist.md"),),
+            kind="html-reference",
+        )
+
+        module = TemplateReferenceModule()
+        caps = SelectedCapabilities(templates=[template])
+        state = type("State", (), {"selected_capabilities": caps})()
+        context = object()
+
+        result = module.render(context, state)
+        assert "### Template Intent" in result
+        assert "### Layout References" in result
+        assert "### Checklists" in result
+        assert "### Reference Files" in result
+        assert "Hero section" in result
+        assert "No raw hex" in result
+        assert "<template>HTML</template>" in result
+        assert "html-reference" in result
+
+    def test_render_truncates_references_and_checklists(self, tmp_path: Path) -> None:
+        template_dir = tmp_path / "web-prototype"
+        template_dir.mkdir()
+        references_dir = template_dir / "references"
+        references_dir.mkdir(parents=True)
+
+        (references_dir / "layout.md").write_text("x" * 5000, encoding="utf-8")
+        (references_dir / "checklist.md").write_text("y" * 5000, encoding="utf-8")
+
+        source_path = template_dir / "template.json"
+        template = TemplateDefinition(
+            id="web-prototype",
+            name="Web Prototype",
+            description="Prototype reference",
+            code_gen_type="single_file",
+            triggers=("prototype",),
+            entry="index.html",
+            max_prompt_files=0,
+            files=(),
+            source_path=source_path,
+            references=(Path("references/layout.md"),),
+            checklists=(Path("references/checklist.md"),),
+        )
+
+        module = TemplateReferenceModule(reference_max_chars=100, checklist_max_chars=100)
+        caps = SelectedCapabilities(templates=[template])
+        state = type("State", (), {"selected_capabilities": caps})()
+        context = object()
+
+        result = module.render(context, state)
+        assert result.count("[truncated]") == 2
 
     def test_render_returns_empty_when_no_caps(self) -> None:
         module = TemplateReferenceModule()

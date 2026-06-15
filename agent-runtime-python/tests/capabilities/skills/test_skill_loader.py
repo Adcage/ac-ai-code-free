@@ -26,6 +26,12 @@ od:
     sections: [color, typography, layout]
   craft:
     requires: [state-coverage, accessibility-baseline]
+ac:
+  when_to_use: "Use when generating a dashboard."
+  target_code_gen_types: ["single_file", "multi_file", "vue_project"]
+  related_templates: ["dashboard"]
+  recommended_seeds: ["vue-dashboard"]
+  output_contract: "single_html_file"
 ---
 
 # Dashboard Skill
@@ -61,6 +67,23 @@ class TestSkillLoader:
         assert "state-coverage" in skill.craft.requires
         assert "accessibility-baseline" in skill.craft.requires
         assert "Build a dashboard" in skill.body
+
+    def test_load_skill_ac_extension_fields(self, tmp_path: Path):
+        skill_dir = tmp_path / "skills" / "dashboard"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(DASHBOARD_SKILL_MD, encoding="utf-8")
+
+        config = AssetPathConfig(bundled_root=tmp_path)
+        loader = SkillLoader()
+        registry = loader.load(config)
+
+        skill = registry.get("dashboard")
+        assert isinstance(skill, SkillDefinition)
+        assert skill.when_to_use == "Use when generating a dashboard."
+        assert skill.target_code_gen_types == ("single_file", "multi_file", "vue_project")
+        assert skill.related_templates == ("dashboard",)
+        assert skill.recommended_seeds == ("vue-dashboard",)
+        assert skill.output_contract == "single_html_file"
 
     def test_load_skips_invalid_skill(self, tmp_path: Path):
         skill_dir = tmp_path / "skills" / "broken"

@@ -1,12 +1,9 @@
-import json
 from pathlib import Path
 
-import pytest
 
 from app.capabilities.common.asset_index import (
     AssetIndex,
     AssetManager,
-    _LoaderBundle,
     create_default_asset_manager,
 )
 from app.capabilities.common.asset_paths import AssetPathConfig
@@ -43,7 +40,10 @@ def _make_skill_registry(skill_id: str = "test-skill") -> SkillRegistry:
     return registry
 
 
-from app.capabilities.skills.types import SkillCraftRequirement, SkillDesignSystemRequirement, SkillPreview
+from app.capabilities.skills.types import (
+    SkillCraftRequirement,
+    SkillDesignSystemRequirement,
+)
 
 
 def _make_seed_registry(seed_id: str = "test-seed") -> SeedRegistry:

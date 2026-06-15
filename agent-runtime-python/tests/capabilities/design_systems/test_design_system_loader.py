@@ -219,6 +219,41 @@ class TestDesignSystemLoader:
         ds = registry.get("default")
         assert ds.name == "Custom Default"
 
+    def test_supports_open_design_camel_case_manifest_keys(self, tmp_path: Path):
+        ds_dir = tmp_path / "design-systems" / "ant"
+        ds_dir.mkdir(parents=True)
+        (ds_dir / "DESIGN.md").write_text("# Ant Design", encoding="utf-8")
+        (ds_dir / "tokens.css").write_text(":root { --color-primary: #1677ff; }", encoding="utf-8")
+        (ds_dir / "components.manifest.json").write_text('{"components": []}', encoding="utf-8")
+        (ds_dir / "USAGE.md").write_text("# Usage\n- Use primary color.", encoding="utf-8")
+        manifest = {
+            "schemaVersion": "od-design-system-project/v1",
+            "id": "ant",
+            "name": "Ant",
+            "category": "Professional & Corporate",
+            "files": {
+                "design": "DESIGN.md",
+                "tokens": "tokens.css",
+            },
+            "componentsManifest": "components.manifest.json",
+            "usage": "USAGE.md",
+            "importMode": "normalized",
+            "craft": {"suggested": ["color", "accessibility-baseline"]},
+        }
+        (ds_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        config = AssetPathConfig(bundled_root=tmp_path)
+        loader = DesignSystemLoader()
+        registry = loader.load(config)
+
+        ds = registry.get("ant")
+        assert ds is not None
+        assert ds.files.components_manifest is not None
+        assert ds.files.components_manifest.name == "components.manifest.json"
+        assert ds.files.usage is not None
+        assert ds.files.usage.name == "USAGE.md"
+        assert ds.suggested_craft == ("color", "accessibility-baseline")
+
 
 class TestDesignSystemRegistry:
     def test_all_returns_registered_design_systems(self, tmp_path: Path):

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from app.capabilities.craft.prompt_module import CraftRulesModule
 from app.capabilities.craft.registry import CraftRegistry
 from app.capabilities.craft.selector import CraftSelector, DEFAULT_CRAFT_IDS
 from app.capabilities.craft.types import CraftDefinition
@@ -27,7 +26,11 @@ class TestCraftSelector:
     def test_default_crafts_always_selected(self):
         registry = CraftRegistry()
         registry.register(_make_craft("anti-slop", "Anti Slop", priority=10))
-        registry.register(_make_craft("state-coverage", "State Coverage", applies_to=("vue_project",), priority=30))
+        registry.register(
+            _make_craft(
+                "state-coverage", "State Coverage", applies_to=("vue_project",), priority=30
+            )
+        )
 
         selector = CraftSelector()
         result = selector.select("vue_project", registry)
@@ -43,7 +46,9 @@ class TestCraftSelector:
         registry.register(_make_craft("accessibility-baseline", "Accessibility", priority=50))
 
         selector = CraftSelector()
-        result = selector.select("vue_project", registry, required_craft_ids=("accessibility-baseline",))
+        result = selector.select(
+            "vue_project", registry, required_craft_ids=("accessibility-baseline",)
+        )
 
         ids = [c.id for c in result]
         assert "accessibility-baseline" in ids
@@ -93,8 +98,14 @@ class TestCraftSelector:
     def test_applies_to_filter_excludes_non_matching(self):
         registry = CraftRegistry()
         registry.register(_make_craft("anti-slop", "Anti Slop", applies_to=(), priority=10))
-        registry.register(_make_craft("state-coverage", "State Coverage", applies_to=("vue_project",), priority=30))
-        registry.register(_make_craft("single-only", "Single Only", applies_to=("single_file",), priority=20))
+        registry.register(
+            _make_craft(
+                "state-coverage", "State Coverage", applies_to=("vue_project",), priority=30
+            )
+        )
+        registry.register(
+            _make_craft("single-only", "Single Only", applies_to=("single_file",), priority=20)
+        )
 
         selector = CraftSelector()
         result = selector.select("vue_project", registry)
@@ -155,3 +166,26 @@ class TestCraftSelector:
 
     def test_default_craft_ids_constant(self):
         assert DEFAULT_CRAFT_IDS == ("anti-slop", "state-coverage")
+
+
+def test_craft_selector_resolves_anti_slop_alias():
+    registry = CraftRegistry()
+    registry.register(
+        CraftDefinition(
+            id="anti-ai-slop",
+            name="Anti AI Slop",
+            description="",
+            applies_to=(),
+            priority=10,
+            body="rules",
+            source_path=Path("anti-ai-slop.md"),
+        )
+    )
+
+    selected = CraftSelector(aliases={"anti-slop": "anti-ai-slop"}).select(
+        code_gen_type="vue_project",
+        registry=registry,
+        required_craft_ids=("anti-slop",),
+    )
+
+    assert [craft.id for craft in selected] == ["anti-ai-slop"]

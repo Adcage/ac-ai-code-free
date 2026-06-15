@@ -3,7 +3,11 @@ from pathlib import Path
 from app.capabilities.design_systems.registry import DesignSystemRegistry
 from app.capabilities.design_systems.selector import DesignSystemSelector
 from app.capabilities.design_systems.types import DesignSystemDefinition, DesignSystemFiles
-from app.capabilities.skills.types import SkillDefinition, SkillCraftRequirement, SkillDesignSystemRequirement
+from app.capabilities.skills.types import (
+    SkillDefinition,
+    SkillCraftRequirement,
+    SkillDesignSystemRequirement,
+)
 
 
 def _make_ds(

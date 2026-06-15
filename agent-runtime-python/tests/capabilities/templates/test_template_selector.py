@@ -78,9 +78,7 @@ class TestTemplateSelector:
 
         registry = TemplateRegistry()
         registry.register(_make_template(id="a", triggers=("dashboard",)))
-        registry.register(
-            _make_template(id="b", name="B", triggers=("dashboard", "analytics"))
-        )
+        registry.register(_make_template(id="b", name="B", triggers=("dashboard", "analytics")))
         selector = TemplateSelector()
 
         result = selector.select("dashboard analytics", "vue_project", None, registry)
@@ -92,9 +90,7 @@ class TestTemplateSelector:
 
         registry = TemplateRegistry()
         registry.register(_make_template(id="b-template", triggers=("dashboard",)))
-        registry.register(
-            _make_template(id="a-template", name="A", triggers=("dashboard",))
-        )
+        registry.register(_make_template(id="a-template", name="A", triggers=("dashboard",)))
         selector = TemplateSelector()
 
         result = selector.select("dashboard", "vue_project", None, registry)
@@ -119,3 +115,70 @@ class TestTemplateSelector:
 
         result = selector.select("dashboard", "vue_project", None, registry)
         assert result is not None
+
+    def test_recommended_template_ids_prefer_match(self) -> None:
+        from app.capabilities.templates.registry import TemplateRegistry
+
+        registry = TemplateRegistry()
+        registry.register(_make_template(id="dashboard", code_gen_type="single_file"))
+        registry.register(
+            _make_template(
+                id="landing",
+                name="Landing",
+                triggers=("landing",),
+                code_gen_type="single_file",
+            )
+        )
+        selector = TemplateSelector()
+
+        result = selector.select(
+            "landing page",
+            "single_file",
+            None,
+            registry,
+            recommended_template_ids=("dashboard", "landing"),
+        )
+        assert result is not None
+        assert result.id == "dashboard"
+
+    def test_recommended_template_ids_skip_mismatched_code_gen_type(self) -> None:
+        from app.capabilities.templates.registry import TemplateRegistry
+
+        registry = TemplateRegistry()
+        registry.register(_make_template(id="dashboard", code_gen_type="vue_project"))
+        registry.register(
+            _make_template(
+                id="landing",
+                name="Landing",
+                triggers=("landing",),
+                code_gen_type="single_file",
+            )
+        )
+        selector = TemplateSelector()
+
+        result = selector.select(
+            "landing page",
+            "single_file",
+            None,
+            registry,
+            recommended_template_ids=("dashboard", "landing"),
+        )
+        assert result is not None
+        assert result.id == "landing"
+
+    def test_recommended_template_ids_fallback_to_trigger_scoring(self) -> None:
+        from app.capabilities.templates.registry import TemplateRegistry
+
+        registry = TemplateRegistry()
+        registry.register(_make_template(id="dashboard", code_gen_type="single_file"))
+        selector = TemplateSelector()
+
+        result = selector.select(
+            "dashboard",
+            "single_file",
+            None,
+            registry,
+            recommended_template_ids=("missing",),
+        )
+        assert result is not None
+        assert result.id == "dashboard"
