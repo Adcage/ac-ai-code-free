@@ -28,7 +28,16 @@ from app.nodes.structure_check import StructureCheckNode
 from app.nodes.finalize import FinalizeNode
 from app.quality.structure_checker import StructureChecker
 from app.prompts.asset_modules import ArtifactOutputContractModule
-from app.prompts.default_modules import DEFAULT_PROMPT_MODULES
+from app.prompts.default_modules import (
+    AntiRoleplayModule,
+    ChatHistorySummaryModule,
+    OutputContractModule,
+    ProjectRulesModule,
+    RuntimeBoundaryModule,
+    SafetyAndInjectionResistanceModule,
+    TaskContextModule,
+    ToolContractModule,
+)
 from app.registries.node_registry import NodeRegistry
 from app.registries.prompt_module_registry import PromptModuleRegistry
 from app.registries.tool_registry import ToolRegistry
@@ -85,14 +94,20 @@ class RuntimeOrchestrator:
 
     def _build_prompt_module_registry(self) -> PromptModuleRegistry:
         registry = PromptModuleRegistry()
-        for module_cls in DEFAULT_PROMPT_MODULES:
-            registry.register(module_cls())
+        registry.register(RuntimeBoundaryModule())
+        registry.register(SafetyAndInjectionResistanceModule())
+        registry.register(ProjectRulesModule())
+        registry.register(TaskContextModule())
+        registry.register(ChatHistorySummaryModule())
         registry.register(SelectedSkillModule())
         registry.register(DesignSystemModule())
         registry.register(SeedModule())
         registry.register(TemplateReferenceModule())
         registry.register(CraftRulesModule())
+        registry.register(ToolContractModule())
         registry.register(ArtifactOutputContractModule())
+        registry.register(OutputContractModule())
+        registry.register(AntiRoleplayModule())
         return registry
 
     def _build_services(self, event_bus: EventBus) -> RuntimeServices:

@@ -40,7 +40,9 @@ class FinalizeNode(RuntimeNode):
             pass_count = sum(1 for r in state.quality_results if r.get("status") == "pass")
             warn_count = sum(1 for r in state.quality_results if r.get("status") == "warn")
             fail_count = sum(1 for r in state.quality_results if r.get("status") == "fail")
-            summary_parts.append(f"质量检查: {pass_count} pass, {warn_count} warn, {fail_count} fail")
+            summary_parts.append(
+                f"质量检查: {pass_count} pass, {warn_count} warn, {fail_count} fail"
+            )
             if has_warnings and not has_error_fail:
                 summary_parts.append("存在质量警告")
 
@@ -52,14 +54,28 @@ class FinalizeNode(RuntimeNode):
         internal_parts = []
         if state.artifact_manifest_path:
             internal_parts.append(f"Manifest: {state.artifact_manifest_path}")
-        if state.selected_skill_id:
+        if state.capability_selection is not None:
+            selection = state.capability_selection
+            internal_parts.append(f"能力选择: {selection.selection_source}")
+            if selection.skill_ids:
+                internal_parts.append(f"Skill: {','.join(selection.skill_ids)}")
+            if selection.seed_id:
+                internal_parts.append(f"Seed: {selection.seed_id}")
+            if selection.template_ids:
+                internal_parts.append(f"Template: {','.join(selection.template_ids)}")
+            if selection.design_system_id:
+                internal_parts.append(f"DesignSystem: {selection.design_system_id}")
+            if selection.craft_ids:
+                internal_parts.append(f"Craft: {','.join(selection.craft_ids)}")
+        elif state.selected_skill_id:
             internal_parts.append(f"Skill: {state.selected_skill_id}")
-        if state.selected_design_system_id:
-            internal_parts.append(f"Design System: {state.selected_design_system_id}")
+            if state.selected_design_system_id:
+                internal_parts.append(f"Design System: {state.selected_design_system_id}")
         state.internal_summary = "，".join(internal_parts) if internal_parts else ""
 
         failed_checks = [
-            r for r in state.quality_results
+            r
+            for r in state.quality_results
             if r.get("status") == "fail" and r.get("severity") == "error"
         ]
         error_message_parts = list(state.errors)
@@ -84,7 +100,9 @@ class FinalizeNode(RuntimeNode):
                 logger.error("complete_agent_run failed: %s", e, exc_info=True)
                 state.errors.append(f"上报运行结果失败: {e}")
 
-        done_message = state.final_summary if success else f"运行失败: {'; '.join(error_message_parts)}"
+        done_message = (
+            state.final_summary if success else f"运行失败: {'; '.join(error_message_parts)}"
+        )
         await services.event_bus.emit(
             RuntimeEvent(RuntimeEventType.DONE, {"message": done_message})
         )

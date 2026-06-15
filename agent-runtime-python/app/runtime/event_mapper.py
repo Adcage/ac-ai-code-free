@@ -10,13 +10,14 @@ logger = logging.getLogger("app.runtime.event_mapper")
 
 
 def _sanitize_path_in_message(message: str) -> str:
-    sanitized = re.sub(r'[A-Za-z]:\\[^\s;,\]]+', '[路径已隐藏]', message)
-    sanitized = re.sub(r'/home/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/var/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/tmp/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/opt/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/usr/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+    sanitized = re.sub(r"[A-Za-z]:\\[^\s;,\]]+", "[路径已隐藏]", message)
+    sanitized = re.sub(r"/home/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/var/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/tmp/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/opt/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/usr/[^\s;,\]]+", "[路径已隐藏]", sanitized)
     return sanitized
+
 
 _CODE_GEN_TYPE_MAP = {
     1: common_pb2.SINGLE_FILE,
@@ -34,13 +35,21 @@ _EVENT_TYPE_MAP: dict[RuntimeEventType, int] = {
 
 
 class ProtoEventMapper:
-    def map_event(self, sequenced_event: SequencedRuntimeEvent) -> code_generation_pb2.CodeGenerationEvent | None:
+    def map_event(
+        self, sequenced_event: SequencedRuntimeEvent
+    ) -> code_generation_pb2.CodeGenerationEvent | None:
         event = sequenced_event.event
         event_type_proto = _EVENT_TYPE_MAP.get(event.event_type)
 
         if event_type_proto is None:
-            if event.event_type in (RuntimeEventType.STATUS, RuntimeEventType.NODE_STARTED,
-                                     RuntimeEventType.NODE_COMPLETED, RuntimeEventType.MODEL_SELECTED):
+            internal_types = {
+                RuntimeEventType.STATUS,
+                RuntimeEventType.NODE_STARTED,
+                RuntimeEventType.NODE_COMPLETED,
+                RuntimeEventType.CAPABILITY_SELECTED,
+                RuntimeEventType.MODEL_SELECTED,
+            }
+            if event.event_type in internal_types:
                 return None
             logger.warning("unmapped runtime event type: %s", event.event_type)
             return None
@@ -81,4 +90,3 @@ class ProtoEventMapper:
             )
 
         return code_generation_pb2.CodeGenerationEvent(**kwargs)
-

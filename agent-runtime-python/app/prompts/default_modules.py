@@ -79,7 +79,10 @@ class ProjectRulesModule(PromptModule):
             "multi-file": self._MULTI_FILE_RULES,
             "vue_project": self._VUE_PROJECT_RULES,
         }
-        return rules_map.get(type_value, f"项目类型：{type_value}\n生成代码时请遵循该类型项目的最佳实践和目录结构规范。")
+        return rules_map.get(
+            type_value,
+            f"项目类型：{type_value}\n生成代码时请遵循该类型项目的最佳实践和目录结构规范。",
+        )
 
 
 class TaskContextModule(PromptModule):

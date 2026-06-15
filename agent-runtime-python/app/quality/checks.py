@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 
 from app.artifacts.types import ArtifactManifest
 from app.quality.result import CheckResult
@@ -195,4 +196,60 @@ def check_artifact_tags_removed(workspace_root: str, manifest: ArtifactManifest)
         status="warn",
         severity="warning",
         message=f"Unreplaced <artifact> tags in: {', '.join(found)}",
+    )
+
+
+AI_DEFAULT_INDIGO = (
+    "#6366f1",
+    "#4f46e5",
+    "#4338ca",
+    "#3730a3",
+    "#8b5cf6",
+    "#7c3aed",
+    "#a855f7",
+)
+
+
+def check_ai_default_indigo(workspace_root: Path, file_paths: list[str]) -> CheckResult:
+    for file_path in file_paths:
+        path = workspace_root / file_path
+        if not path.is_file():
+            continue
+        content = path.read_text(encoding="utf-8", errors="ignore").lower()
+        for color in AI_DEFAULT_INDIGO:
+            if color in content:
+                return CheckResult(
+                    id="ai_default_indigo",
+                    status="fail",
+                    severity="warning",
+                    message=f"Common AI default accent color found: {color}",
+                    file_path=file_path,
+                )
+    return CheckResult(
+        id="ai_default_indigo",
+        status="pass",
+        severity="warning",
+        message="No common AI default indigo colors found",
+    )
+
+
+def check_vue_state_coverage(workspace_root: Path, file_paths: list[str]) -> CheckResult:
+    keywords = ("loading", "加载", "empty", "暂无", "error", "错误", "失败", "retry", "重试")
+    combined = ""
+    for file_path in file_paths:
+        path = workspace_root / file_path
+        if path.is_file() and path.suffix in {".vue", ".ts", ".js"}:
+            combined += path.read_text(encoding="utf-8", errors="ignore").lower()
+    if all(keyword.lower() not in combined for keyword in keywords):
+        return CheckResult(
+            id="vue_state_coverage",
+            status="warn",
+            severity="warning",
+            message="No loading, empty, error, or retry state was detected in generated Vue files",
+        )
+    return CheckResult(
+        id="vue_state_coverage",
+        status="pass",
+        severity="warning",
+        message="Vue state coverage keywords detected",
     )

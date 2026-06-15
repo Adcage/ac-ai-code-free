@@ -13,7 +13,11 @@ logger = logging.getLogger("app.nodes.collect_artifacts")
 
 
 class CollectArtifactsNode(RuntimeNode):
-    metadata = NodeMetadata(id="collect_artifacts", name="收集产物", description="收集生成的文件并生成 Artifact Manifest")
+    metadata = NodeMetadata(
+        id="collect_artifacts",
+        name="收集产物",
+        description="收集生成的文件并生成 Artifact Manifest",
+    )
 
     async def run(
         self,
@@ -27,10 +31,14 @@ class CollectArtifactsNode(RuntimeNode):
         skill_preview_entry = ""
         seed_entry = ""
         source_skill_id = state.selected_skill_id
+        source_skill_ids: list[str] = []
         source_seed_id = state.selected_seed_id
         source_template_id = state.selected_template_id
+        source_template_ids: list[str] = []
         design_system_id = state.selected_design_system_id
         craft_ids = list(state.selected_craft_ids)
+        selection_source = state.selection_source
+        project_mode = code_gen_type
 
         if state.selected_capabilities is not None:
             cap: SelectedCapabilities = state.selected_capabilities
@@ -38,6 +46,13 @@ class CollectArtifactsNode(RuntimeNode):
                 skill_preview_entry = cap.skill.preview.entry
             if cap.seed is not None:
                 seed_entry = cap.seed.entry
+
+        if state.capability_selection is not None:
+            selection = state.capability_selection
+            source_skill_ids = list(selection.skill_ids)
+            source_template_ids = list(selection.template_ids)
+            project_mode = selection.project_mode or code_gen_type
+            selection_source = selection_source or selection.selection_source
 
         collector = ArtifactCollector()
         manifest = collector.build_manifest(
@@ -47,10 +62,14 @@ class CollectArtifactsNode(RuntimeNode):
             skill_preview_entry=skill_preview_entry,
             seed_entry=seed_entry,
             source_skill_id=source_skill_id,
+            source_skill_ids=source_skill_ids,
             source_seed_id=source_seed_id,
             source_template_id=source_template_id,
+            source_template_ids=source_template_ids,
             design_system_id=design_system_id,
             craft_ids=craft_ids,
+            selection_source=selection_source,
+            project_mode=project_mode,
             metadata={
                 "agentRunId": context.agent_run_id,
                 "appId": context.app_id,

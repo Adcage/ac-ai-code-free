@@ -10,6 +10,7 @@ class RuntimeEventType(str, Enum):
     TOOL_RESULT = "tool_result"
     NODE_STARTED = "node_started"
     NODE_COMPLETED = "node_completed"
+    CAPABILITY_SELECTED = "capability_selected"
     MODEL_SELECTED = "model_selected"
     RUNTIME_ERROR = "runtime_error"
     DONE = "done"

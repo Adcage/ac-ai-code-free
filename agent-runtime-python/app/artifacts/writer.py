@@ -10,10 +10,14 @@ _CAMEL_MAP: dict[str, str] = {
     "code_gen_type": "codeGenType",
     "supporting_files": "supportingFiles",
     "source_skill_id": "sourceSkillId",
+    "source_skill_ids": "sourceSkillIds",
     "source_seed_id": "sourceSeedId",
     "source_template_id": "sourceTemplateId",
+    "source_template_ids": "sourceTemplateIds",
     "design_system_id": "designSystemId",
     "craft_ids": "craftIds",
+    "selection_source": "selectionSource",
+    "project_mode": "projectMode",
 }
 
 _CAMEL_MAP_CHECK: dict[str, str] = {}
@@ -68,12 +72,14 @@ class ArtifactWriter:
 def _dict_to_manifest(data: dict) -> ArtifactManifest:
     checks = []
     for c in data.get("checks", []):
-        checks.append(ArtifactCheckResult(
-            id=c.get("id", ""),
-            status=c.get("status", ""),
-            message=c.get("message", ""),
-            severity=c.get("severity", ""),
-        ))
+        checks.append(
+            ArtifactCheckResult(
+                id=c.get("id", ""),
+                status=c.get("status", ""),
+                message=c.get("message", ""),
+                severity=c.get("severity", ""),
+            )
+        )
     return ArtifactManifest(
         version=data.get("version", 1),
         kind=data.get("kind", ""),
@@ -83,10 +89,14 @@ def _dict_to_manifest(data: dict) -> ArtifactManifest:
         supporting_files=data.get("supportingFiles", data.get("supporting_files", [])),
         status=data.get("status", "complete"),
         source_skill_id=data.get("sourceSkillId", data.get("source_skill_id", "")),
+        source_skill_ids=data.get("sourceSkillIds", data.get("source_skill_ids", [])),
         source_seed_id=data.get("sourceSeedId", data.get("source_seed_id", "")),
         source_template_id=data.get("sourceTemplateId", data.get("source_template_id", "")),
+        source_template_ids=data.get("sourceTemplateIds", data.get("source_template_ids", [])),
         design_system_id=data.get("designSystemId", data.get("design_system_id", "")),
         craft_ids=data.get("craftIds", data.get("craft_ids", [])),
+        selection_source=data.get("selectionSource", data.get("selection_source", "")),
+        project_mode=data.get("projectMode", data.get("project_mode", "")),
         checks=checks,
         metadata=data.get("metadata", {}),
     )
