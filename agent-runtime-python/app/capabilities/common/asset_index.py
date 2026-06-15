@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.capabilities.common.asset_manifest import AssetManifest, load_asset_manifest
 from app.capabilities.common.asset_paths import AssetPathConfig
 from app.capabilities.craft.loader import CraftLoader
 from app.capabilities.craft.registry import CraftRegistry
@@ -24,6 +25,7 @@ class AssetIndex:
     template_registry: TemplateRegistry
     design_system_registry: DesignSystemRegistry
     craft_registry: CraftRegistry
+    manifest: AssetManifest = field(default_factory=AssetManifest)
 
 
 @dataclass
@@ -47,12 +49,14 @@ class AssetManager:
         return self._index
 
     def refresh(self) -> AssetIndex:
+        manifest = load_asset_manifest(self._path_config.bundled_root)
         index = AssetIndex(
             skill_registry=self._loaders.skill.load(self._path_config),
             seed_registry=self._loaders.seed.load(self._path_config),
             template_registry=self._loaders.template.load(self._path_config),
             design_system_registry=self._loaders.design_system.load(self._path_config),
             craft_registry=self._loaders.craft.load(self._path_config),
+            manifest=manifest,
         )
         self._index = index
         return index

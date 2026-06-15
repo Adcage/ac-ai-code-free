@@ -46,6 +46,9 @@ class ExecutionState:
     selected_design_system_id: str = ""
     selected_craft_ids: list[str] = field(default_factory=list)
     selected_capabilities: Any | None = None
+    capability_selection: Any | None = None
+    asset_summaries: list[dict[str, Any]] = field(default_factory=list)
+    selection_source: str = ""
     quality_results: list[dict[str, Any]] = field(default_factory=list)
     artifact_manifest_path: str = ""
     asset_counts: dict[str, int] = field(default_factory=dict)
