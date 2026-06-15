@@ -27,6 +27,7 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tsconfig/node22": "^22.0.2",
     "@types/node": "^22.16.5",
     "@umijs/openapi": "^1.14.1",
