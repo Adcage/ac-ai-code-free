@@ -101,29 +101,6 @@
                         </div>
                       </div>
                     </details>
-                    <div v-if="msg.workflowSteps?.length" class="workflow-steps message-workflow-steps">
-                      <div class="workflow-steps-title">工作流进度</div>
-                      <div class="workflow-steps-list">
-                        <div
-                          v-for="step in msg.workflowSteps"
-                          :key="step.step"
-                          :class="['workflow-step-item', step.status]"
-                        >
-                          <div class="workflow-step-icon">
-                            <check-circle-outlined v-if="step.status === 'completed'" />
-                            <loading-outlined v-else-if="step.status === 'running'" />
-                            <close-circle-outlined v-else-if="step.status === 'error'" />
-                            <clock-circle-outlined v-else />
-                          </div>
-                          <div class="workflow-step-content">
-                            <div class="workflow-step-name">{{ step.message }}</div>
-                            <div v-if="step.status === 'error'" class="workflow-step-error">
-                              {{ step.errorMessage || step.message }}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </template>
                 </template>
                 <div v-else class="message-text" v-html="renderMarkdown(msg.content)"></div>
@@ -293,19 +270,12 @@ const loginUserStore = useLoginUserStore()
 const appId = String(route.params.id ?? '')
 
 const app = ref<API.AppVO>()
-type WorkflowStep = {
-  step: string
-  status: 'pending' | 'running' | 'completed' | 'error'
-  message?: string
-  errorMessage?: string
-}
 
 type ChatMessage = {
   role: 'user' | 'ai'
   content: string
   status?: string
   toolEvents?: ToolEvent[]
-  workflowSteps?: WorkflowStep[]
 }
 
 const messages = ref<ChatMessage[]>([])
@@ -314,7 +284,6 @@ const currentSessionId = ref<string>()
 const inputText = ref('')
 const generating = ref(false)
 const enhancingInput = ref(false)
-const workflowSteps = ref<WorkflowStep[]>([])
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
 const sessionLoading = ref(false)
@@ -505,17 +474,9 @@ const startSSE = (userMsg: string, sessionId: string) => {
   iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  workflowSteps.value = [
-    { step: 'image_collect', status: 'pending', message: '收集素材' },
-    { step: 'prompt_enhancer', status: 'pending', message: '增强 prompt' },
-    { step: 'router', status: 'pending', message: '判断类型' },
-    { step: 'code_generator', status: 'pending', message: '生成代码' },
-    { step: 'code_quality_check', status: 'pending', message: '质量检查' },
-    { step: 'project_builder', status: 'pending', message: '构建' },
-  ]
   let streamCompleted = false
   const aiMsgIndex = messages.value.length
-  messages.value.push({ role: 'ai', content: '', status: 'running', workflowSteps: workflowSteps.value })
+  messages.value.push({ role: 'ai', content: '', status: 'running' })
   const isStructuredToolMode =
     app.value?.codeGenType === 'vue_project' ||
     app.value?.codeGenType === 'multi-file' ||
@@ -691,43 +652,7 @@ const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
   const eventType = eventData.event
   const data = eventData.data || {}
 
-  if (eventType === 'workflow_start') {
-    workflowSteps.value.forEach((step, index) => {
-      step.status = index === 0 ? 'running' : 'pending'
-    })
-    return
-  }
-
-  if (eventType === 'step_started') {
-    const stepName = data.step
-    workflowSteps.value.forEach((step) => {
-      if (step.step === stepName) {
-        step.status = 'running'
-      } else if (step.status === 'running') {
-        step.status = 'pending'
-      }
-    })
-    return
-  }
-
-  if (eventType === 'step_completed') {
-    const stepName = data.step
-    const stepIndex = workflowSteps.value.findIndex((s) => s.step === stepName)
-    if (stepIndex >= 0) {
-      workflowSteps.value[stepIndex].status = 'completed'
-      if (stepIndex + 1 < workflowSteps.value.length) {
-        workflowSteps.value[stepIndex + 1].status = 'running'
-      }
-    }
-    return
-  }
-
   if (eventType === 'workflow_completed') {
-    workflowSteps.value.forEach((step) => {
-      if (step.status !== 'completed') {
-        step.status = 'completed'
-      }
-    })
     if (data.codeGenType && app.value) {
       app.value.codeGenType = data.codeGenType
     }
@@ -735,17 +660,6 @@ const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
       const codeGenTypeText = data.codeGenType ? formatCodeGenType(data.codeGenType) : '代码'
       messages.value[aiMsgIndex].content = `代码生成完成：已生成 ${codeGenTypeText} 产物`
     }
-    return
-  }
-
-  if (eventType === 'workflow_error') {
-    workflowSteps.value.forEach((step) => {
-      if (step.status === 'running') {
-        step.status = 'error'
-        step.errorMessage = data.message || '执行失败'
-      }
-    })
-    return
   }
 }
 
@@ -883,22 +797,34 @@ const updatePreview = async () => {
   previewStatus.value = 'checking'
   const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix)
   const resourceAvailable = await checkPreviewResource(nextUrl)
-  if (!resourceAvailable) {
-    iframeUrl.value = ''
-    previewStatus.value = 'failed'
-    const latestFailureReason = extractLatestFailureReason()
-    previewWarning.value = latestFailureReason
-      ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
-      : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。'
+  if (resourceAvailable) {
+    previewStatus.value = 'ready'
+    iframeUrl.value = nextUrl
     return
   }
-  previewStatus.value = 'ready'
-  iframeUrl.value = nextUrl
+  if (codeGenType === 'multi-file') {
+    const plainUrl = `${deployUrlPrefix}/multi-file/${appId}/index.html?t=${Date.now()}`
+    const plainAvailable = await checkPreviewResource(plainUrl)
+    if (plainAvailable) {
+      previewStatus.value = 'ready'
+      iframeUrl.value = plainUrl
+      return
+    }
+  }
+  iframeUrl.value = ''
+  previewStatus.value = 'failed'
+  const latestFailureReason = extractLatestFailureReason()
+  previewWarning.value = latestFailureReason
+    ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
+    : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。'
 }
 
 const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string) => {
   if (codeGenType === 'vue_project') {
     return `${deployUrlPrefix}/vue_project/${appId}/dist/index.html?t=${Date.now()}`
+  }
+  if (codeGenType === 'multi-file') {
+    return `${deployUrlPrefix}/multi-file/${appId}/dist/index.html?t=${Date.now()}`
   }
   return `${deployUrlPrefix}/${codeGenType}/${appId}/index.html?t=${Date.now()}`
 }
@@ -1737,71 +1663,6 @@ onUnmounted(() => {
   color: var(--color-text-muted);
   margin-top: -12px;
   margin-left: 44px;
-}
-
-.workflow-steps {
-  margin-top: 12px;
-  margin-left: 44px;
-  padding: 12px;
-  background: var(--color-surface-elevated);
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-}
-
-.workflow-steps-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  margin-bottom: 8px;
-}
-
-.workflow-steps-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.workflow-step-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.workflow-step-item.running {
-  color: var(--color-info);
-}
-
-.workflow-step-item.completed {
-  color: var(--color-success);
-}
-
-.workflow-step-item.error {
-  color: var(--color-error);
-}
-
-.workflow-step-icon {
-  font-size: 14px;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.workflow-step-content {
-  flex: 1;
-}
-
-.workflow-step-name {
-  font-weight: 500;
-}
-
-.workflow-step-error {
-  font-size: 11px;
-  color: var(--color-error);
-  margin-top: 2px;
 }
 
 .stream-warning {

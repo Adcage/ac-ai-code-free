@@ -342,6 +342,25 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             log.error("Vue 项目构建失败, appId={}, sessionId={}, codeGenType={}, userId={}, message={}",
                                     appId, sessionId, codeGenTypeStr, loginUser.getId(), message, e);
                         }
+                    } else if (actualCodeGenTypeEnum == CodeGenTypeEnum.MULTI_FILE) {
+                        Path multiFileProjectDir = AppConstant.getMultiFileOutputDir(appId);
+                        if (Files.exists(multiFileProjectDir.resolve("package.json"))) {
+                            try {
+                                log.info("多文件模式检测到 package.json，触发构建, appId={}, sessionId={}", appId, sessionId);
+                                vueProjectBuildService.buildProject(multiFileProjectDir);
+                                aiMessage = aiMessage + "\n构建完成：已生成 dist 产物";
+                                log.info("多文件模式构建完成, appId={}, sessionId={}, latencyMs={}", appId, sessionId, latencyMs);
+                            } catch (Exception e) {
+                                status = "failed";
+                                aiMessage = aiMessage + "\n构建失败：" + e.getMessage();
+                                extra = JSONUtil.toJsonStr(Map.of(
+                                        "buildError", e.getMessage(),
+                                        "buildErrorType", e.getClass().getSimpleName()
+                                ));
+                                log.error("多文件模式构建失败, appId={}, sessionId={}, userId={}, message={}",
+                                        appId, sessionId, loginUser.getId(), message, e);
+                            }
+                        }
                     }
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
                     updateSessionSummary(sessionId);

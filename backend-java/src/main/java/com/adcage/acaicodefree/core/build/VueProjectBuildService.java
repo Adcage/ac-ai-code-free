@@ -32,8 +32,15 @@ public class VueProjectBuildService {
 
     public BuildResult buildVueProject(Long appId) {
         Path projectDir = outputRootPath.resolve(AppConstant.VUE_PROJECT_OUTPUT_PREFIX).resolve(String.valueOf(appId));
+        return buildProject(projectDir);
+    }
+
+    public BuildResult buildProject(Path projectDir) {
         if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Vue 工程目录不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "项目目录不存在：" + projectDir);
+        }
+        if (!Files.exists(projectDir.resolve("package.json"))) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "package.json 不存在，无法构建");
         }
         String npmCommand = resolveNpmCommand(System.getProperty("os.name"));
         CommandResult installResult = executeCommand(List.of(npmCommand, "install"), projectDir, installTimeoutSeconds);
