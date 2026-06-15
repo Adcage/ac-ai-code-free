@@ -68,4 +68,6 @@ class PromptEnhancerService:
             raise
         except Exception as e:
             logger.error("enhance prompt failed: %s", e)
-            raise AgentRuntimeError(f"提示词优化失败: {e}", code=AgentErrorCode.PROMPT_ENHANCE_FAILED) from e
+            raise AgentRuntimeError(
+                f"提示词优化失败: {e}", code=AgentErrorCode.PROMPT_ENHANCE_FAILED
+            ) from e

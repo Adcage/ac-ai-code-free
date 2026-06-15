@@ -19,7 +19,9 @@ class ChatModelFactory:
             raise AgentRuntimeError("模型名称不能为空", code=AgentErrorCode.MODEL_NAME_MISSING)
 
         if provider not in SUPPORTED_PROVIDERS:
-            raise AgentRuntimeError(f"不支持的模型提供商: {provider}", code=AgentErrorCode.PROVIDER_NOT_SUPPORTED)
+            raise AgentRuntimeError(
+                f"不支持的模型提供商: {provider}", code=AgentErrorCode.PROVIDER_NOT_SUPPORTED
+            )
 
         if not api_key:
             raise AgentRuntimeError("模型 API Key 不能为空", code=AgentErrorCode.API_KEY_MISSING)

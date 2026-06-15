@@ -9,7 +9,9 @@ logger = logging.getLogger("app.nodes.prepare_context")
 
 
 class PrepareContextNode(RuntimeNode):
-    metadata = NodeMetadata(id="prepare_context", name="准备上下文", description="校验运行上下文完整性")
+    metadata = NodeMetadata(
+        id="prepare_context", name="准备上下文", description="校验运行上下文完整性"
+    )
 
     def can_run(self, context: ExecutionContext, state: ExecutionState) -> bool:
         return True
@@ -23,6 +25,7 @@ class PrepareContextNode(RuntimeNode):
         if not context.prompt or not context.prompt.strip():
             from app.core.error_codes import AgentErrorCode
             from app.core.exceptions import AgentRuntimeError
+
             raise AgentRuntimeError("提示词不能为空", code=AgentErrorCode.PROMPT_EMPTY)
 
         if context.app_id <= 0:
@@ -35,6 +38,10 @@ class PrepareContextNode(RuntimeNode):
             logger.warning("modify mode without original_content")
 
         state.task_type = context.run_mode.value
-        logger.info("prepare_context done | app=%s session=%s runMode=%s",
-                     context.app_id, context.session_id, context.run_mode.value)
+        logger.info(
+            "prepare_context done | app=%s session=%s runMode=%s",
+            context.app_id,
+            context.session_id,
+            context.run_mode.value,
+        )
         return state

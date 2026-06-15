@@ -8,9 +8,14 @@ from app.runtime.context import CodeGenType, ExecutionContext, RunMode
 
 def _make_context(**overrides) -> ExecutionContext:
     defaults = dict(
-        agent_run_id=1, app_id=1, session_id=1, user_id=1,
-        prompt="test", code_gen_type=CodeGenType.VUE_PROJECT,
-        workspace_path="/tmp", run_mode=RunMode.GENERATE,
+        agent_run_id=1,
+        app_id=1,
+        session_id=1,
+        user_id=1,
+        prompt="test",
+        code_gen_type=CodeGenType.VUE_PROJECT,
+        workspace_path="/tmp",
+        run_mode=RunMode.GENERATE,
     )
     defaults.update(overrides)
     return ExecutionContext(**defaults)
@@ -33,14 +38,26 @@ class TestModelResolver:
         mock_client = AsyncMock()
         bundle = {
             ModelRole.LIGHT: ResolvedModelConfig(
-                role=ModelRole.LIGHT, provider="openai", model_name="gpt-4o-mini",
-                base_url="https://api.openai.com/v1", api_key="key1",
-                model_config_id=1, config_version=1, source="USER", billing_mode="USER_OWNED",
+                role=ModelRole.LIGHT,
+                provider="openai",
+                model_name="gpt-4o-mini",
+                base_url="https://api.openai.com/v1",
+                api_key="key1",
+                model_config_id=1,
+                config_version=1,
+                source="USER",
+                billing_mode="USER_OWNED",
             ),
             ModelRole.PRIMARY: ResolvedModelConfig(
-                role=ModelRole.PRIMARY, provider="openai", model_name="gpt-4o",
-                base_url="https://api.openai.com/v1", api_key="key1",
-                model_config_id=1, config_version=1, source="USER", billing_mode="USER_OWNED",
+                role=ModelRole.PRIMARY,
+                provider="openai",
+                model_name="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="key1",
+                model_config_id=1,
+                config_version=1,
+                source="USER",
+                billing_mode="USER_OWNED",
             ),
         }
         mock_client.resolve_runtime_model_bundle.return_value = bundle
@@ -58,8 +75,11 @@ class TestModelResolver:
         mock_client = AsyncMock()
         bundle = {
             ModelRole.PRIMARY: ResolvedModelConfig(
-                role=ModelRole.PRIMARY, provider="openai", model_name="gpt-4o",
-                base_url="https://api.openai.com/v1", api_key="key1",
+                role=ModelRole.PRIMARY,
+                provider="openai",
+                model_name="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="key1",
             ),
         }
         mock_client.resolve_runtime_model_bundle.return_value = bundle

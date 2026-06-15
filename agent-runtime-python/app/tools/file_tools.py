@@ -40,12 +40,16 @@ class FileTools:
     async def read_file(self, relative_path: str) -> str:
         abs_path = self._workspace.resolve(relative_path)
         if not os.path.exists(abs_path):
-            raise AgentRuntimeError(f"文件不存在: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED)
+            raise AgentRuntimeError(
+                f"文件不存在: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED
+            )
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
-            raise AgentRuntimeError(f"读取文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED) from e
+            raise AgentRuntimeError(
+                f"读取文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED
+            ) from e
 
     async def write_file(self, relative_path: str, content: str) -> str:
         abs_path = self._workspace.resolve(relative_path)
@@ -56,12 +60,16 @@ class FileTools:
             logger.info("write_file | path=%s size=%d", relative_path, len(content))
             return f"写入成功: {relative_path}"
         except Exception as e:
-            raise AgentRuntimeError(f"写入文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED) from e
+            raise AgentRuntimeError(
+                f"写入文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED
+            ) from e
 
     async def modify_file(self, relative_path: str, old_content: str, new_content: str) -> str:
         abs_path = self._workspace.resolve(relative_path)
         if not os.path.exists(abs_path):
-            raise AgentRuntimeError(f"文件不存在: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED)
+            raise AgentRuntimeError(
+                f"文件不存在: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED
+            )
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
                 file_content = f.read()
@@ -78,18 +86,24 @@ class FileTools:
         except AgentRuntimeError:
             raise
         except Exception as e:
-            raise AgentRuntimeError(f"修改文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED) from e
+            raise AgentRuntimeError(
+                f"修改文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED
+            ) from e
 
     async def delete_file(self, relative_path: str) -> str:
         abs_path = self._workspace.resolve(relative_path)
         if not os.path.exists(abs_path):
-            raise AgentRuntimeError(f"文件不存在: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED)
+            raise AgentRuntimeError(
+                f"文件不存在: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED
+            )
         try:
             os.remove(abs_path)
             logger.info("delete_file | path=%s", relative_path)
             return f"删除成功: {relative_path}"
         except Exception as e:
-            raise AgentRuntimeError(f"删除文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED) from e
+            raise AgentRuntimeError(
+                f"删除文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED
+            ) from e
 
     async def read_dir(self, relative_path: str = ".") -> str:
         abs_path = self._workspace.resolve(relative_path)
@@ -98,10 +112,14 @@ class FileTools:
             logger.info("read_dir | path=%s created", relative_path)
             return ""
         if not os.path.isdir(abs_path):
-            raise AgentRuntimeError(f"路径不是目录: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED)
+            raise AgentRuntimeError(
+                f"路径不是目录: {relative_path}", code=AgentErrorCode.TOOL_CALL_FAILED
+            )
         try:
             entries = os.listdir(abs_path)
             logger.info("read_dir | path=%s entries=%d", relative_path, len(entries))
             return "\n".join(entries)
         except Exception as e:
-            raise AgentRuntimeError(f"读取目录失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED) from e
+            raise AgentRuntimeError(
+                f"读取目录失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED
+            ) from e

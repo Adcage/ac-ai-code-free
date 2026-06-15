@@ -14,7 +14,9 @@ logger = logging.getLogger("app.nodes.structure_check")
 
 
 class StructureCheckNode(RuntimeNode):
-    metadata = NodeMetadata(id="structure_check", name="结构检查", description="对生成的产物执行确定性结构检查")
+    metadata = NodeMetadata(
+        id="structure_check", name="结构检查", description="对生成的产物执行确定性结构检查"
+    )
 
     async def run(
         self,

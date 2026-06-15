@@ -13,7 +13,11 @@ logger = logging.getLogger("app.nodes.load_assets")
 
 
 class LoadAssetsNode(RuntimeNode):
-    metadata = NodeMetadata(id="load_assets", name="加载资产", description="从文件系统加载技能、种子、模板、设计系统和工艺规则资产")
+    metadata = NodeMetadata(
+        id="load_assets",
+        name="加载资产",
+        description="从文件系统加载技能、种子、模板、设计系统和工艺规则资产",
+    )
 
     async def run(
         self,

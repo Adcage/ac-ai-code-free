@@ -39,16 +39,25 @@ class ResolveModelNode(RuntimeNode):
             state.resolved_model = context.runtime_options.get("model_config")
 
         await services.event_bus.emit(
-            RuntimeEvent(RuntimeEventType.MODEL_SELECTED, {
-                "role": role.value,
-                "model": state.resolved_model.get("modelName", "") if state.resolved_model else "",
-                "source": state.resolved_model.get("source", "") if state.resolved_model else "",
-            })
+            RuntimeEvent(
+                RuntimeEventType.MODEL_SELECTED,
+                {
+                    "role": role.value,
+                    "model": state.resolved_model.get("modelName", "")
+                    if state.resolved_model
+                    else "",
+                    "source": state.resolved_model.get("source", "")
+                    if state.resolved_model
+                    else "",
+                },
+            )
         )
 
-        logger.info("resolve_model | role=%s model=%s source=%s apiKeyLen=%d",
-                     role.value,
-                     state.resolved_model.get("modelName", "") if state.resolved_model else "none",
-                     state.resolved_model.get("source", "") if state.resolved_model else "",
-                     len(state.resolved_model.get("apiKey", "")) if state.resolved_model else 0)
+        logger.info(
+            "resolve_model | role=%s model=%s source=%s apiKeyLen=%d",
+            role.value,
+            state.resolved_model.get("modelName", "") if state.resolved_model else "none",
+            state.resolved_model.get("source", "") if state.resolved_model else "",
+            len(state.resolved_model.get("apiKey", "")) if state.resolved_model else 0,
+        )
         return state

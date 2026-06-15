@@ -7,20 +7,24 @@ from app.registries.prompt_module_registry import PromptModuleRegistry
 
 class _HelloModule(PromptModule):
     id = "hello"
+
     def render(self, context, state):
         return "Hello section"
 
 
 class _WorldModule(PromptModule):
     id = "world"
+
     def render(self, context, state):
         return "World section"
 
 
 class _DisabledModule(PromptModule):
     id = "disabled"
+
     def enabled(self, context, state):
         return False
+
     def render(self, context, state):
         return "Should not appear"
 

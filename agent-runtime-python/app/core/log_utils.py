@@ -25,7 +25,11 @@ def log_model_call(
 ) -> None:
     logger.info(
         "model_call | provider=%s model=%s duration_ms=%.0f inputTokens=%d outputTokens=%d",
-        provider, model, duration_ms, input_tokens, output_tokens,
+        provider,
+        model,
+        duration_ms,
+        input_tokens,
+        output_tokens,
     )
 
 
@@ -39,5 +43,9 @@ def log_tool_call(
 ) -> None:
     logger.info(
         "tool_call | name=%s status=%s duration_ms=%.0f argsLength=%d resultLength=%d",
-        tool_name, status, duration_ms, args_length, result_length,
+        tool_name,
+        status,
+        duration_ms,
+        args_length,
+        result_length,
     )

@@ -35,7 +35,9 @@ class ModelResolver:
             self._bundle = bundle
             logger.info("model bundle loaded | roles=%s", list(self._bundle.keys()))
         except Exception as e:
-            logger.warning("resolve_runtime_model_bundle failed, falling back to get_model_config: %s", e)
+            logger.warning(
+                "resolve_runtime_model_bundle failed, falling back to get_model_config: %s", e
+            )
             await self._load_fallback(context)
 
     async def _load_fallback(self, context) -> None:

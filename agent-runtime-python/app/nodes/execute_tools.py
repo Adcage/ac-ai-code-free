@@ -352,10 +352,11 @@ def _to_frontend_args(tool_name: str, args: dict) -> dict:
 
 def _sanitize_error_message(message: str) -> str:
     import re
-    sanitized = re.sub(r'[A-Za-z]:\\[^\s;,\]]+', '[路径已隐藏]', message)
-    sanitized = re.sub(r'/home/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/var/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/tmp/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/opt/[^\s;,\]]+', '[路径已隐藏]', sanitized)
-    sanitized = re.sub(r'/usr/[^\s;,\]]+', '[路径已隐藏]', sanitized)
+
+    sanitized = re.sub(r"[A-Za-z]:\\[^\s;,\]]+", "[路径已隐藏]", message)
+    sanitized = re.sub(r"/home/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/var/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/tmp/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/opt/[^\s;,\]]+", "[路径已隐藏]", sanitized)
+    sanitized = re.sub(r"/usr/[^\s;,\]]+", "[路径已隐藏]", sanitized)
     return sanitized

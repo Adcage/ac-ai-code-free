@@ -1,8 +1,5 @@
-import asyncio
-import pytest
 
 import grpc
-from grpc import aio
 
 from app.grpc_server.interceptors import _wrap_handler, _RpcMethodHandler
 

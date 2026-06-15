@@ -19,18 +19,42 @@ class TestRuntimeOrchestrator:
         mock_request.model_config_id = 0
         mock_request.config_version = 0
 
-        with patch.object(orchestrator._platform_client, "get_app_detail", new_callable=AsyncMock) as mock_app, \
-             patch.object(orchestrator._platform_client, "get_chat_history", new_callable=AsyncMock, return_value=[]), \
-             patch.object(orchestrator._platform_client, "resolve_runtime_model_bundle", new_callable=AsyncMock) as mock_bundle, \
-             patch.object(orchestrator._chat_model_factory, "create", new_callable=AsyncMock) as mock_create:
-
-            mock_app.return_value = {"id": 1, "name": "test", "description": "", "codeGenType": 3, "userId": 1}
+        with (
+            patch.object(
+                orchestrator._platform_client, "get_app_detail", new_callable=AsyncMock
+            ) as mock_app,
+            patch.object(
+                orchestrator._platform_client,
+                "get_chat_history",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                orchestrator._platform_client,
+                "resolve_runtime_model_bundle",
+                new_callable=AsyncMock,
+            ) as mock_bundle,
+            patch.object(
+                orchestrator._chat_model_factory, "create", new_callable=AsyncMock
+            ) as mock_create,
+        ):
+            mock_app.return_value = {
+                "id": 1,
+                "name": "test",
+                "description": "",
+                "codeGenType": 3,
+                "userId": 1,
+            }
             from app.modeling.resolver import ResolvedModelConfig
             from app.modeling.roles import ModelRole
+
             mock_bundle.return_value = {
                 ModelRole.PRIMARY: ResolvedModelConfig(
-                    role=ModelRole.PRIMARY, provider="openai", model_name="gpt-4o-mini",
-                    base_url="https://api.openai.com/v1", api_key="test-key",
+                    role=ModelRole.PRIMARY,
+                    provider="openai",
+                    model_name="gpt-4o-mini",
+                    base_url="https://api.openai.com/v1",
+                    api_key="test-key",
                 ),
             }
             mock_llm = AsyncMock()

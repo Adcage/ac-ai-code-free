@@ -48,7 +48,9 @@ async def lifespan(app: FastAPI):
     grpc_server = await create_grpc_server()
     await grpc_server.start()
     logger.info("gRPC server started on port %s", settings.grpc_server_port)
-    logger.info("application started | runtime=%s env=%s", settings.agent_runtime_name, settings.app_env)
+    logger.info(
+        "application started | runtime=%s env=%s", settings.agent_runtime_name, settings.app_env
+    )
 
     yield
 
@@ -76,7 +78,11 @@ def create_app() -> FastAPI:
     async def health(request: Request) -> dict:
         grpc_status = await _check_grpc_channel()
         return success(
-            data={"status": "ok", "runtime": settings.agent_runtime_name, "grpc_channel": grpc_status},
+            data={
+                "status": "ok",
+                "runtime": settings.agent_runtime_name,
+                "grpc_channel": grpc_status,
+            },
             request=request,
         )
 
@@ -100,12 +106,18 @@ def create_app() -> FastAPI:
             return success(data={"status": "ready", "checks": checks}, request=request)
         return JSONResponse(
             status_code=503,
-            content={"code": 5030, "message": "Not Ready", "data": {"status": "not_ready", "checks": checks}},
+            content={
+                "code": 5030,
+                "message": "Not Ready",
+                "data": {"status": "not_ready", "checks": checks},
+            },
         )
 
     @app.get("/metrics", tags=["monitoring"])
     async def metrics():
-        return PlainTextResponse(generate_latest(), media_type="text/plain; version=0.0.4; charset=utf-8")
+        return PlainTextResponse(
+            generate_latest(), media_type="text/plain; version=0.0.4; charset=utf-8"
+        )
 
     return app
 

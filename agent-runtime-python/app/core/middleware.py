@@ -12,7 +12,9 @@ logger = get_logger("app.middleware")
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self: "RequestContextMiddleware", request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self: "RequestContextMiddleware", request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         incoming_trace_id = request.headers.get("X-Trace-ID") or str(uuid.uuid4())
         start = time.perf_counter()
 

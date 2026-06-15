@@ -14,9 +14,14 @@ from app.core.error_codes import AgentErrorCode
 
 def _make_context() -> ExecutionContext:
     return ExecutionContext(
-        agent_run_id=1, app_id=1, session_id=1, user_id=1,
-        prompt="test", code_gen_type=CodeGenType.VUE_PROJECT,
-        workspace_path="/tmp", run_mode=RunMode.GENERATE,
+        agent_run_id=1,
+        app_id=1,
+        session_id=1,
+        user_id=1,
+        prompt="test",
+        code_gen_type=CodeGenType.VUE_PROJECT,
+        workspace_path="/tmp",
+        run_mode=RunMode.GENERATE,
     )
 
 
