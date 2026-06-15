@@ -84,7 +84,7 @@ loginUserStore.fetchLoginUser()
 const menuItems = [
   { key: '/', icon: Home, label: '主页' },
   { key: '/app/my', icon: FolderOpen, label: '我的作品' },
-  { key: '/model/config', icon: Settings, label: '模型配置' },
+  // { key: '/model/config', icon: Settings, label: '模型配置' },
   { key: '/admin/userManage', icon: Users, label: '用户管理' },
   { key: '/admin/appManage', icon: LayoutGrid, label: '应用管理' },
 ]

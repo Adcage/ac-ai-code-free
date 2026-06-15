@@ -59,6 +59,8 @@ class AssetManager:
 
 
 def create_default_asset_manager() -> AssetManager:
-    bundled_root = Path(__file__).parent.parent.parent / "assets"
+    bundled_root = Path(__file__).parent.parent.parent.parent / "assets"
+    if not bundled_root.is_dir():
+        logger.warning("Bundled assets directory not found: %s", bundled_root)
     path_config = AssetPathConfig(bundled_root=bundled_root)
     return AssetManager(path_config=path_config)
