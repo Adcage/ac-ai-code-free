@@ -1,36 +1,8 @@
 ---
 name: web-prototype
-description: |
-  General-purpose desktop web prototype. Use when generating a single-page
-  landing, marketing page, homepage, docs index, or any general-purpose web
-  page that doesn't match a more specific skill. Produces real HTML/CSS/JS
-  project files through file tools instead of artifact tags.
-triggers:
-  - "prototype"
-  - "mockup"
-  - "landing"
-  - "single page"
-  - "marketing page"
-  - "homepage"
-  - "官网"
-  - "首页"
-  - "营销页"
-od:
-  mode: prototype
-  platform: desktop
-  scenario: design
-  preview:
-    type: html
-    entry: index.html
-  design_system:
-    requires: true
-    sections: [color, typography, layout, components]
-ac:
-  when_to_use: "Use when generating a single-page web prototype, landing page, marketing page, homepage, docs index, or any general-purpose web page in HTML."
-  target_code_gen_types: ["single_file", "multi_file"]
-  related_templates: ["web-prototype"]
-  recommended_seeds: []
-  output_contract: "single_html_file"
+description: General-purpose desktop web prototype for single-page landing, marketing
+  page, homepage, docs index, or any general-purpose web page that doesn't
+  match a more specific skill.
 ---
 
 # Web Prototype Skill

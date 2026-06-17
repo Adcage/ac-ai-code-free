@@ -1,10 +1,9 @@
 {
   "schemaVersion": "ac-assets/v1",
-  "source": "open-design-adapted",
   "enabled": {
-    "skills": ["frontend-design", "web-prototype", "dashboard", "landing-page"],
+    "skills": ["dashboard", "landing-page", "web-prototype", "frontend-design"],
     "seeds": ["vue-basic"],
-    "templates": ["web-prototype", "dashboard", "landing"],
+    "templates": ["dashboard", "landing", "web-prototype"],
     "designSystems": ["default", "ant", "enterprise", "clean", "dashboard"],
     "craft": [
       "anti-ai-slop",
@@ -15,36 +14,19 @@
       "laws-of-ux"
     ]
   },
-  "aliases": {
-    "craft": {
-      "anti-slop": "anti-ai-slop"
-    },
-    "designSystems": {
-      "antd": "ant",
-      "ant-design": "ant"
-    }
-  },
   "defaults": {
     "single_file": {
-      "skill": "web-prototype",
       "designSystem": "default",
-      "craft": ["anti-ai-slop", "state-coverage", "accessibility-baseline"]
+      "craft": ["anti-ai-slop", "state-coverage"]
     },
     "multi_file": {
-      "skill": "web-prototype",
       "designSystem": "default",
-      "craft": ["anti-ai-slop", "state-coverage", "accessibility-baseline"]
+      "craft": ["anti-ai-slop", "state-coverage"]
     },
     "vue_project": {
       "seed": "vue-basic",
       "designSystem": "default",
       "craft": ["anti-ai-slop", "state-coverage", "accessibility-baseline"]
-    },
-    "dashboard": {
-      "skill": "dashboard",
-      "template": "dashboard",
-      "designSystem": "ant",
-      "craft": ["anti-ai-slop", "state-coverage", "accessibility-baseline", "laws-of-ux"]
     }
   }
 }

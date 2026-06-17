@@ -4,35 +4,8 @@ description: |
   Create distinctive, production-grade frontend interfaces with strong visual
   direction, polished typography, considered layout, and working HTML/CSS/JS or
   framework code. Use for websites, landing pages, dashboards, application
-  screens, UI beautification, or any frontend-heavy task that needs design craft
-  rather than a templated layout.
-triggers:
-  - "frontend design"
-  - "ui design"
-  - "ux design"
-  - "web design"
-  - "production ui"
-  - "landing page"
-  - "dashboard design"
-  - "react component design"
-  - "vue component design"
-license: Complete terms in LICENSE.txt
-od:
-  mode: prototype
-  category: web-artifacts
-  craft:
-    requires: [typography, color, anti-ai-slop]
-  design_system:
-    requires: true
-    sections: [color, typography, layout, components]
-  example_prompt: "Design and build a production-quality SaaS analytics dashboard for a finance team, with real interaction states, refined typography, and a distinctive visual direction."
-  upstream: "https://github.com/anthropics/skills/tree/main/skills/frontend-design"
-ac:
-  when_to_use: "Use when the task calls for design craft, visual refinement, or a bespoke frontend interface across HTML, CSS/JS, or Vue projects."
-  target_code_gen_types: ["single_file", "multi_file", "vue_project"]
-  related_templates: []
-  recommended_seeds: []
-  output_contract: "project_files"
+  screens, or any frontend-heavy task that needs design craft rather than a
+  templated layout.
 ---
 
 # frontend-design

@@ -2,36 +2,7 @@
 name: dashboard
 description: |
   Admin / analytics dashboard for monitoring operational data. Use when the brief
-  asks for a "dashboard", "admin", "analytics", "control panel", or "后台/看板" screen.
-  Produces real project files through file tools for single_file, multi_file, or
-  Vue project output modes.
-triggers:
-  - "dashboard"
-  - "admin panel"
-  - "analytics"
-  - "control panel"
-  - "后台"
-  - "管理后台"
-  - "看板"
-  - "数据看板"
-od:
-  mode: prototype
-  platform: desktop
-  scenario: operations
-  preview:
-    type: html
-    entry: index.html
-  design_system:
-    requires: true
-    sections: [color, typography, layout, components]
-  craft:
-    requires: [state-coverage, accessibility-baseline, laws-of-ux]
-ac:
-  when_to_use: "Use when generating an admin panel, analytics dashboard, operations screen, or data monitoring interface."
-  target_code_gen_types: ["single_file", "multi_file", "vue_project"]
-  related_templates: ["dashboard"]
-  recommended_seeds: ["vue-dashboard"]
-  output_contract: "single_html_file"
+  asks for a dashboard, admin panel, analytics, or data monitoring interface.
 ---
 
 # Dashboard Skill

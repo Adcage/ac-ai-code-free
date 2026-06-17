@@ -2,65 +2,8 @@
 name: landing-page
 description: |
   Single-page SaaS / product landing page with hero, features, social proof,
-  pricing, and CTA. Use when the brief asks for a "landing page", "marketing page",
-  "product landing", "官网", "首页", or "营销页". Produces real HTML/CSS/JS
-  project files through file tools instead of artifact tags.
-triggers:
-  - "saas landing"
-  - "landing page"
-  - "marketing page"
-  - "product landing"
-  - "官网"
-  - "首页"
-  - "营销页"
-  - "产品页"
-od:
-  mode: prototype
-  platform: desktop
-  scenario: marketing
-  preview:
-    type: html
-    entry: index.html
-    reload: debounce-100
-  design_system:
-    requires: true
-    sections: [color, typography, layout, components]
-  craft:
-    requires: [typography, color, anti-ai-slop, laws-of-ux]
-  inputs:
-    - name: product_name
-      type: string
-      required: true
-    - name: tagline
-      type: string
-      required: true
-    - name: has_pricing
-      type: boolean
-      default: true
-    - name: proof_count
-      type: integer
-      default: 3
-      min: 0
-      max: 6
-  parameters:
-    - name: hero_density
-      type: spacing
-      default: 96
-      range: [48, 200]
-    - name: accent_strength
-      type: opacity
-      default: 1.0
-      range: [0.5, 1.0]
-  outputs:
-    primary: index.html
-  capabilities_required:
-    - file_write
-ac:
-  when_to_use: "Use when generating a single-page SaaS landing, product marketing page, homepage, or promotional web page."
-  target_code_gen_types: ["single_file", "multi_file"]
-  related_templates: ["landing"]
-  recommended_seeds: []
-  output_contract: "single_html_file"
+  pricing, and CTA. Use when the brief asks for a landing page, marketing page,
+  product landing, or promotional web page.
 ---
 
 # Landing Page Skill
