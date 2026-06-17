@@ -35,6 +35,16 @@ public class VueProjectBuildService {
         return buildProject(projectDir);
     }
 
+    public BuildResult buildVueProject(Long appId, String workspacePath) {
+        if (workspacePath != null && !workspacePath.isBlank()) {
+            Path wsDir = Path.of(workspacePath).toAbsolutePath().normalize();
+            if (Files.exists(wsDir) && Files.exists(wsDir.resolve("package.json"))) {
+                return buildProject(wsDir);
+            }
+        }
+        return buildVueProject(appId);
+    }
+
     public BuildResult buildProject(Path projectDir) {
         if (!Files.exists(projectDir) || !Files.isDirectory(projectDir)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "项目目录不存在：" + projectDir);

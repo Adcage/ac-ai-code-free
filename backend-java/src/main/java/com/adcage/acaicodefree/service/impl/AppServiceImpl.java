@@ -15,6 +15,7 @@ import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
+import com.adcage.acaicodefree.core.build.VueProjectBuildService.BuildResult;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
@@ -328,8 +329,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     }
                     if (actualCodeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
                         try {
-                            log.info("Vue 项目构建开始, appId={}, sessionId={}", appId, sessionId);
-                            vueProjectBuildService.buildVueProject(appId);
+                            log.info("Vue 项目构建开始, appId={}, sessionId={}, workspacePath={}", appId, sessionId, workspacePath);
+                            vueProjectBuildService.buildVueProject(appId, workspacePath);
                             aiMessage = aiMessage + "\n构建完成：已生成 dist 产物";
                             log.info("Vue 项目构建完成, appId={}, sessionId={}, latencyMs={}", appId, sessionId, latencyMs);
                         } catch (Exception e) {
@@ -344,9 +345,15 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                         }
                     } else if (actualCodeGenTypeEnum == CodeGenTypeEnum.MULTI_FILE) {
                         Path multiFileProjectDir = AppConstant.getMultiFileOutputDir(appId);
+                        if (workspacePath != null && !workspacePath.isBlank()) {
+                            Path wsDir = Path.of(workspacePath).toAbsolutePath().normalize();
+                            if (Files.exists(wsDir) && Files.exists(wsDir.resolve("package.json"))) {
+                                multiFileProjectDir = wsDir;
+                            }
+                        }
                         if (Files.exists(multiFileProjectDir.resolve("package.json"))) {
                             try {
-                                log.info("多文件模式检测到 package.json，触发构建, appId={}, sessionId={}", appId, sessionId);
+                                log.info("多文件模式检测到 package.json，触发构建, appId={}, sessionId={}, projectDir={}", appId, sessionId, multiFileProjectDir);
                                 vueProjectBuildService.buildProject(multiFileProjectDir);
                                 aiMessage = aiMessage + "\n构建完成：已生成 dist 产物";
                                 log.info("多文件模式构建完成, appId={}, sessionId={}, latencyMs={}", appId, sessionId, latencyMs);
@@ -530,16 +537,25 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String codeGenType = app.getCodeGenType();
         File sourceDir;
         if (CodeGenTypeEnum.VUE_PROJECT.getValue().equals(codeGenType)) {
-            Path vueProjectPath = AppConstant.getVueProjectOutputDir(appId);
+            Path workspaceDir = Path.of(workspaceProperties.getAgentWorkspaceDir()).toAbsolutePath().normalize();
+            Path vueProjectPath = workspaceDir.resolve(AppConstant.VUE_PROJECT_OUTPUT_PREFIX).resolve(String.valueOf(appId));
             Path distPath = vueProjectPath.resolve(AppConstant.DIST_DIR_NAME);
             if (!Files.exists(distPath) || !Files.isDirectory(distPath)) {
-                distPath = vueProjectBuildService.buildVueProject(appId).distPath();
+                distPath = AppConstant.getVueProjectOutputDir(appId).resolve(AppConstant.DIST_DIR_NAME);
+            }
+            if (!Files.exists(distPath) || !Files.isDirectory(distPath)) {
+                BuildResult buildResult = vueProjectBuildService.buildVueProject(appId, null);
+                distPath = buildResult.distPath();
             }
             sourceDir = distPath.toFile();
         } else {
-            String sourceDirName = codeGenType + "_" + appId;
-            String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
-            sourceDir = new File(sourceDirPath);
+            Path workspaceDir = Path.of(workspaceProperties.getAgentWorkspaceDir()).toAbsolutePath().normalize();
+            Path sourcePath = workspaceDir.resolve(getCodeGenOutputPrefix(CodeGenTypeEnum.getEnumByValue(codeGenType))).resolve(String.valueOf(appId));
+            if (!Files.exists(sourcePath)) {
+                String sourceDirName = codeGenType + "_" + appId;
+                sourcePath = Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR).resolve(sourceDirName);
+            }
+            sourceDir = sourcePath.toFile();
         }
         // 6. 检查源目录是否存在
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
