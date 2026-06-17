@@ -160,3 +160,7 @@ grpc:
     python-agent:
       address: 'dns:///localhost:9091'
       negotiationType: plaintext
+
+agent:
+  grpc:
+    stream-deadline-seconds: 600
