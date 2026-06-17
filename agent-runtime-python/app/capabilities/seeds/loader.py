@@ -42,12 +42,6 @@ def _parse_seed_json(seed_json_path: Path) -> SeedDefinition | None:
         logger.warning("seed.json missing 'codeGenType' field: %s", seed_json_path)
         return None
 
-    raw_triggers = data.get("triggers")
-    if not isinstance(raw_triggers, list):
-        triggers: tuple[str, ...] = ()
-    else:
-        triggers = tuple(str(t) for t in raw_triggers)
-
     entry = data.get("entry")
     if not isinstance(entry, str):
         entry = ""
@@ -68,7 +62,6 @@ def _parse_seed_json(seed_json_path: Path) -> SeedDefinition | None:
         name=name,
         description=description,
         code_gen_type=code_gen_type,
-        triggers=triggers,
         entry=entry,
         files_dir=files_dir,
         copy_mode=copy_mode,

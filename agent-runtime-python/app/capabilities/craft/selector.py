@@ -5,16 +5,10 @@ from app.capabilities.craft.types import CraftDefinition
 
 logger = logging.getLogger("app.capabilities.craft.selector")
 
-DEFAULT_CRAFT_IDS: tuple[str, ...] = ("anti-slop", "state-coverage")
+DEFAULT_CRAFT_IDS: tuple[str, ...] = ("anti-ai-slop", "state-coverage")
 
 
 class CraftSelector:
-    def __init__(self, aliases: dict[str, str] | None = None) -> None:
-        self._aliases = aliases or {}
-
-    def _resolve_id(self, craft_id: str) -> str:
-        return self._aliases.get(craft_id, craft_id)
-
     def select(
         self,
         code_gen_type: str,
@@ -22,28 +16,21 @@ class CraftSelector:
         required_craft_ids: tuple[str, ...] = (),
         suggested_craft_ids: tuple[str, ...] = (),
         default_craft_ids: tuple[str, ...] | None = None,
-        aliases: dict[str, str] | None = None,
     ) -> tuple[CraftDefinition, ...]:
-        if aliases is not None:
-            self._aliases = aliases
-
         candidate_ids: list[str] = []
 
         for craft_id in required_craft_ids:
-            resolved = self._resolve_id(craft_id)
-            if resolved not in candidate_ids:
-                candidate_ids.append(resolved)
+            if craft_id not in candidate_ids:
+                candidate_ids.append(craft_id)
 
         for craft_id in suggested_craft_ids:
-            resolved = self._resolve_id(craft_id)
-            if resolved not in candidate_ids:
-                candidate_ids.append(resolved)
+            if craft_id not in candidate_ids:
+                candidate_ids.append(craft_id)
 
         defaults = default_craft_ids if default_craft_ids is not None else DEFAULT_CRAFT_IDS
         for craft_id in defaults:
-            resolved = self._resolve_id(craft_id)
-            if resolved not in candidate_ids:
-                candidate_ids.append(resolved)
+            if craft_id not in candidate_ids:
+                candidate_ids.append(craft_id)
 
         resolved: list[CraftDefinition] = []
         for craft_id in candidate_ids:

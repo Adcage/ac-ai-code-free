@@ -2,7 +2,6 @@ import logging
 
 from app.capabilities.design_systems.registry import DesignSystemRegistry
 from app.capabilities.design_systems.types import DesignSystemDefinition
-from app.capabilities.skills.types import SkillDefinition
 
 logger = logging.getLogger("app.capabilities.design_systems.selector")
 
@@ -13,8 +12,6 @@ DESIGN_SYSTEM_ID_HINTS: dict[str, str] = {
     "enterprise": "enterprise",
     "clean": "clean",
     "dashboard": "dashboard",
-    "material": "material",
-    "tailwind": "tailwind",
 }
 
 
@@ -23,14 +20,13 @@ class DesignSystemSelector:
         self,
         prompt: str,
         code_gen_type: str,
-        skill: SkillDefinition | None,
         registry: DesignSystemRegistry,
+        default_design_system_id: str = "",
     ) -> DesignSystemDefinition | None:
         all_ds = registry.all()
         if len(all_ds) == 0:
             return None
 
-        # Priority 1: prompt explicitly specifies a supported design system
         hinted_id = self._extract_hinted_id(prompt)
         if hinted_id is not None:
             try:
@@ -40,25 +36,14 @@ class DesignSystemSelector:
             except KeyError:
                 logger.warning("Prompt hinted design system not found: %s", hinted_id)
 
-        # Priority 2: skill scenario=operations and ant exists -> ant
-        if skill is not None and getattr(skill, "scenario", "").lower() == "operations":
+        if default_design_system_id:
             try:
-                ds = registry.get("ant")
-                logger.info("Design system selected by skill scenario=operations: ant")
+                ds = registry.get(default_design_system_id)
+                logger.info("Design system selected by default: %s", default_design_system_id)
                 return ds
             except KeyError:
-                pass
+                logger.warning("Default design system not found: %s", default_design_system_id)
 
-        # Priority 3: code_gen_type=vue_project and default exists -> default
-        if code_gen_type == "vue_project":
-            try:
-                ds = registry.get("default")
-                logger.info("Design system selected: default")
-                return ds
-            except KeyError:
-                pass
-
-        # Priority 4: fallback to first id alphabetically
         fallback = min(all_ds, key=lambda d: d.id)
         logger.info("Design system selected by fallback (smallest id): %s", fallback.id)
         return fallback

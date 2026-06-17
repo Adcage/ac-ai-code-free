@@ -8,7 +8,6 @@ class TemplateDefinition:
     name: str
     description: str
     code_gen_type: str
-    triggers: tuple[str, ...]
     entry: str
     max_prompt_files: int
     files: tuple[Path, ...]

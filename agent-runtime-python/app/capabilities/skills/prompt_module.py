@@ -16,31 +16,6 @@ class SelectedSkillModule(PromptModule):
             return False
         return getattr(caps, "skill", None) is not None
 
-    def _adapt_body(self, body: str) -> str:
-        replacements = {
-            "Emit between <artifact> tags": "Use file tools to write real project files",
-            "single, self-contained HTML": "project files",
-            "one self-contained HTML document": "real project files using write_file",
-            "<artifact>": "workspace files",
-            "</artifact>": "",
-        }
-        adapted = body
-        for source, target in replacements.items():
-            adapted = adapted.replace(source, target)
-        return adapted
-
-    def _render_output_contract(self, skill: SkillDefinition) -> str:
-        contract_lines: list[str] = [
-            "### Project Output Contract",
-            "- Use file tools (write_file) to write real project files under the workspace.",
-            "- Do not wrap output in artifact tags.",
-            "- Generate complete, production-quality code with real business content.",
-            "- Include loading, empty, error, and normal states for data-dependent views.",
-        ]
-        if skill.output_contract:
-            contract_lines.append(f"- Expected output contract: {skill.output_contract}")
-        return "\n".join(contract_lines)
-
     def render(self, context: Any, state: Any) -> str:
         caps = getattr(state, "selected_capabilities", None)
         if caps is None:
@@ -54,14 +29,14 @@ class SelectedSkillModule(PromptModule):
         sections.append("")
         sections.append("Use this workflow for the current generation.")
         sections.append("")
-        sections.append(self._adapt_body(skill.body.strip()))
-        sections.append("")
-        sections.append(self._render_output_contract(skill))
+        sections.append(skill.body.strip())
 
-        if skill.preview is not None:
+        if skill.references:
             sections.append("")
-            sections.append("Preview target:")
-            sections.append(f"- type: {skill.preview.type}")
-            sections.append(f"- entry: {skill.preview.entry}")
+            sections.append("## Skill 可用资源")
+            sections.append("")
+            sections.append('使用 read_file(path, scope="skill") 按需读取以下文件：')
+            for ref in skill.references:
+                sections.append(f"  - {ref}")
 
         return "\n".join(sections)

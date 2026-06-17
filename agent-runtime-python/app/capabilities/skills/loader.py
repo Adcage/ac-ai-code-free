@@ -4,14 +4,18 @@ from pathlib import Path
 from app.capabilities.common.asset_paths import AssetPathConfig
 from app.capabilities.common.frontmatter import parse_frontmatter
 from app.capabilities.skills.registry import SkillRegistry
-from app.capabilities.skills.types import (
-    SkillCraftRequirement,
-    SkillDefinition,
-    SkillDesignSystemRequirement,
-    SkillPreview,
-)
+from app.capabilities.skills.types import SkillDefinition
 
 logger = logging.getLogger("app.capabilities.skills.loader")
+
+
+def _scan_references(skill_dir: Path) -> tuple[str, ...]:
+    refs: list[str] = []
+    for f in sorted(skill_dir.rglob("*")):
+        if f.is_file() and f.name != "SKILL.md":
+            ref_path = str(f.relative_to(skill_dir)).replace("\\", "/")
+            refs.append(ref_path)
+    return tuple(refs)
 
 
 def _map_frontmatter_to_skill(
@@ -29,78 +33,19 @@ def _map_frontmatter_to_skill(
     if not isinstance(description, str):
         description = ""
 
-    raw_triggers = doc_metadata.get("triggers")
-    if not isinstance(raw_triggers, list):
-        logger.warning("Skill asset missing or invalid 'triggers' field: %s", source_path)
-        return None
-    triggers = tuple(str(t) for t in raw_triggers)
-
-    od = doc_metadata.get("od")
-    if not isinstance(od, dict):
-        od = {}
-
-    mode = str(od.get("mode", ""))
-    platform = str(od.get("platform", ""))
-    scenario = str(od.get("scenario", ""))
-
-    preview = None
-    raw_preview = od.get("preview")
-    if isinstance(raw_preview, dict) and "type" in raw_preview and "entry" in raw_preview:
-        preview = SkillPreview(type=str(raw_preview["type"]), entry=str(raw_preview["entry"]))
-
-    design_system = SkillDesignSystemRequirement()
-    raw_ds = od.get("design_system")
-    if isinstance(raw_ds, dict):
-        ds_requires = bool(raw_ds.get("requires", False))
-        ds_sections = raw_ds.get("sections")
-        ds_sections_tuple = (
-            tuple(str(s) for s in ds_sections) if isinstance(ds_sections, list) else ()
-        )
-        design_system = SkillDesignSystemRequirement(
-            requires=ds_requires, sections=ds_sections_tuple
-        )
-
-    craft = SkillCraftRequirement()
-    raw_craft = od.get("craft")
-    if isinstance(raw_craft, dict):
-        craft_requires = raw_craft.get("requires")
-        craft_tuple = (
-            tuple(str(c) for c in craft_requires) if isinstance(craft_requires, list) else ()
-        )
-        craft = SkillCraftRequirement(requires=craft_tuple)
-
-    ac = doc_metadata.get("ac")
-    if not isinstance(ac, dict):
-        ac = {}
-
-    when_to_use = str(ac.get("when_to_use", ""))
-    target_code_gen_types = tuple(str(v) for v in ac.get("target_code_gen_types", []) if v)
-    related_templates = tuple(str(v) for v in ac.get("related_templates", []) if v)
-    recommended_seeds = tuple(str(v) for v in ac.get("recommended_seeds", []) if v)
-    output_contract = str(ac.get("output_contract", ""))
-
-    known_keys = {"name", "description", "triggers", "od", "ac"}
+    known_keys = {"name", "description"}
     metadata = {k: v for k, v in doc_metadata.items() if k not in known_keys}
+
+    references = _scan_references(source_path.parent)
 
     return SkillDefinition(
         id=skill_id,
         name=name,
         description=description,
-        triggers=triggers,
-        mode=mode,
-        platform=platform,
-        scenario=scenario,
-        preview=preview,
-        design_system=design_system,
-        craft=craft,
         body=body,
         source_path=source_path,
         metadata=metadata,
-        when_to_use=when_to_use,
-        target_code_gen_types=target_code_gen_types,
-        related_templates=related_templates,
-        recommended_seeds=recommended_seeds,
-        output_contract=output_contract,
+        references=references,
     )
 
 

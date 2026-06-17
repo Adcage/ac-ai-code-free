@@ -8,7 +8,6 @@ class SeedDefinition:
     name: str
     description: str
     code_gen_type: str
-    triggers: tuple[str, ...]
     entry: str
     files_dir: Path
     copy_mode: str

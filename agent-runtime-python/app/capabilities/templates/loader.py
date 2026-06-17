@@ -25,9 +25,6 @@ def _parse_template_json(
     if not isinstance(code_gen_type, str):
         code_gen_type = ""
 
-    raw_triggers = data.get("triggers")
-    triggers = tuple(str(t) for t in raw_triggers) if isinstance(raw_triggers, list) else ()
-
     entry = data.get("entry")
     if not isinstance(entry, str):
         entry = ""
@@ -58,7 +55,6 @@ def _parse_template_json(
         name=name,
         description=description,
         code_gen_type=code_gen_type,
-        triggers=triggers,
         entry=entry,
         max_prompt_files=max_prompt_files,
         files=files,
