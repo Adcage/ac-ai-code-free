@@ -1,0 +1,289 @@
+import logging
+import time
+from typing import Any
+
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
+from pydantic_core import PydanticUndefined
+from langchain_core.tools import BaseTool
+
+from app.agent_loop.state import AgentLoopState
+from app.agent_loop.tools.switch_mode import SwitchModeTool
+from app.agent_loop.tools.ask_user import AskUserTool
+from app.agent_loop.tools.finish_tool import FinishTool
+from app.agent_loop.tools.select_skill import SelectSkillTool
+from app.agent_loop.tools.write_plan import WritePlanTool
+from app.core.config import settings
+from app.core.error_codes import AgentErrorCode
+from app.core.exceptions import AgentRuntimeError
+from app.core.log_utils import log_model_call, log_response, log_tool_call
+from app.runtime.context import ExecutionContext
+from app.runtime.events import RuntimeEvent, RuntimeEventType
+from app.runtime.services import RuntimeServices
+from app.tools.file_tools import Workspace, FileTools
+from app.tools.terminal_tools import TerminalTools
+
+logger = logging.getLogger("app.agent_loop.nodes.step_base")
+
+
+def _get_skill_dir(state: AgentLoopState) -> str | None:
+    try:
+        caps = getattr(state, "selected_capabilities", None)
+        if caps is None:
+            return None
+        skill = getattr(caps, "skill", None)
+        if skill is None:
+            return None
+        return str(skill.source_path.parent)
+    except Exception:
+        return None
+
+
+def _create_terminal_tools_for_mode(workspace: Workspace, readonly: bool) -> TerminalTools | None:
+    allowed = [cmd.strip() for cmd in settings.terminal_allowed_commands.split(",") if cmd.strip()]
+    if not allowed:
+        return None
+    readonly_cmds = [
+        cmd.strip() for cmd in settings.terminal_readonly_commands.split(",") if cmd.strip()
+    ]
+    return TerminalTools(
+        workspace=workspace,
+        allowed_commands=allowed,
+        readonly_commands=readonly_cmds,
+        default_timeout=settings.terminal_default_timeout,
+        max_timeout=settings.terminal_max_timeout,
+        max_output_bytes=settings.terminal_max_output_bytes,
+    )
+
+
+def _build_tool_handlers(
+    file_tools: FileTools, terminal_tools: TerminalTools | None
+) -> dict[str, Any]:
+    handlers: dict[str, Any] = {
+        "write_file": file_tools.write_file,
+        "read_file": file_tools.read_file,
+        "read_dir": file_tools.read_dir,
+    }
+    if terminal_tools is not None:
+        handlers["run_command"] = terminal_tools.run_command
+    return handlers
+
+
+def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
+    switch = SwitchModeTool()
+    switch.set_state(state)
+    ask = AskUserTool()
+    ask.set_state(state)
+    ask.set_event_bus(event_bus)
+    finish = FinishTool()
+    finish.set_state(state)
+    select_skill = SelectSkillTool()
+    select_skill.set_state(state)
+    write_plan = WritePlanTool()
+    write_plan.set_state(state)
+    return [write_plan, select_skill, switch, ask, finish]
+
+
+def _format_tool_list(tools: list[BaseTool]) -> str:
+    lines: list[str] = []
+    for tool in tools:
+        name = tool.name
+        desc = tool.description
+        args_part = _format_tool_args(tool)
+        lines.append(f"- `{name}{args_part}` — {desc}")
+    return "\n".join(lines)
+
+
+def _format_tool_args(tool: BaseTool) -> str:
+    if tool.args_schema is None:
+        return "()"
+    schema = tool.args_schema
+    fields: list[str] = []
+    for field_name, field_info in schema.model_fields.items():
+        default = field_info.default
+        if default is not None and default is not PydanticUndefined:
+            fields.append(f"{field_name}={default}")
+        else:
+            fields.append(field_name)
+    return "(" + ", ".join(fields) + ")"
+
+
+async def _invoke_tool_handler(
+    tool_handlers: dict[str, Any], name: str, args: dict, lc_tools: list[BaseTool] | None = None
+) -> str:
+    handler = tool_handlers.get(name)
+    if handler is not None:
+        return await handler(**args)
+    if lc_tools is not None:
+        for tool in lc_tools:
+            if tool.name == name:
+                return await tool._arun(**args)
+    raise AgentRuntimeError(f"未知工具: {name}", code=AgentErrorCode.TOOL_CALL_FAILED)
+
+
+async def _execute_single_step(
+    state: AgentLoopState,
+    context: ExecutionContext,
+    services: RuntimeServices,
+    system_prompt: str,
+    lc_tools: list[BaseTool],
+    tool_handlers: dict[str, Any],
+    file_tools: FileTools,
+) -> AgentLoopState:
+    if not state.resolved_model:
+        state.status = "failed"
+        return state
+
+    chat_model = services.chat_model_factory.create(state.resolved_model)
+    chat_model = chat_model.bind_tools(lc_tools)
+
+    lc_messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=context.prompt),
+    ]
+
+    for msg in state.conversation_messages:
+        lc_messages.append(HumanMessage(content=msg["content"]))
+
+    for record in state.executed_tool_calls:
+        lc_messages.append(
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": record.id,
+                        "name": record.name,
+                        "args": record.arguments,
+                        "type": "tool_call",
+                    }
+                ],
+            )
+        )
+        lc_messages.append(
+            ToolMessage(
+                content=record.result or "",
+                tool_call_id=record.id,
+                name=record.name,
+            )
+        )
+
+    start_ms = time.monotonic()
+    try:
+        text_content, tool_calls, response_obj = await _stream_invoke(
+            chat_model, lc_messages, services.event_bus
+        )
+        duration_ms = (time.monotonic() - start_ms) * 1000
+    except AgentRuntimeError:
+        raise
+    except Exception as e:
+        duration_ms = (time.monotonic() - start_ms) * 1000
+        log_model_call(logger, "", "", duration_ms)
+        state.status = "failed"
+        await services.event_bus.emit(
+            RuntimeEvent(
+                RuntimeEventType.RUNTIME_ERROR,
+                {"message": str(e), "code": int(AgentErrorCode.MODEL_CALL_FAILED)},
+            )
+        )
+        return state
+
+    log_model_call(
+        logger,
+        state.resolved_model.get("provider", ""),
+        state.resolved_model.get("modelName", ""),
+        duration_ms,
+    )
+
+    if not text_content and not tool_calls:
+        state.status = "failed"
+        return state
+
+    if tool_calls:
+        for tc in tool_calls:
+            await services.event_bus.emit(
+                RuntimeEvent(
+                    RuntimeEventType.TOOL_CALL,
+                    {"id": tc["id"], "name": tc["name"], "arguments": str(tc["arguments"])},
+                )
+            )
+
+            start_tool = time.monotonic()
+            try:
+                result = await _invoke_tool_handler(
+                    tool_handlers, tc["name"], tc["arguments"], lc_tools
+                )
+                duration_tool = (time.monotonic() - start_tool) * 1000
+                log_tool_call(logger, tc["name"], duration_tool, status="ok")
+
+                if tc["name"] == "write_file" and "relative_path" in tc["arguments"]:
+                    state.files_touched.append(tc["arguments"]["relative_path"])
+
+                await services.event_bus.emit(
+                    RuntimeEvent(
+                        RuntimeEventType.TOOL_RESULT,
+                        {"id": tc["id"], "name": tc["name"], "result": result},
+                    )
+                )
+
+                from app.runtime.state import ToolCallRecord
+
+                state.executed_tool_calls.append(
+                    ToolCallRecord(
+                        id=tc["id"], name=tc["name"], arguments=tc["arguments"], result=result
+                    )
+                )
+            except Exception as e:
+                duration_tool = (time.monotonic() - start_tool) * 1000
+                log_tool_call(logger, tc["name"], duration_tool, status="error")
+                await services.event_bus.emit(
+                    RuntimeEvent(
+                        RuntimeEventType.RUNTIME_ERROR,
+                        {
+                            "message": f"工具执行失败 [{tc['name']}]: {e}",
+                            "code": int(AgentErrorCode.TOOL_CALL_FAILED),
+                        },
+                    )
+                )
+    else:
+        log_response(logger, text_content, label="model_response")
+        await services.event_bus.emit(
+            RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content})
+        )
+
+    state.model_response_text = text_content
+    state.iteration += 1
+
+    ago_state = state
+    await services.event_bus.emit(
+        RuntimeEvent(
+            RuntimeEventType.AGENT_LOOP_ITERATION,
+            {"iteration": ago_state.iteration, "mode": ago_state.mode},
+        )
+    )
+
+    return state
+
+
+async def _stream_invoke(chat_model, lc_messages, event_bus):
+    collected_chunks: list[AIMessageChunk] = []
+    async for chunk in chat_model.astream(lc_messages):
+        collected_chunks.append(chunk)
+        delta = chunk.content or ""
+        if delta:
+            await event_bus.emit(RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": delta}))
+
+    if not collected_chunks:
+        return "", [], None
+
+    full_response = collected_chunks[0]
+    for c in collected_chunks[1:]:
+        full_response = full_response + c
+
+    text_content = full_response.content or ""
+    tool_calls = []
+    if full_response.tool_calls:
+        tool_calls = [
+            {"id": tc["id"], "name": tc["name"], "arguments": tc["args"]}
+            for tc in full_response.tool_calls
+        ]
+
+    return text_content, tool_calls, full_response
