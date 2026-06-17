@@ -76,32 +76,47 @@
           >
             <a-avatar :src="msg.role === 'user' ? loginUserStore.loginUser.userAvatar : '/ai-avatar.png'" />
             <div class="message-body">
-              <div class="message-content">
+              <template v-if="msg.role === 'ai' && planningData(index)">
+                <PlanningForm
+                  v-if="planningData(index)!.planningType === 'clarification'"
+                  :questions="planningData(index)!.questions!"
+                  :readonly-answers="planningAnswers(index)"
+                  @submit="(answers: Record<string, string>) => handlePlanningSubmit(answers)"
+                  @skip="handlePlanningSkip(index)"
+                />
+                <PlanConfirmationCard
+                  v-else-if="planningData(index)!.planningType === 'plan_confirmation'"
+                  :outline="planningData(index)!.outline!"
+                  @confirm="handlePlanConfirm(index)"
+                  @cancel="handlePlanningSkip(index)"
+                />
+              </template>
+              <div v-else class="message-content">
                 <template v-if="msg.role === 'ai'">
                   <template
                     v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]"
                     :key="`parsed-${index}`"
                   >
                     <div v-if="parsed.aiText" class="message-text" v-html="renderMarkdown(parsed.aiText)"></div>
-                    <details v-if="parsed.toolEvents.length" class="tool-call-card">
-                      <summary class="tool-call-summary">
-                        <span class="tool-call-title">工具调用（{{ parsed.toolEvents.length }}）</span>
-                        <span class="tool-call-hint">点击查看执行详情</span>
-                      </summary>
-                      <div class="tool-call-list">
-                        <div
-                          v-for="(eventItem, toolIndex) in parsed.toolEvents"
-                          :key="`tool-${index}-${toolIndex}`"
-                          class="tool-call-item"
-                        >
-                          <span :class="['tool-call-tag', eventItem.type]">
-                            {{ eventItem.type === 'request' ? '调用中' : '已完成' }}
-                          </span>
-                          <span class="tool-call-text">{{ eventItem.text }}</span>
+                      <details v-if="parsed.toolEvents.length" class="tool-call-card">
+                        <summary class="tool-call-summary">
+                          <span class="tool-call-title">工具调用（{{ parsed.toolEvents.length }}）</span>
+                          <span class="tool-call-hint">点击查看执行详情</span>
+                        </summary>
+                        <div class="tool-call-list">
+                          <div
+                            v-for="(eventItem, toolIndex) in parsed.toolEvents"
+                            :key="`tool-${index}-${toolIndex}`"
+                            class="tool-call-item"
+                          >
+                            <span :class="['tool-call-tag', eventItem.type]">
+                              {{ eventItem.type === 'request' ? '调用中' : '已完成' }}
+                            </span>
+                            <span class="tool-call-text">{{ eventItem.text }}</span>
+                          </div>
                         </div>
-                      </div>
-                    </details>
-                  </template>
+                      </details>
+                    </template>
                 </template>
                 <div v-else class="message-text" v-html="renderMarkdown(msg.content)"></div>
               </div>
@@ -263,6 +278,8 @@ import {
 import { listAppVersions } from '@/api/appVersionController'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import { createVisualEditor, type ElementInfo } from '@/utils/visualEditor'
+import PlanningForm from '@/components/PlanningForm.vue'
+import PlanConfirmationCard from '@/components/PlanConfirmationCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -353,6 +370,73 @@ const visualEditor = createVisualEditor({
     }
   },
 })
+
+type PlanningOption = {
+  value: string
+  label: string
+  description?: string
+  recommended?: boolean
+}
+
+type PlanningQuestion = {
+  id: string
+  question: string
+  inputType: string
+  required: boolean
+  options?: PlanningOption[]
+  reason?: string
+  placeholder?: string
+}
+
+type PlanningData =
+  | { planningType: 'clarification'; questions: PlanningQuestion[] }
+  | { planningType: 'plan_confirmation'; outline: PlanOutline }
+
+type PlanOutline = {
+  title: string
+  summary: string
+  steps: string[]
+  risks: string[]
+  assumptions: string[]
+}
+
+const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
+
+function planningData(index: number): PlanningData | null {
+  const msg = messages.value[index]
+  if (!msg || msg.role !== 'ai') return null
+  const match = msg.content.match(PLANNING_TAG_RE)
+  if (!match) return null
+  try {
+    const data = JSON.parse(match[2])
+    return { planningType: match[1] as PlanningData['planningType'], ...data }
+  } catch {
+    return null
+  }
+}
+
+function planningAnswers(index: number): Record<string, string> | null {
+  const data = planningData(index)
+  if (!data || data.planningType !== 'clarification') return null
+  const nextUserMsg = messages.value.slice(index + 1).find((m) => m.role === 'user')
+  if (!nextUserMsg) return null
+  const answers: Record<string, string> = {}
+  for (const q of data.questions) {
+    const escapedQ = q.question.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const answerRe = new RegExp(`${escapedQ}\\s*[：:]\\s*答[：:]\\s*(.+?)(?:\\n|$)`, 'i')
+    const qaMatch = nextUserMsg.content.match(answerRe)
+    if (qaMatch) {
+      answers[q.id] = qaMatch[1].trim()
+    }
+  }
+  return Object.keys(answers).length > 0 ? answers : null
+}
+
+function planningOutsideText(index: number): string {
+  const msg = messages.value[index]
+  if (!msg || msg.role !== 'ai') return ''
+  return msg.content.replace(PLANNING_TAG_RE, '').trim()
+}
 
 const normalizeId = (id?: string | number | null) => {
   if (id === undefined || id === null) {
@@ -728,6 +812,7 @@ const ensureSessionReady = async () => {
 }
 
 const doChat = async () => {
+  if (hasActivePlanning()) return
   const rawMessage = inputText.value.trim()
   if (generating.value || !rawMessage) return
   const sessionId = await ensureSessionReady()
@@ -739,6 +824,50 @@ const doChat = async () => {
   messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
   inputText.value = ''
   startSSE(promptMessage, sessionId)
+}
+
+function hasActivePlanning(): boolean {
+  return messages.value.some((_msg, index) => planningData(index) !== null && !planningAnswers(index))
+}
+
+async function handlePlanningSubmit(answers: Record<string, string>) {
+  const pdList: { questions: { id: string; question: string }[] }[] = []
+  for (let i = 0; i < messages.value.length; i++) {
+    const pd = planningData(i)
+    if (pd?.planningType === 'clarification') {
+      pdList.push(pd)
+    }
+  }
+  const latest = pdList[pdList.length - 1]
+  if (!latest) return
+  const answersList: string[] = []
+  for (const q of latest.questions) {
+    const a = answers[q.id]
+    if (a && a !== '（未回答）') {
+      answersList.push(`${q.question}：${a}`)
+    }
+  }
+  const prompt = answersList.length > 0
+    ? `需求补充：${answersList.join('；')}\n\n请继续生成。`
+    : '跳过补充需求，请继续生成。'
+  const sessionId = currentSessionId.value
+  if (!sessionId) return
+  messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
+  startSSE(prompt, sessionId)
+}
+
+async function handlePlanConfirm(index: number) {
+  const pd = planningData(index)
+  const title = pd?.planningType === 'plan_confirmation' ? pd.outline.title : ''
+  const prompt = `确认实施计划「${title}」，请按计划开始生成。`
+  const sessionId = currentSessionId.value
+  if (!sessionId) return
+  messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
+  startSSE(prompt, sessionId)
+}
+
+function handlePlanningSkip(_index: number) {
+  inputText.value = ''
 }
 
 const doEnhanceInput = async () => {
@@ -810,6 +939,13 @@ const updatePreview = async () => {
       iframeUrl.value = plainUrl
       return
     }
+  }
+  const fallbackUrl = `${deployUrlPrefix}/${codeGenType === 'vue_project' ? 'vue_project' : codeGenType}/${appId}/index.html?t=${Date.now()}`
+  const fallbackAvailable = await checkPreviewResource(fallbackUrl)
+  if (fallbackAvailable) {
+    previewStatus.value = 'ready'
+    iframeUrl.value = fallbackUrl
+    return
   }
   iframeUrl.value = ''
   previewStatus.value = 'failed'
