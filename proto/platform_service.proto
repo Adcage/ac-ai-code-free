@@ -61,6 +61,7 @@ message CompleteAgentRunRequest {
   string workspace_path = 3;
   int32 latency_ms = 4;
   string error_message = 5;
+  string loop_state_json = 6;
 }
 
 message CompleteAgentRunResponse {

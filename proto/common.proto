@@ -20,6 +20,7 @@ enum EventType {
   TOOL_EXECUTED = 4;
   ERROR = 5;
   DONE = 6;
+  STATUS = 7;
 }
 
 message AiResponseData {
@@ -46,5 +47,9 @@ message ErrorData {
 }
 
 message DoneData {
+  string message = 1;
+}
+
+message StatusData {
   string message = 1;
 }

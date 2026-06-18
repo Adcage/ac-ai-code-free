@@ -25,6 +25,8 @@ message CodeGenerationRequest {
   string workspace_path = 7;
   int64 model_config_id = 8;
   int32 config_version = 9;
+  string loop_state_json = 10;
+  bool is_test = 11;
 }
 
 message CodeModificationRequest {
@@ -38,6 +40,8 @@ message CodeModificationRequest {
   int64 model_config_id = 8;
   int32 config_version = 9;
   string original_content = 10;
+  string loop_state_json = 11;
+  bool is_test = 12;
 }
 
 message CodeGenerationEvent {
@@ -50,6 +54,7 @@ message CodeGenerationEvent {
     ToolExecutedData tool_executed = 6;
     ErrorData error = 7;
     DoneData done = 8;
+    StatusData status = 9;
   }
 }
 
