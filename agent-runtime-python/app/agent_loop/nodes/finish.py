@@ -34,10 +34,18 @@ class FinishNode:
             )
         )
 
-        await self._services.event_bus.emit(
-            RuntimeEvent(
-                RuntimeEventType.DONE, {"message": f"Agent loop completed: {state.status}"}
+        if state.status == "waiting_for_user":
+            await self._services.event_bus.emit(
+                RuntimeEvent(
+                    RuntimeEventType.DONE,
+                    {"message": "waiting_for_user", "loop_state_json": state.serialize()},
+                )
             )
-        )
+        else:
+            await self._services.event_bus.emit(
+                RuntimeEvent(
+                    RuntimeEventType.DONE, {"message": f"Agent loop completed: {state.status}"}
+                )
+            )
 
         return state
