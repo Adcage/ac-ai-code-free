@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS agent_run
     workspacePath VARCHAR(1024) NULL COMMENT '工作区路径',
     errorMessage  TEXT         NULL COMMENT '错误信息',
     latencyMs     INT          DEFAULT 0 COMMENT '耗时（毫秒）',
+    loopStateJson TEXT         NULL COMMENT 'Agent Loop 暂停状态JSON',
     createTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
     updateTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     isDelete      TINYINT      DEFAULT 0     NOT NULL COMMENT '是否删除',

@@ -15,4 +15,6 @@ public interface AgentRunService extends IService<AgentRun> {
     void failAgentRun(Long id, String errorMessage);
 
     void updateAgentRunWorkspacePath(Long id, String workspacePath);
+
+    void pauseAgentRun(Long id, String loopStateJson);
 }

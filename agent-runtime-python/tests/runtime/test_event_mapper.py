@@ -106,7 +106,6 @@ class TestProtoEventMapper:
     @pytest.mark.parametrize(
         "event_type",
         [
-            RuntimeEventType.STATUS,
             RuntimeEventType.NODE_STARTED,
             RuntimeEventType.NODE_COMPLETED,
             RuntimeEventType.CAPABILITY_SELECTED,

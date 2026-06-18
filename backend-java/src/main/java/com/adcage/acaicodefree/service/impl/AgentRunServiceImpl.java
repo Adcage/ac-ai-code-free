@@ -82,4 +82,18 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 工作空间路径失败");
     }
+
+    @Override
+    public void pauseAgentRun(Long id, String loopStateJson) {
+        ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "AgentRun ID 不能为空");
+        AgentRun agentRun = this.getById(id);
+        ThrowUtils.throwIf(agentRun == null, ErrorCode.NOT_FOUND_ERROR, "AgentRun 不存在");
+        AgentRun update = AgentRun.builder()
+                .id(id)
+                .status("waiting_for_user")
+                .loopStateJson(loopStateJson)
+                .build();
+        boolean result = this.updateById(update);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 暂停状态失败");
+    }
 }

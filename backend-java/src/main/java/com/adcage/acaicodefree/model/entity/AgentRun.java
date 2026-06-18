@@ -58,6 +58,9 @@ public class AgentRun implements Serializable {
     @Builder.Default
     private Integer latencyMs = 0;
 
+    @Column("loopStateJson")
+    private String loopStateJson;
+
     @Column("createTime")
     private LocalDateTime createTime;
 

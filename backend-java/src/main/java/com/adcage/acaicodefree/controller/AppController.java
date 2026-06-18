@@ -88,6 +88,25 @@ public class AppController {
     }
 
     /**
+     * 管理员创建测试应用
+     *
+     * @param appAddRequest 创建应用请求
+     * @param request       请求
+     * @return 应用 id
+     */
+    @PostMapping("/add/test")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Long> addTestApp(@RequestBody AppAddRequest appAddRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(StrUtil.isBlank(appAddRequest.getInitPrompt()), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        // 强制标记为测试应用
+        appAddRequest.setIsTestApp(true);
+        User loginUser = userService.getLoginUser(request);
+        Long appId = appService.createApp(appAddRequest, loginUser);
+        return ResultUtils.success(appId);
+    }
+
+    /**
      * 优化提示词
      *
      * @param body 请求体，包含 prompt 字段

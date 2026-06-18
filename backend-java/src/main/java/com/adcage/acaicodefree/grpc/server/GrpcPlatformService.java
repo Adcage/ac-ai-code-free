@@ -199,7 +199,10 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     @Override
     public void completeAgentRun(CompleteAgentRunRequest request, StreamObserver<CompleteAgentRunResponse> responseObserver) {
         try {
-            if (request.getSuccess()) {
+            String loopStateJson = request.getLoopStateJson();
+            if (!loopStateJson.isEmpty()) {
+                agentRunService.pauseAgentRun(request.getAgentRunId(), loopStateJson);
+            } else if (request.getSuccess()) {
                 agentRunService.completeAgentRun(
                         request.getAgentRunId(),
                         request.getWorkspacePath(),

@@ -112,4 +112,10 @@ public class App implements Serializable {
     @Column(value = "isDelete", isLogicDelete = true)
     private Integer isDelete;
 
+    /**
+     * 是否测试应用
+     */
+    @Column("isTestApp")
+    private Integer isTestApp;
+
 }

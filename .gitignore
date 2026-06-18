@@ -36,6 +36,7 @@ agent-runtime-python/tests/e2e/node_modules/
 agent-runtime-python/tests/e2e/test-results/
 
 # Python
+agent-runtime-python/workspace/
 agent-runtime-python/.venv/
 agent-runtime-python/__pycache__/
 agent-runtime-python/**/__pycache__/
@@ -72,3 +73,5 @@ docs/*
 # Generated local docs artifacts
 docs/**/*.tmp
 docs/**/*.bak
+
+python-
