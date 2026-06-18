@@ -38,7 +38,22 @@ def _get_skill_dir(state: AgentLoopState) -> str | None:
         return None
 
 
-def _create_terminal_tools_for_mode(workspace: Workspace, readonly: bool) -> TerminalTools | None:
+def _get_assets_dir(state: AgentLoopState) -> str | None:
+    try:
+        index = getattr(state, "_asset_index", None)
+        if index is None:
+            return None
+        bundled_root = getattr(index, "bundled_root", None)
+        if bundled_root is None:
+            return None
+        return str(bundled_root)
+    except Exception:
+        return None
+
+
+def _create_terminal_tools_for_mode(
+    workspace: Workspace, readonly: bool, allowed_script_dirs: list[str] | None = None
+) -> TerminalTools | None:
     allowed = [cmd.strip() for cmd in settings.terminal_allowed_commands.split(",") if cmd.strip()]
     if not allowed:
         return None
@@ -49,6 +64,7 @@ def _create_terminal_tools_for_mode(workspace: Workspace, readonly: bool) -> Ter
         workspace=workspace,
         allowed_commands=allowed,
         readonly_commands=readonly_cmds,
+        allowed_script_dirs=allowed_script_dirs,
         default_timeout=settings.terminal_default_timeout,
         max_timeout=settings.terminal_max_timeout,
         max_output_bytes=settings.terminal_max_output_bytes,
@@ -62,6 +78,7 @@ def _build_tool_handlers(
         "write_file": file_tools.write_file,
         "read_file": file_tools.read_file,
         "read_dir": file_tools.read_dir,
+        "read_asset": file_tools.read_asset,
     }
     if terminal_tools is not None:
         handlers["run_command"] = terminal_tools.run_command

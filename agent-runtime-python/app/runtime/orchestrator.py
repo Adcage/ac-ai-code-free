@@ -42,6 +42,76 @@ class RuntimeOrchestrator:
         self._event_mapper = ProtoEventMapper()
 
     def _build_services(self, event_bus: EventBus) -> RuntimeServices:
+        from app.prompts.registry import PromptModuleRegistry
+        from app.prompts.default_modules import (
+            RuntimeBoundaryModule,
+            SafetyAndInjectionResistanceModule,
+            ProjectRulesModule,
+            TaskContextModule,
+            ChatHistorySummaryModule,
+            ToolContractModule,
+            OutputContractModule,
+            AntiRoleplayModule,
+        )
+        from app.prompts.asset_modules import ArtifactOutputContractModule
+        from app.prompts.loop_modules import (
+            PlanWorkflowModule,
+            ImplementWorkflowModule,
+            ValidateWorkflowModule,
+            ValidateFeedbackModule,
+            ToolListModule,
+            PlanSpecModule,
+            UserPromptModule,
+            SkillContextModule,
+        )
+        from app.prompts.route_modules import (
+            RouteInitialModule,
+            RouteAfterImplementModule,
+            RouteAfterValidateModule,
+        )
+        from app.prompts.test_modules import (
+            TestModeInfoModule,
+            ProductionSecurityModule,
+        )
+
+        registry = PromptModuleRegistry()
+        # 按注册顺序排列，决定提示词中的段落顺序
+        # mandatory
+        registry.register(RuntimeBoundaryModule())
+        registry.register(SafetyAndInjectionResistanceModule())
+        # test
+        registry.register(ProductionSecurityModule())  # is_test=False 时启用
+        # strategic - 项目规则
+        registry.register(ProjectRulesModule())
+        # strategic - 工具合约
+        registry.register(ToolContractModule())
+        # strategic - 工具列表（动态注入）
+        registry.register(ToolListModule())
+        # strategic - 路由模块（互斥）
+        registry.register(RouteInitialModule())
+        registry.register(RouteAfterImplementModule())
+        registry.register(RouteAfterValidateModule())
+        # strategic - 大循环工作流（互斥）
+        registry.register(PlanWorkflowModule())
+        registry.register(ImplementWorkflowModule())
+        registry.register(ValidateWorkflowModule())
+        registry.register(PlanSpecModule())
+        registry.register(ValidateFeedbackModule())
+        # strategic - artifact 合约
+        registry.register(ArtifactOutputContractModule())
+        # mandatory - 输出规则
+        registry.register(OutputContractModule())
+        registry.register(AntiRoleplayModule())
+        # strategic - Skill 上下文
+        registry.register(SkillContextModule())
+        # strategic - 任务上下文
+        registry.register(TaskContextModule())
+        registry.register(ChatHistorySummaryModule())
+        # test
+        registry.register(TestModeInfoModule())  # is_test=True 时启用
+        # mandatory - 用户需求（放最后）
+        registry.register(UserPromptModule())
+
         return RuntimeServices(
             platform_client=self._platform_client,
             tool_client=None,
@@ -49,7 +119,7 @@ class RuntimeOrchestrator:
             model_policy=self._model_policy,
             model_resolver=self._model_resolver,
             prompt_composer=None,
-            prompt_module_registry=None,
+            prompt_module_registry=registry,
             tool_registry=None,
             event_bus=event_bus,
             node_registry=None,
@@ -105,6 +175,7 @@ class RuntimeOrchestrator:
                 "model_config_id": model_config_id,
                 "config_version": config_version,
             },
+            is_test=getattr(request, "is_test", False),
         )
 
     async def stream_generate(self, request):
@@ -120,6 +191,8 @@ class RuntimeOrchestrator:
         from app.agent_loop.graph import build_agent_loop_graph
         from app.agent_loop.nodes.init import InitNode
         from app.agent_loop.nodes.plan_step import PlanStepNode, ImplementStepNode
+        from app.agent_loop.nodes.route_step import RouteStepNode
+        from app.agent_loop.nodes.validate_step import ValidateStepNode
         from app.agent_loop.nodes.finish import FinishNode
 
         agent_run_id = int(request.agent_run_id)
@@ -128,17 +201,37 @@ class RuntimeOrchestrator:
         start_time = time.monotonic()
         context = await self._build_context(request, run_mode)
 
-        state = AgentLoopState(
-            max_iterations=settings.agent_loop_max_iterations,
-            max_mode_switches=settings.agent_loop_max_mode_switches,
-        )
+        loop_state_json = getattr(request, "loop_state_json", "") or ""
+
+        if loop_state_json:
+            logger.info("resuming agent loop from paused state | agentRunId=%s", agent_run_id)
+            state = AgentLoopState.deserialize(loop_state_json)
+            state.max_iterations = settings.agent_loop_max_iterations
+            state.max_mode_switches = settings.agent_loop_max_mode_switches
+            state.max_plan_iterations = 15
+            state.status = "running"
+
+            if context.prompt:
+                state.conversation_messages.append({
+                    "role": "user",
+                    "content": context.prompt,
+                })
+        else:
+            state = AgentLoopState(
+                max_iterations=settings.agent_loop_max_iterations,
+                max_mode_switches=settings.agent_loop_max_mode_switches,
+            )
 
         init_node = InitNode(context, services)
+        route_step = RouteStepNode(context, services)
         plan_step = PlanStepNode(context, services)
         implement_step = ImplementStepNode(context, services)
+        validate_step = ValidateStepNode(context, services)
         finish_node = FinishNode(context, services)
 
-        graph = build_agent_loop_graph(init_node, plan_step, implement_step, finish_node)
+        graph = build_agent_loop_graph(
+            init_node, route_step, plan_step, implement_step, validate_step, finish_node
+        )
 
         async def _execute():
             nonlocal context
@@ -159,12 +252,18 @@ class RuntimeOrchestrator:
 
                 latency_ms = int((time.monotonic() - start_time) * 1000)
                 success = status == "completed"
+
+                loop_state_json = ""
+                if status == "waiting_for_user":
+                    loop_state_json = state.serialize()
+
                 await self._platform_client.complete_agent_run(
                     agent_run_id=agent_run_id,
                     success=success,
                     workspace_path=context.workspace_path,
                     latency_ms=latency_ms,
                     error_message="" if success else f"AgentLoop status: {status}",
+                    loop_state_json=loop_state_json,
                 )
             except AgentRuntimeError as e:
                 logger.error("agent_loop error | agentRunId=%s error=%s", agent_run_id, e)
@@ -207,7 +306,7 @@ class RuntimeOrchestrator:
                 except Exception:
                     pass
             finally:
-                pass
+                await event_bus.close()
 
         workflow_task = asyncio.create_task(_execute())
 
