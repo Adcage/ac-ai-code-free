@@ -45,3 +45,4 @@ class ExecutionContext:
     chat_history: tuple[ChatHistoryEntry, ...] = ()
     original_content: str = ""
     runtime_options: dict[str, Any] = field(default_factory=dict)
+    is_test: bool = False
