@@ -3,6 +3,7 @@ from app.prompts.modules import PromptModule
 
 class RuntimeBoundaryModule(PromptModule):
     id = "runtime_boundary"
+    category = "mandatory"
 
     def render(self, context, state) -> str:
         return (
@@ -13,6 +14,7 @@ class RuntimeBoundaryModule(PromptModule):
 
 class SafetyAndInjectionResistanceModule(PromptModule):
     id = "safety_injection_resistance"
+    category = "mandatory"
 
     def render(self, context, state) -> str:
         return (
@@ -25,6 +27,7 @@ class SafetyAndInjectionResistanceModule(PromptModule):
 
 class ProjectRulesModule(PromptModule):
     id = "project_rules"
+    category = "strategic"
 
     _SINGLE_FILE_RULES = (
         "项目类型：single_file（单文件模式）\n"
@@ -73,7 +76,9 @@ class ProjectRulesModule(PromptModule):
 
     def render(self, context, state) -> str:
         code_gen_type = getattr(context, "code_gen_type", None)
-        type_value = code_gen_type.value if code_gen_type else "unknown"
+        # 优先使用 state 中推荐的应用类型（route_step 中用户选择的结果）
+        recommended = getattr(state, "recommended_code_gen_type", None)
+        type_value = recommended if recommended else (code_gen_type.value if code_gen_type else "unknown")
         rules_map = {
             "single_file": self._SINGLE_FILE_RULES,
             "multi-file": self._MULTI_FILE_RULES,
@@ -87,6 +92,7 @@ class ProjectRulesModule(PromptModule):
 
 class TaskContextModule(PromptModule):
     id = "task_context"
+    category = "strategic"
 
     def render(self, context, state) -> str:
         task_type = getattr(state, "task_type", "generate")
@@ -100,21 +106,24 @@ class TaskContextModule(PromptModule):
 
 class ChatHistorySummaryModule(PromptModule):
     id = "chat_history_summary"
+    category = "strategic"
 
     def enabled(self, context, state) -> bool:
-        return bool(context.chat_history)
+        return bool(getattr(context, "chat_history", None))
 
     def render(self, context, state) -> str:
-        if not context.chat_history:
+        chat_history = getattr(context, "chat_history", None)
+        if not chat_history:
             return ""
         lines = ["对话历史："]
-        for entry in context.chat_history[-10:]:
+        for entry in chat_history[-10:]:
             lines.append(f"  [{entry.role}]: {entry.content}")
         return "\n".join(lines)
 
 
 class ToolContractModule(PromptModule):
     id = "tool_contract"
+    category = "strategic"
 
     def render(self, context, state) -> str:
         return (
@@ -131,6 +140,7 @@ class ToolContractModule(PromptModule):
 
 class OutputContractModule(PromptModule):
     id = "output_contract"
+    category = "mandatory"
 
     def render(self, context, state) -> str:
         return (
@@ -144,6 +154,7 @@ class OutputContractModule(PromptModule):
 
 class AntiRoleplayModule(PromptModule):
     id = "anti_roleplay"
+    category = "mandatory"
 
     def render(self, context, state) -> str:
         return (

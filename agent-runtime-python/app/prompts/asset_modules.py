@@ -8,10 +8,13 @@ logger = logging.getLogger("app.prompts.asset_modules")
 
 class ArtifactOutputContractModule(PromptModule):
     id = "artifact_output_contract"
+    category = "strategic"
 
     def render(self, context: Any, state: Any) -> str:
         code_gen_type = getattr(context, "code_gen_type", None)
-        type_value = code_gen_type.value if code_gen_type else "unknown"
+        # 优先使用 state 中推荐的应用类型
+        recommended = getattr(state, "recommended_code_gen_type", None)
+        type_value = recommended if recommended else (code_gen_type.value if code_gen_type else "unknown")
 
         base_rules = (
             "## Artifact Output Contract\n"
