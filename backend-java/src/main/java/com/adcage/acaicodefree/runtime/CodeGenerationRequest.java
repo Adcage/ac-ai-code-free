@@ -19,4 +19,6 @@ public class CodeGenerationRequest {
     private Long modelConfigId;
     private Integer configVersion;
     private String workspacePath;
+    private String loopStateJson;
+    private Boolean isTest;
 }

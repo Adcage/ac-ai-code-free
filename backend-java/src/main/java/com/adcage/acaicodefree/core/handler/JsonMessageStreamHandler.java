@@ -34,6 +34,9 @@ public class JsonMessageStreamHandler {
             String type = jsonObject.getStr("type");
             if (StreamMessageTypeEnum.AI_RESPONSE.getValue().equals(type)) {
                 String data = jsonObject.getStr("data", "");
+                if ("waiting_for_user".equals(data) || data.startsWith("Agent loop completed:")) {
+                    return Flux.just(chunk);
+                }
                 readableOutput.append(data);
                 return Flux.just(chunk);
             }
@@ -43,6 +46,9 @@ public class JsonMessageStreamHandler {
                     return Flux.empty();
                 }
                 String toolName = jsonObject.getStr("name", "");
+                if ("ask_user".equals(toolName) || "finish".equals(toolName)) {
+                    return Flux.just(chunk);
+                }
                 JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
                 String requestText = buildToolRequestText(toolName, arguments);
                 if (StrUtil.isNotBlank(requestText)) {
@@ -52,12 +58,18 @@ public class JsonMessageStreamHandler {
             }
             if (StreamMessageTypeEnum.TOOL_EXECUTED.getValue().equals(type)) {
                 String toolName = jsonObject.getStr("name", "");
+                if ("ask_user".equals(toolName) || "finish".equals(toolName)) {
+                    return Flux.just(chunk);
+                }
                 String result = jsonObject.getStr("result", "");
                 JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
                 String executedText = buildToolExecutedText(toolName, arguments, result);
                 if (StrUtil.isNotBlank(executedText)) {
                     readableOutput.append("\n[工具完成] ").append(executedText).append('\n');
                 }
+                return Flux.just(chunk);
+            }
+            if (StreamMessageTypeEnum.STATUS.getValue().equals(type)) {
                 return Flux.just(chunk);
             }
             if ("workflow_event".equals(type)) {

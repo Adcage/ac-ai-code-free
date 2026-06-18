@@ -38,6 +38,7 @@ import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
@@ -143,6 +144,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         app.setStyleTemplate(appAddRequest.getStyleTemplate());
         app.setUserId(loginUser.getId());
         app.setPriority(AppConstant.DEFAULT_APP_PRIORITY);
+        // 设置测试应用标记
+        app.setIsTestApp(Boolean.TRUE.equals(appAddRequest.getIsTestApp()) ? 1 : 0);
         boolean saveResult = this.save(app);
         ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "创建应用失败");
         return app.getId();
@@ -286,6 +289,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 modelConfigId, configVersion, null);
         String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" + getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId;
         agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
+        String loopStateJson = "";
+        AgentRun pausedRun = agentRunService.getOne(
+                QueryWrapper.create()
+                        .eq("sessionId", sessionId)
+                        .eq("status", "waiting_for_user")
+                        .orderBy("createTime", false)
+                        .limit(1)
+        );
+        if (pausedRun != null && pausedRun.getLoopStateJson() != null) {
+            loopStateJson = pausedRun.getLoopStateJson();
+            log.info("found paused agent_run for resume, sessionId={}, agentRunId={}", sessionId, pausedRun.getId());
+        }
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
                 .appId(appId)
@@ -297,6 +312,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .modelConfigId(modelConfigId)
                 .configVersion(configVersion)
                 .workspacePath(workspacePath)
+                .loopStateJson(loopStateJson)
+                .isTest(UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole()))
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();

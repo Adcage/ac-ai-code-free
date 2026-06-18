@@ -152,6 +152,8 @@ agent:
   python:
     base-url: ${AGENT_PYTHON_BASE_URL:http://localhost:9000}
   runtime-internal-secret: ${AGENT_RUNTIME_INTERNAL_SECRET:}
+  grpc:
+    stream-deadline-seconds: 600
 
 grpc:
   server:
@@ -160,7 +162,3 @@ grpc:
     python-agent:
       address: 'dns:///localhost:9091'
       negotiationType: plaintext
-
-agent:
-  grpc:
-    stream-deadline-seconds: 600
