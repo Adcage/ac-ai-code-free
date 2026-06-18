@@ -53,6 +53,8 @@ class AskUserTool(BaseTool):
             state = self._state
             if hasattr(state, "clarification_questions"):
                 state.clarification_questions.append(q)
+            if hasattr(state, "status"):
+                state.status = "waiting_for_user"
 
         if self._event_bus is not None:
             from app.runtime.events import RuntimeEvent, RuntimeEventType
