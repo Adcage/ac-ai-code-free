@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import shlex
 import time
 
@@ -19,6 +20,7 @@ class TerminalTools:
         workspace: Workspace,
         allowed_commands: list[str],
         readonly_commands: list[str] | None = None,
+        allowed_script_dirs: list[str] | None = None,
         default_timeout: int = 30,
         max_timeout: int = 120,
         max_output_bytes: int = 10240,
@@ -26,6 +28,9 @@ class TerminalTools:
         self._workspace = workspace
         self._allowed = [cmd.strip() for cmd in allowed_commands if cmd.strip()]
         self._readonly = [cmd.strip() for cmd in (readonly_commands or []) if cmd.strip()]
+        self._allowed_script_dirs = [
+            os.path.abspath(d) for d in (allowed_script_dirs or []) if d.strip()
+        ]
         self._default_timeout = default_timeout
         self._max_timeout = max_timeout
         self._max_output_bytes = max_output_bytes
@@ -85,6 +90,18 @@ class TerminalTools:
                     f"命令不在只读列表中: {prefix}",
                     code=AgentErrorCode.COMMAND_NOT_ALLOWED,
                 )
+            if prefix == "python" and self._allowed_script_dirs:
+                script_path = self._find_script_path(tokens)
+                if script_path is None:
+                    raise AgentRuntimeError(
+                        "plan 模式下 python 命令必须指定脚本文件路径，不支持 -c 内联代码",
+                        code=AgentErrorCode.COMMAND_NOT_ALLOWED,
+                    )
+                if not self._is_script_in_allowed_dirs(script_path):
+                    raise AgentRuntimeError(
+                        f"脚本不在允许的目录中: {script_path}",
+                        code=AgentErrorCode.COMMAND_NOT_ALLOWED,
+                    )
 
         timeout = min(timeout or self._default_timeout, self._max_timeout)
 
@@ -123,6 +140,25 @@ class TerminalTools:
                 f"命令执行失败: {e}",
                 code=AgentErrorCode.COMMAND_EXECUTION_FAILED,
             ) from e
+
+    def _find_script_path(self, tokens: list[str]) -> str | None:
+        for i, token in enumerate(tokens[1:], 1):
+            if token.startswith("-"):
+                if token in ("-m", "-W", "-X", "-E", "-s", "-S", "-O", "-OO", "-v", "-b", "-B", "-I"):
+                    continue
+                if token == "-c":
+                    return None
+                continue
+            if token.endswith(".py"):
+                return os.path.abspath(token)
+            return os.path.abspath(token) if not token.startswith("-") else None
+        return None
+
+    def _is_script_in_allowed_dirs(self, script_path: str) -> bool:
+        if not self._allowed_script_dirs:
+            return True
+        abs_path = os.path.abspath(script_path)
+        return any(abs_path.startswith(d) for d in self._allowed_script_dirs)
 
     async def _execute(self, tokens: list[str], timeout: int) -> dict:
         proc = await asyncio.create_subprocess_exec(

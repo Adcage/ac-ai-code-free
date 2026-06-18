@@ -32,6 +32,10 @@ class RunCommandInput(BaseModel):
     timeout: int = Field(default=30, description="超时秒数，最大120")
 
 
+class ReadAssetInput(BaseModel):
+    relative_path: str = Field(description="相对于assets目录的资源路径，例如 skills/ui-ux-pro-max/SKILL.md 或 craft/anti-ai-slop.md")
+
+
 class WriteFileTool(BaseTool):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     name: str = "write_file"
@@ -80,12 +84,27 @@ class RunCommandTool(BaseTool):
     description: str = "在项目工作区执行预授权终端命令。仅在skill工作流明确要求时使用（如npm install安装依赖、npm run build构建项目、运行检查脚本）。"
     args_schema: Type[BaseModel] = RunCommandInput
     terminal_tools: TerminalTools | None = None
+    readonly: bool = False
 
     def _run(self, command: str, timeout: int = 30) -> str:
         raise NotImplementedError("Use async version")
 
     async def _arun(self, command: str, timeout: int = 30) -> str:
-        return await self.terminal_tools.run_command(command, timeout=timeout)
+        return await self.terminal_tools.run_command(command, timeout=timeout, readonly=self.readonly)
+
+
+class ReadAssetTool(BaseTool):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    name: str = "read_asset"
+    description: str = "读取assets目录下的设计资源文件，如skill定义、craft规则、design system等。路径相对于assets目录。"
+    args_schema: Type[BaseModel] = ReadAssetInput
+    file_tools: FileTools | None = None
+
+    def _run(self, relative_path: str) -> str:
+        raise NotImplementedError("Use async version")
+
+    async def _arun(self, relative_path: str) -> str:
+        return await self.file_tools.read_asset(relative_path)
 
 
 def create_file_tools(file_tools: FileTools) -> list[BaseTool]:

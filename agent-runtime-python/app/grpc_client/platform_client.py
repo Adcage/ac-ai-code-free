@@ -68,6 +68,7 @@ class GrpcPlatformClient:
         workspace_path: str = "",
         latency_ms: int = 0,
         error_message: str = "",
+        loop_state_json: str = "",
     ) -> bool:
         stub = await self._get_stub()
         request = platform_service_pb2.CompleteAgentRunRequest(
@@ -76,6 +77,7 @@ class GrpcPlatformClient:
             workspace_path=workspace_path,
             latency_ms=latency_ms,
             error_message=error_message,
+            loop_state_json=loop_state_json,
         )
         response = await stub.CompleteAgentRun(request, metadata=get_internal_metadata())
         return response.ok

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ac-assets/v1",
   "enabled": {
-    "skills": ["dashboard", "landing-page", "web-prototype", "frontend-design"],
+    "skills": ["dashboard", "landing-page", "web-prototype", "frontend-design", "ui-ux-pro-max"],
     "seeds": ["vue-basic"],
     "templates": ["dashboard", "landing", "web-prototype"],
     "designSystems": ["default", "ant", "enterprise", "clean", "dashboard"],

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     java_grpc_target: str = "localhost:9090"
 
     terminal_allowed_commands: str = "npm,npx,pip,python,node"
-    terminal_readonly_commands: str = "ls,cat,git,head,tail,find,wc,type"
+    terminal_readonly_commands: str = "ls,cat,git,head,tail,find,wc,type,python"
     terminal_default_timeout: int = 30
     terminal_max_timeout: int = 120
     terminal_max_output_bytes: int = 10240

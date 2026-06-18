@@ -26,6 +26,7 @@ class AssetIndex:
     design_system_registry: DesignSystemRegistry
     craft_registry: CraftRegistry
     manifest: AssetManifest = field(default_factory=AssetManifest)
+    bundled_root: Path = field(default_factory=lambda: Path("."))
 
 
 @dataclass
@@ -57,6 +58,7 @@ class AssetManager:
             design_system_registry=self._loaders.design_system.load(self._path_config),
             craft_registry=self._loaders.craft.load(self._path_config),
             manifest=manifest,
+            bundled_root=self._path_config.bundled_root,
         )
         self._index = index
         return index
