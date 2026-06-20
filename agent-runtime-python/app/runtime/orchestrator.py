@@ -48,7 +48,6 @@ class RuntimeOrchestrator:
             SafetyAndInjectionResistanceModule,
             ProjectRulesModule,
             TaskContextModule,
-            ChatHistorySummaryModule,
             ToolContractModule,
             OutputContractModule,
             AntiRoleplayModule,
@@ -61,7 +60,6 @@ class RuntimeOrchestrator:
             ValidateFeedbackModule,
             ToolListModule,
             PlanSpecModule,
-            UserPromptModule,
             SkillContextModule,
         )
         from app.prompts.route_modules import (
@@ -106,11 +104,8 @@ class RuntimeOrchestrator:
         registry.register(SkillContextModule())
         # strategic - 任务上下文
         registry.register(TaskContextModule())
-        registry.register(ChatHistorySummaryModule())
         # test
         registry.register(TestModeInfoModule())  # is_test=True 时启用
-        # mandatory - 用户需求（放最后）
-        registry.register(UserPromptModule())
 
         return RuntimeServices(
             platform_client=self._platform_client,
@@ -128,7 +123,13 @@ class RuntimeOrchestrator:
             artifact_writer=self._artifact_writer,
         )
 
-    async def _build_context(self, request, run_mode: RunMode) -> ExecutionContext:
+    async def _build_context(
+        self,
+        request,
+        run_mode: RunMode,
+        *,
+        is_resume: bool = False,
+    ) -> ExecutionContext:
         code_gen_type = _map_code_gen_type(request.code_gen_type)
         original_content = getattr(request, "original_content", "")
         model_config_id = getattr(request, "model_config_id", 0)
@@ -176,6 +177,7 @@ class RuntimeOrchestrator:
                 "config_version": config_version,
             },
             is_test=getattr(request, "is_test", False),
+            is_resume=is_resume,
         )
 
     async def stream_generate(self, request):
@@ -199,9 +201,12 @@ class RuntimeOrchestrator:
         event_bus = EventBus(agent_run_id=agent_run_id)
         services = self._build_services(event_bus)
         start_time = time.monotonic()
-        context = await self._build_context(request, run_mode)
-
         loop_state_json = getattr(request, "loop_state_json", "") or ""
+        context = await self._build_context(
+            request,
+            run_mode,
+            is_resume=bool(loop_state_json),
+        )
 
         if loop_state_json:
             logger.info("resuming agent loop from paused state | agentRunId=%s", agent_run_id)
@@ -211,11 +216,6 @@ class RuntimeOrchestrator:
             state.max_plan_iterations = 15
             state.status = "running"
 
-            if context.prompt:
-                state.conversation_messages.append({
-                    "role": "user",
-                    "content": context.prompt,
-                })
         else:
             state = AgentLoopState(
                 max_iterations=settings.agent_loop_max_iterations,
@@ -237,10 +237,11 @@ class RuntimeOrchestrator:
             nonlocal context
             try:
                 result = await graph.ainvoke(state)
-                status = result["status"] if isinstance(result, dict) else result.status
-                iteration = result["iteration"] if isinstance(result, dict) else result.iteration
-                mode_switches = result["mode_switches"] if isinstance(result, dict) else result.mode_switches
-                files_touched = result["files_touched"] if isinstance(result, dict) else result.files_touched
+                final_state = AgentLoopState.from_graph_result(result)
+                status = final_state.status
+                iteration = final_state.iteration
+                mode_switches = final_state.mode_switches
+                files_touched = final_state.files_touched
 
                 logger.info(
                     "agent_loop completed | status=%s iterations=%d switches=%d files=%d",
@@ -255,7 +256,7 @@ class RuntimeOrchestrator:
 
                 loop_state_json = ""
                 if status == "waiting_for_user":
-                    loop_state_json = state.serialize()
+                    loop_state_json = final_state.serialize()
 
                 await self._platform_client.complete_agent_run(
                     agent_run_id=agent_run_id,

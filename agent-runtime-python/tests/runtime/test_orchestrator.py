@@ -2,9 +2,49 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.runtime.orchestrator import RuntimeOrchestrator
+from app.runtime.context import RunMode
 
 
 class TestRuntimeOrchestrator:
+    @pytest.mark.asyncio
+    async def test_build_context_marks_resume_without_mutating_platform_history(self):
+        orchestrator = RuntimeOrchestrator()
+        prompt = "需求补充：企业后台登录页面\n\n请继续生成。"
+        request = MagicMock(
+            agent_run_id="42",
+            app_id=0,
+            session_id=9,
+            user_id=7,
+            prompt=prompt,
+            code_gen_type=3,
+            workspace_path="C:/tmp/workspace",
+            original_content="",
+            model_config_id=1,
+            config_version=1,
+            is_test=False,
+        )
+        history = [
+            {"id": 1, "role": "user", "content": "创建登录页面"},
+            {"id": 2, "role": "ai", "content": "您想创建什么样的登录界面？"},
+            {"id": 3, "role": "user", "content": prompt},
+        ]
+
+        with patch.object(
+            orchestrator._platform_client,
+            "get_chat_history",
+            new_callable=AsyncMock,
+            return_value=history,
+        ):
+            context = await orchestrator._build_context(
+                request,
+                RunMode.GENERATE,
+                is_resume=True,
+            )
+
+        assert context.is_resume is True
+        assert context.prompt == prompt
+        assert context.chat_history[-1].content == prompt
+
     @pytest.mark.asyncio
     @pytest.mark.skip(reason="Agent Loop requires real model; full integration test in E2E")
     async def test_stream_generate_yields_events(self):

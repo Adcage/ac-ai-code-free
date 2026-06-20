@@ -46,3 +46,4 @@ class ExecutionContext:
     original_content: str = ""
     runtime_options: dict[str, Any] = field(default_factory=dict)
     is_test: bool = False
+    is_resume: bool = False

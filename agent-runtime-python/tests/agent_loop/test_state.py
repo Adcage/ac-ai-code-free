@@ -1,4 +1,4 @@
-import pytest
+import json
 
 from app.agent_loop.state import AgentLoopState
 from app.runtime.state import ToolCallRecord
@@ -38,6 +38,27 @@ class TestAgentLoopState:
 
 
 class TestAgentLoopStateSerialization:
+    def test_from_graph_result_uses_returned_waiting_state(self):
+        entry_state = AgentLoopState(status="running", iteration=1)
+        graph_result = {
+            **entry_state.__dict__,
+            "status": "waiting_for_user",
+            "iteration": 4,
+            "clarification_questions": [{"id": "q1", "question": "页面类型？"}],
+        }
+
+        final_state = AgentLoopState.from_graph_result(graph_result)
+
+        assert final_state is not entry_state
+        assert final_state.status == "waiting_for_user"
+        assert final_state.iteration == 4
+        assert final_state.clarification_questions[0]["id"] == "q1"
+
+    def test_from_graph_result_keeps_state_instance(self):
+        state = AgentLoopState(status="completed", iteration=3)
+
+        assert AgentLoopState.from_graph_result(state) is state
+
     def test_serialize_deserialize_roundtrip(self):
         state = AgentLoopState()
         state.mode = "implement"
@@ -93,6 +114,22 @@ class TestAgentLoopStateSerialization:
         state = AgentLoopState()
         state.resolved_model = {"provider": "openai", "modelName": "gpt-4", "apiKey": "sk-super-secret"}
         json_str = state.serialize()
-        import json
         data = json.loads(json_str)
         assert "apiKey" not in data["resolved_model"]
+
+    def test_serialize_compacts_write_file_content(self):
+        state = AgentLoopState()
+        state.executed_tool_calls = [
+            ToolCallRecord(
+                id="w1",
+                name="write_file",
+                arguments={"relative_path": "src/App.vue", "content": "x" * 20_000},
+                result="文件写入成功",
+            )
+        ]
+
+        data = json.loads(state.serialize())
+
+        arguments = data["executed_tool_calls"][0]["arguments"]
+        assert "content" not in arguments
+        assert arguments["content_length"] == 20_000

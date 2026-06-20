@@ -96,7 +96,6 @@ class PlanStepNode:
         # 构建回退用的硬编码提示词
         fallback_prompt = PLAN_MODE_SYSTEM_PROMPT.format(
             tool_list=_format_tool_list(lc_tools),
-            user_prompt=self._context.prompt,
             plan_spec=PLAN_SPEC,
         )
         caps_text = ""
@@ -177,7 +176,6 @@ class ImplementStepNode:
 
         fallback_prompt = IMPLEMENT_MODE_SYSTEM_PROMPT.format(
             tool_list=_format_tool_list(lc_tools),
-            user_prompt=self._context.prompt,
             implementation_outline=outline_text,
         )
         if state.selected_capabilities and getattr(state.selected_capabilities, "skill", None):

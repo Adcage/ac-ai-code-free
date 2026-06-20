@@ -133,6 +133,37 @@ class TestResumeFlow:
         assert restored.selected_skill_id == "ui-ux-pro-max"
         assert restored.iteration == 3
 
+    def test_resume_does_not_persist_current_answer_in_internal_messages(self):
+        """恢复时不应将当前用户回答追加到 conversation_messages"""
+        state = AgentLoopState(status="waiting_for_user")
+        state.conversation_messages = [
+            {"role": "system", "content": "等待用户补充需求"},
+        ]
+
+        restored = AgentLoopState.deserialize(state.serialize())
+        restored.status = "running"
+
+        assert restored.conversation_messages == [
+            {"role": "system", "content": "等待用户补充需求"},
+        ]
+
+    def test_pause_snapshot_contains_final_question_and_iteration(self):
+        """暂停快照应包含最终问题和迭代次数"""
+        graph_result = {
+            "status": "waiting_for_user",
+            "iteration": 6,
+            "clarification_questions": [{"id": "q2", "question": "选择布局？"}],
+        }
+
+        snapshot = AgentLoopState.from_graph_result(graph_result).serialize()
+        restored = AgentLoopState.deserialize(snapshot)
+
+        assert restored.status == "waiting_for_user"
+        assert restored.iteration == 6
+        assert restored.clarification_questions == [
+            {"id": "q2", "question": "选择布局？"},
+        ]
+
     def test_resume_injects_user_answer(self):
         """恢复时应将用户回答注入 conversation_messages"""
         state = AgentLoopState()

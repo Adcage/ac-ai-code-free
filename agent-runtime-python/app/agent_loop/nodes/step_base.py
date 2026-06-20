@@ -3,11 +3,12 @@ import logging
 import time
 from typing import Any
 
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessageChunk
 from pydantic_core import PydanticUndefined
 from langchain_core.tools import BaseTool
 
 from app.agent_loop.state import AgentLoopState
+from app.agent_loop.message_builder import build_llm_messages
 from app.agent_loop.tools.switch_mode import SwitchModeTool
 from app.agent_loop.tools.ask_user import AskUserTool
 from app.agent_loop.tools.finish_tool import FinishTool
@@ -177,35 +178,7 @@ async def _execute_single_step(
     chat_model = services.chat_model_factory.create(state.resolved_model)
     chat_model = chat_model.bind_tools(lc_tools)
 
-    lc_messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=context.prompt),
-    ]
-
-    for msg in state.conversation_messages:
-        lc_messages.append(HumanMessage(content=msg["content"]))
-
-    for record in state.executed_tool_calls:
-        lc_messages.append(
-            AIMessage(
-                content="",
-                tool_calls=[
-                    {
-                        "id": record.id,
-                        "name": record.name,
-                        "args": record.arguments,
-                        "type": "tool_call",
-                    }
-                ],
-            )
-        )
-        lc_messages.append(
-            ToolMessage(
-                content=record.result or "",
-                tool_call_id=record.id,
-                name=record.name,
-            )
-        )
+    lc_messages = build_llm_messages(system_prompt, context, state)
 
     start_ms = time.monotonic()
     try:
@@ -242,9 +215,6 @@ async def _execute_single_step(
     # 之前有 tool_calls 时整段 text_content 被丢弃，前端看不到 AI 的过程说明与完成总结。
     if text_content:
         log_response(logger, text_content, label="model_response")
-        await services.event_bus.emit(
-            RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content})
-        )
 
     if tool_calls:
         for tc in tool_calls:
@@ -292,12 +262,6 @@ async def _execute_single_step(
                         },
                     )
                 )
-    else:
-        log_response(logger, text_content, label="model_response")
-        await services.event_bus.emit(
-            RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content})
-        )
-
     state.model_response_text = text_content
     state.iteration += 1
 

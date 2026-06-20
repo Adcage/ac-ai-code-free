@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from app.runtime.state import ToolCallRecord
+from app.agent_loop.tool_history import compact_tool_records
+from app.core.config import settings
 
 logger = logging.getLogger("app.agent_loop.state")
 
@@ -87,9 +89,20 @@ class AgentLoopState:
         for f in _PERSIST_FIELDS:
             val = getattr(self, f)
             if f == "executed_tool_calls":
+                records = compact_tool_records(
+                    val,
+                    max_total_chars=settings.agent_tool_history_max_chars,
+                    max_result_chars=settings.agent_tool_result_max_chars,
+                )
                 val = [
-                    {"id": r.id, "name": r.name, "arguments": r.arguments, "result": r.result}
-                    for r in val
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "arguments": r.arguments,
+                        "result": r.result,
+                        "error": r.error,
+                    }
+                    for r in records
                 ]
             if f == "resolved_model" and isinstance(val, dict):
                 val = {k: v for k, v in val.items() if k != "apiKey"}
@@ -99,13 +112,43 @@ class AgentLoopState:
         return json.dumps(data, ensure_ascii=False)
 
     @classmethod
+    def from_graph_result(
+        cls,
+        result: "AgentLoopState | dict[str, Any]",
+    ) -> "AgentLoopState":
+        if isinstance(result, cls):
+            return result
+        if not isinstance(result, dict):
+            raise TypeError(f"Unsupported graph result type: {type(result).__name__}")
+
+        state = cls()
+        for key, value in result.items():
+            if not hasattr(state, key):
+                continue
+            if key == "executed_tool_calls":
+                value = [
+                    record
+                    if isinstance(record, ToolCallRecord)
+                    else ToolCallRecord(
+                        id=record["id"],
+                        name=record["name"],
+                        arguments=record.get("arguments", {}),
+                        result=record.get("result"),
+                        error=record.get("error"),
+                    )
+                    for record in value
+                ]
+            setattr(state, key, value)
+        return state
+
+    @classmethod
     def deserialize(cls, json_str: str) -> "AgentLoopState":
         data = json.loads(json_str)
         executed = data.pop("executed_tool_calls", [])
         data["executed_tool_calls"] = [
             ToolCallRecord(
                 id=r["id"], name=r["name"],
-                arguments=r["arguments"], result=r.get("result"),
+                arguments=r["arguments"], result=r.get("result"), error=r.get("error"),
             )
             for r in executed
         ]
