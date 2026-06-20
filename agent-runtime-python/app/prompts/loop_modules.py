@@ -16,41 +16,45 @@ class PlanWorkflowModule(PromptModule):
 
     def render(self, context: Any, state: Any) -> str:
         return (
-            "你处于规划模式（Plan Mode）。你的职责是理解用户需求，制定完整实现计划，然后尽快切换到实现模式开始生成代码。\n"
+            "你处于规划模式（Plan Mode）。你的职责是充分理解用户需求，制定完整的实现计划，然后切换到实现模式。\n"
             "\n"
-            "**重要：你应该在 2-3 个步骤内完成规划并切换，不要在 plan 模式反复徘徊。**\n"
+            "**核心原则：plan 模式的价值在于搞清楚用户要什么。需求不明确时，必须先问清楚再做计划。**\n"
             "\n"
             "## 工作流\n"
             "\n"
+            "**步骤 0：澄清需求（必须先判断）**\n"
+            "\n"
+            "如果用户需求不够清晰——只说了一句话、没有说明功能、没有描述页面内容——你必须调用 ask_user 发起选择式提问。\n"
+            "\n"
+            "**ask_user 调用规则（必须严格遵守）：**\n"
+            "- 使用 input_type='single_select'（单选）\n"
+            "- options 参数必须提供：至少 3 个、最多 5 个具体选项\n"
+            "- 每个选项用简短的短语描述一种可能（如'登录注册页面'、'数据展示仪表盘'、'待办事项列表'）\n"
+            "- 根据用户原始需求推断可能的意图来设计选项，不要把问题丢回给用户\n"
+            "- 示例调用：ask_user(question='请选择您要创建的应用类型', input_type='single_select', options=['登录注册页面', '数据展示仪表盘', '待办事项列表', '产品展示页'])\n"
+            "用户回答后，根据回答继续下面的步骤。\n"
+            "如果用户需求已经非常明确（如详细描述了功能和布局），可以跳过此步骤直接进入步骤 1。\n"
+            "\n"
             "**步骤 1：判断是否有 Skill（1 步）**\n"
             "\n"
-            "- 如果有选中的 Skill：用 `read_file(scope=\"skill\", path=\"SKILL.md\")` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。\n"
+            "- 如果有选中的 Skill：用 `read_file(scope='skill', path='SKILL.md')` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。\n"
             "- 如果没有选中的 Skill：**直接进入步骤 2**，不要反复查看空工作区。\n"
             "\n"
             "**步骤 2：编写实现计划（1 步）**\n"
             "\n"
-            "按照计划编写规范，调用 `write_plan(outline=\"...\")` 写入实现计划。计划必须包含文件清单、生成顺序、技术选型和关键逻辑。\n"
+            "按照计划编写规范，调用 `write_plan(outline='...')` 写入实现计划。计划必须包含文件清单、生成顺序、技术选型和关键逻辑。\n"
             "\n"
             "**步骤 3：切换到 Implement 模式**\n"
             "\n"
-            "计划写入后立即调用 `switch_mode(\"implement\")`。必须先调用 `write_plan` 写入计划，才能切换到 implement 模式。\n"
-            "\n"
-            "## 切换到 Implement 模式的条件\n"
-            "\n"
-            "满足以下条件即可切换（只需 1-3 个步骤）：\n"
-            "\n"
-            "1. 用户需求已理解（不需要完美理解，合理推测即可）\n"
-            "2. 如有 Skill，已读取 Skill 正文\n"
-            "3. 已通过 `write_plan` 写入实现计划\n"
-            "\n"
-            "**不要在计划阶段追求完美。** 对于明确的简单需求（如'创建一个登录页面'），可以直接在 1 步内完成规划并切换，在实施时再逐步完善。\n"
+            "计划写入后立即调用 `switch_mode('implement')`。必须先调用 `write_plan` 写入计划，才能切换到 implement 模式。\n"
             "\n"
             "## 注意事项\n"
             "\n"
             "- 你没有写文件权限，不要尝试调用 write_file\n"
             "- 工作区为空时不要反复调用 read_dir，直接开始规划\n"
-            "- 如果连续 3 步没有进展，立即调用 `write_plan` 写入当前理解，然后 `switch_mode(\"implement\")` 强行切换\n"
-            "- 用户对应用本身的细节（如配色、布局、功能），你先按最佳实践自主决定，不要问用户\n"
+            "- 如果连续 3 步没有进展，立即调用 `write_plan` 写入当前理解，然后 `switch_mode('implement')` 强行切换\n"
+            "- 不要在 plan 模式反复徘徊，目标是最多 3-4 步内进入 implement\n"
+            "- 对于配色、字体间距等不影响功能结构的纯视觉细节，你可以按最佳实践自主决定\n"
             "- **不要在回复中复述 Skill 原文内容**，只提取关键规则和约束用于指导实现，对用户可见的回复必须是简洁的中文摘要"
         )
 
@@ -84,7 +88,7 @@ class ImplementWorkflowModule(PromptModule):
             "1. 按实现计划中的顺序，逐个创建文件。用 write_file 写入完整的、可直接运行的内容。\n"
             "2. 文件路径使用正斜杠 /。每个文件一次性写完完整内容，不省略、不使用占位符。\n"
             "3. 如果是 Vue 项目，写入所有文件后执行 npm install 安装依赖。\n"
-            "4. 重点：全部文件创建完成后立即调用 finish，不要画蛇添足。\n"
+            "4. 全部文件创建完成后，先用一句话总结你完成了什么（如'登录页面已创建完成，包含三个文件'），然后调用 finish。\n"
             "5. 如果实现计划为空或不完整，按用户需求的合理理解自主生成，不需要回 plan 模式。\n"
             "\n"
             "## 返回 Plan 模式的条件（极少使用）\n"
@@ -120,8 +124,13 @@ class ValidateWorkflowModule(PromptModule):
         if check_results:
             lines = []
             for r in check_results:
-                icon = "✓" if r.get("status") == "pass" else ("✗" if r.get("status") == "fail" else "⚠")
-                lines.append(f"{icon} [{r.get('severity', '?')}] {r.get('id', '?')}: {r.get('message', '')}")
+                status = r.get("status", "?")
+                icon = "✓" if status == "pass" else ("✗" if status == "fail" else "⚠")
+                severity = r.get('severity', '')
+                if status == "pass":
+                    lines.append(f"{icon} {r.get('id', '?')}: {r.get('message', '')}")
+                else:
+                    lines.append(f"{icon} [{severity}] {r.get('id', '?')}: {r.get('message', '')}")
             check_results_text = "\n".join(lines)
 
         parts = [

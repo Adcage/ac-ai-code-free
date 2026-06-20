@@ -86,6 +86,9 @@ class RouteAfterImplementModule(PromptModule):
             "- 如果是首次生成或改动量较大（3 个以上文件）：调用 `decide_route(mode=\"validate\")`\n"
             "- 如果是简单修改（1-2 个文件的小改动）：调用 `decide_route(mode=\"finish\")`\n"
             "\n"
+            "**必须遵守**：在调用 decide_route 之前，你要用自然语言告诉用户 AI 刚才完成了什么工作。"
+            "例如：'代码生成完成，已更新 index.html 和 style.css 两个文件。'\n"
+            "\n"
             "**1 步内必须做出决策。**"
         )
 
@@ -109,8 +112,13 @@ class RouteAfterValidateModule(PromptModule):
         if check_results:
             lines = []
             for r in check_results:
-                icon = "✓" if r.get("status") == "pass" else ("✗" if r.get("status") == "fail" else "⚠")
-                lines.append(f"{icon} [{r.get('severity', '?')}] {r.get('id', '?')}: {r.get('message', '')}")
+                status = r.get("status", "?")
+                icon = "✓" if status == "pass" else ("✗" if status == "fail" else "⚠")
+                severity = r.get('severity', '')
+                if status == "pass":
+                    lines.append(f"{icon} {r.get('id', '?')}: {r.get('message', '')}")
+                else:
+                    lines.append(f"{icon} [{severity}] {r.get('id', '?')}: {r.get('message', '')}")
             results_text = "\n".join(lines)
 
         failures_text = ""
@@ -139,7 +147,11 @@ class RouteAfterValidateModule(PromptModule):
             "\n### 判断规则\n"
             "\n"
             "- 校验通过（无 error 级别失败）：调用 `decide_route(mode=\"finish\")`\n"
-            "- 校验有 error 级别失败：调用 `decide_route(mode=\"implement\")`，AI 将修复问题后重新校验\n"
+            "- 校验有 error 级别失败：调用 `decide_route(mode=\"implement\")`\n"
+            "\n"
+            "**必须遵守**：在调用 decide_route 之前，你要用自然语言告诉用户刚才的校验结果，"
+            "以及这次生成了什么、代码质量如何。"
+            "例如：'校验通过，登录页面已创建完成，三个文件均已生成且通过所有检查。'\n"
             "\n"
             "**1 步内必须做出决策。**"
         )
