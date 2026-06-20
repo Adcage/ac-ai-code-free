@@ -55,6 +55,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
@@ -267,6 +268,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
@@ -277,36 +279,60 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = getAndCheckApp(appId, loginUser);
         // 3. 校验会话归属
         getAndCheckChatSession(sessionId, appId, loginUser);
-        // 4. 保存用户消息
-        saveHistoryMessage(sessionId, appId, loginUser.getId(), message, "user", "success", app.getCodeGenType(), 0, null);
-        updateSessionSummary(sessionId);
-        // 5. 获取应用的代码生成类型
+        // 锁定会话行，确保恢复、运行中检查与新建 AgentRun 在并发请求下严格串行
+        chatSessionMapper.selectByIdForUpdate(sessionId);
+        // 4. 获取应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 6. 通过 Runtime Router 选择运行时
+        // 5. 通过 Runtime Router 选择运行时，并优先认领已有的暂停运行
         CodeGenerationRuntime runtime = codeGenerationRuntimeRouter.select();
-        ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
-        Long modelConfigId = modelConfig == null ? null : modelConfig.getId();
-        Integer configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
-        Long agentRunId = agentRunService.createAgentRun(appId, sessionId, loginUser.getId(), runtime.getName(),
-                modelConfigId, configVersion, null);
-        String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" + getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId;
-        agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
-        String loopStateJson = "";
-        AgentRun pausedRun = agentRunService.getOne(
-                QueryWrapper.create()
-                        .eq("sessionId", sessionId)
-                        .eq("status", "waiting_for_user")
-                        .orderBy("createTime", false)
-                        .limit(1)
-        );
-        if (pausedRun != null && pausedRun.getLoopStateJson() != null) {
-            loopStateJson = pausedRun.getLoopStateJson();
-            log.info("found paused agent_run for resume, sessionId={}, agentRunId={}", sessionId, pausedRun.getId());
+        AgentRun resumedRun = agentRunService.claimLatestPausedRun(
+                appId, sessionId, loginUser.getId());
+
+        Long agentRunId;
+        Long modelConfigId;
+        Integer configVersion;
+        String loopStateJson;
+        String workspacePath;
+
+        if (resumedRun != null) {
+            agentRunId = resumedRun.getId();
+            modelConfigId = resumedRun.getModelConfigId();
+            configVersion = resumedRun.getConfigVersion();
+            loopStateJson = resumedRun.getLoopStateJson();
+            workspacePath = StrUtil.blankToDefault(
+                    resumedRun.getWorkspacePath(),
+                    workspaceProperties.getAgentWorkspaceDir() + "/" +
+                            getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId
+            );
+            log.info("resuming paused agent_run, sessionId={}, agentRunId={}", sessionId, agentRunId);
+        } else {
+            ThrowUtils.throwIf(
+                    agentRunService.hasRunningRun(appId, sessionId, loginUser.getId()),
+                    ErrorCode.OPERATION_ERROR,
+                    "当前会话正在生成，请勿重复提交"
+            );
+            ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
+            modelConfigId = modelConfig == null ? null : modelConfig.getId();
+            configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
+            agentRunId = agentRunService.createAgentRun(
+                    appId, sessionId, loginUser.getId(), runtime.getName(),
+                    modelConfigId, configVersion, null
+            );
+            loopStateJson = "";
+            workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" +
+                    getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId;
+            agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
         }
+
+        // 6. 运行准备完成后再保存用户消息；同步失败时事务会回滚 AgentRun 认领/创建
+        saveHistoryMessage(sessionId, appId, loginUser.getId(), message, "user", "success",
+                app.getCodeGenType(), 0, null);
+        updateSessionSummary(sessionId);
+
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
                 .appId(appId)

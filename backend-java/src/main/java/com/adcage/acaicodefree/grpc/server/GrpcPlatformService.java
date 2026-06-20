@@ -1,26 +1,28 @@
 package com.adcage.acaicodefree.grpc.server;
 
+import java.util.List;
+
+import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
 import com.adcage.acaicodefree.grpc.platform.*;
+import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
-import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
-import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.AppVersionService;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.UserService;
+
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
-import jakarta.annotation.Resource;
-import java.util.List;
 
 @Slf4j
 @GrpcService

@@ -3,11 +3,12 @@ package com.adcage.acaicodefree.controller;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
-import com.adcage.acaicodefree.legacy.core.AiCodeGeneratorFacade;
+import com.adcage.acaicodefree.grpc.client.GrpcPythonAgentRuntime;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
+import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
@@ -75,7 +76,7 @@ class AppChatE2ETest {
     private JdbcTemplate jdbcTemplate;
 
     @MockBean
-    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+    private GrpcPythonAgentRuntime grpcPythonAgentRuntime;
 
     @MockBean
     private AgentRunService agentRunService;
@@ -117,6 +118,7 @@ class AppChatE2ETest {
                 .appName("E2E会话应用")
                 .initPrompt("生成一个简单页面")
                 .codeGenType(CodeGenTypeEnum.SINGLE_FILE.getValue())
+                .isTestApp(0)
                 .userId(user.getId())
                 .priority(0)
                 .editTime(LocalDateTime.now())
@@ -206,7 +208,8 @@ class AppChatE2ETest {
 
     @Test
     void chatFullChain_shouldCreateSessionStreamPersistAndQuery() throws Exception {
-        when(aiCodeGeneratorFacade.generateAndSaveCodeStream(anyString(), any(), anyLong()))
+        when(grpcPythonAgentRuntime.getName()).thenReturn("python-agent");
+        when(grpcPythonAgentRuntime.stream(any(CodeGenerationRequest.class)))
                 .thenReturn(Flux.just("<div>", "hello</div>"));
 
         MvcResult createSessionResult = mockMvc.perform(post("/app/chat/session/create")
@@ -302,7 +305,8 @@ class AppChatE2ETest {
         appMapper.update(testApp);
 
         String toolArguments = "{\"relativeFilePath\":\"src/main.js\"}";
-        when(aiCodeGeneratorFacade.generateAndSaveCodeStream(anyString(), any(), anyLong()))
+        when(grpcPythonAgentRuntime.getName()).thenReturn("python-agent");
+        when(grpcPythonAgentRuntime.stream(any(CodeGenerationRequest.class)))
                 .thenReturn(Flux.just(
                         "{\"type\":\"ai_response\",\"data\":\"开始生成 Vue 工程\"}",
                         "{\"type\":\"tool_request\",\"id\":\"t1\",\"name\":\"writeFile\",\"arguments\":" + JSONUtil.quote(toolArguments) + "}",

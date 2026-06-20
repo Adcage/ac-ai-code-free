@@ -122,6 +122,7 @@ class AppServiceImplWorkflowTest {
                 .appName("Workflow接入测试应用")
                 .initPrompt("生成页面")
                 .codeGenType(CodeGenTypeEnum.SINGLE_FILE.getValue())
+                .isTestApp(0)
                 .userId(loginUser.getId())
                 .priority(0)
                 .editTime(LocalDateTime.now())

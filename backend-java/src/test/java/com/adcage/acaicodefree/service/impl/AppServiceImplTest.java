@@ -7,6 +7,7 @@ import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.entity.App;
+import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
@@ -126,7 +127,7 @@ class AppServiceImplTest {
         verify(agentRunService).createAgentRun(appId, sessionId, userId, "python-agent",
                 42L, 3, null);
 
-        String expectedWorkspacePath = "/data/agent-workspaces/99/source";
+        String expectedWorkspacePath = "/data/agent-workspaces/vue_project/1";
         verify(agentRunService).updateAgentRunWorkspacePath(99L, expectedWorkspacePath);
 
         ArgumentCaptor<CodeGenerationRequest> requestCaptor = ArgumentCaptor.forClass(CodeGenerationRequest.class);
@@ -171,7 +172,7 @@ class AppServiceImplTest {
         verify(agentRunService).createAgentRun(appId, sessionId, userId, "python-agent",
                 null, null, null);
 
-        String expectedWorkspacePath = "/tmp/workspaces/50/source";
+        String expectedWorkspacePath = "/tmp/workspaces/multi-file/1";
         verify(agentRunService).updateAgentRunWorkspacePath(50L, expectedWorkspacePath);
 
         ArgumentCaptor<CodeGenerationRequest> requestCaptor = ArgumentCaptor.forClass(CodeGenerationRequest.class);
@@ -181,5 +182,77 @@ class AppServiceImplTest {
         assertNull(capturedRequest.getModelConfigId());
         assertNull(capturedRequest.getConfigVersion());
         assertEquals(expectedWorkspacePath, capturedRequest.getWorkspacePath());
+    }
+
+    @Test
+    void chatToGenCode_shouldResumePausedRunWithoutCreatingAnotherRun() {
+        Long appId = 1L;
+        Long sessionId = 10L;
+        Long userId = 100L;
+        User loginUser = User.builder().id(userId).build();
+        App app = new App();
+        app.setId(appId);
+        app.setUserId(userId);
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(sessionId);
+        chatSession.setAppId(appId);
+        chatSession.setUserId(userId);
+        AgentRun paused = AgentRun.builder()
+                .id(88L)
+                .appId(appId)
+                .sessionId(sessionId)
+                .userId(userId)
+                .modelConfigId(42L)
+                .configVersion(3)
+                .workspacePath("/data/agent-workspaces/88/source")
+                .loopStateJson("{\"status\":\"waiting_for_user\"}")
+                .build();
+        doReturn(app).when(appService).getById(appId);
+        when(chatSessionMapper.selectOneByQuery(any())).thenReturn(chatSession);
+        when(chatHistoryMapper.selectCountByQuery(any())).thenReturn(0L);
+        when(chatHistoryMapper.insert(any())).thenReturn(1);
+        when(agentRunService.claimLatestPausedRun(appId, sessionId, userId)).thenReturn(paused);
+
+        appService.chatToGenCode(appId, sessionId, "企业后台登录页面", loginUser);
+
+        verify(agentRunService, never()).createAgentRun(
+                anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any());
+        ArgumentCaptor<CodeGenerationRequest> request =
+                ArgumentCaptor.forClass(CodeGenerationRequest.class);
+        verify(mockRuntime).stream(request.capture());
+        assertEquals(88L, request.getValue().getAgentRunId());
+        assertEquals(paused.getLoopStateJson(), request.getValue().getLoopStateJson());
+        assertEquals(42L, request.getValue().getModelConfigId());
+    }
+
+    @Test
+    void chatToGenCode_shouldRejectWhenSessionAlreadyHasRunningRun() {
+        Long appId = 1L;
+        Long sessionId = 10L;
+        Long userId = 100L;
+        User loginUser = User.builder().id(userId).build();
+        App app = new App();
+        app.setId(appId);
+        app.setUserId(userId);
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(sessionId);
+        chatSession.setAppId(appId);
+        chatSession.setUserId(userId);
+        doReturn(app).when(appService).getById(appId);
+        when(chatSessionMapper.selectOneByQuery(any())).thenReturn(chatSession);
+        when(agentRunService.claimLatestPausedRun(appId, sessionId, userId)).thenReturn(null);
+        when(agentRunService.hasRunningRun(appId, sessionId, userId)).thenReturn(true);
+
+        BusinessException error = assertThrows(
+                BusinessException.class,
+                () -> appService.chatToGenCode(appId, sessionId, "重复提交", loginUser));
+
+        assertTrue(error.getMessage().contains("当前会话正在生成"));
+        verify(agentRunService, never()).createAgentRun(
+                anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any());
+        verify(mockRuntime, never()).stream(any());
+        verify(chatHistoryMapper, never()).insert(any());
     }
 }

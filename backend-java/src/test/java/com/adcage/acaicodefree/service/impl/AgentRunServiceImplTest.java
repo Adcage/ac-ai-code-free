@@ -14,12 +14,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class AgentRunServiceImplTest {
 
     private AgentRun capturedAgentRun;
+    private AgentRun capturedUpdate;
 
     private AgentRunServiceImpl agentRunService;
 
     @BeforeEach
     void setUp() {
         capturedAgentRun = null;
+        capturedUpdate = null;
         agentRunService = new AgentRunServiceImpl() {
             @Override
             public boolean save(AgentRun entity) {
@@ -36,6 +38,7 @@ class AgentRunServiceImplTest {
 
             @Override
             public boolean updateById(AgentRun entity) {
+                capturedUpdate = entity;
                 return true;
             }
         };
@@ -88,6 +91,24 @@ class AgentRunServiceImplTest {
     void updateAgentRunWorkspacePath_NotFound_ThrowsException() {
         assertThrows(BusinessException.class,
                 () -> agentRunService.updateAgentRunWorkspacePath(999L, "/path"));
+    }
+
+    @Test
+    void completeAgentRun_ClearsCheckpoint() {
+        agentRunService.completeAgentRun(1L, "/workspace", 10);
+
+        assertNotNull(capturedUpdate);
+        assertEquals("completed", capturedUpdate.getStatus());
+        assertEquals("", capturedUpdate.getLoopStateJson());
+    }
+
+    @Test
+    void failAgentRun_ClearsCheckpoint() {
+        agentRunService.failAgentRun(1L, "failed");
+
+        assertNotNull(capturedUpdate);
+        assertEquals("failed", capturedUpdate.getStatus());
+        assertEquals("", capturedUpdate.getLoopStateJson());
     }
 
     @Test
