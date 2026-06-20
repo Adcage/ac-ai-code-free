@@ -124,7 +124,6 @@ const app = ref<API.AppVO>()
 const messages = ref<ChatMessage[]>([])
 const sessions = ref<API.ChatSessionVO[]>([])
 const currentSessionId = ref<string>()
-const generating = ref(false)
 const enhancingInput = ref(false)
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
@@ -146,19 +145,6 @@ const editingTitle = ref('')
 const chatMessageListRef = ref<InstanceType<typeof ChatMessageList>>()
 const chatInputAreaRef = ref<InstanceType<typeof ChatInputArea>>()
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel>>()
-
-// SSE composable
-const { startSSE, stopSSE, streamWarning } = useSSEChat({
-  appId,
-  messages,
-  onPreviewUpdate: updatePreview,
-  onSessionsUpdate: loadSessions,
-  onAppUpdate: (data) => {
-    if (data.codeGenType && app.value) {
-      app.value.codeGenType = data.codeGenType
-    }
-  },
-})
 
 const isOwner = computed(() => {
   const loginUserId = loginUserStore.loginUser?.id
@@ -351,7 +337,6 @@ const doChatWithMessage = async (rawMessage: string) => {
   }
   const promptMessage = buildSelectedElementPrompt(rawMessage)
   messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
-  iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
   startSSE(promptMessage, sessionId, app.value?.codeGenType)
@@ -406,7 +391,6 @@ async function handlePlanningSubmit(answers: Record<string, string>) {
   const sessionId = currentSessionId.value
   if (!sessionId) return
   messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
-  iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
   startSSE(prompt, sessionId, app.value?.codeGenType)
@@ -428,7 +412,6 @@ async function handlePlanConfirm(index: number) {
   const sessionId = currentSessionId.value
   if (!sessionId) return
   messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
-  iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
   startSSE(prompt, sessionId, app.value?.codeGenType)
@@ -476,21 +459,26 @@ const doEnhanceInput = async (promptText: string) => {
 /**
  * 更新预览
  */
-const updatePreview = async () => {
+const updatePreview = async (refresh = false) => {
   const codeGenType = app.value?.codeGenType || 'single_file'
   const deployUrlPrefix = import.meta.env.VITE_APP_DEPLOY_URL_PREFIX
   previewWarning.value = ''
   selectedElement.value = null
-  if (!hasPreviewCandidate()) {
-    iframeUrl.value = ''
-    previewStatus.value = hasLatestGenerationFailure() ? 'failed' : 'idle'
-    if (previewStatus.value === 'failed') {
-      previewWarning.value = extractLatestFailureReason() || '本次生成未产出可预览页面，请根据左侧错误信息调整后重试'
+
+  const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix, refresh)
+
+  // 非刷新模式下，如果 URL 基础路径相同（不含时间戳），跳过重复检查
+  if (!refresh && iframeUrl.value) {
+    const currentBase = iframeUrl.value.split('?')[0]
+    const nextBase = nextUrl.split('?')[0]
+    if (currentBase === nextBase && previewStatus.value === 'ready') {
+      return
     }
-    return
   }
+
+  // 无论当前会话是否有消息，都尝试检查服务器上的预览资源
+  // （之前的会话可能已经生成过，资源仍然存在）
   previewStatus.value = 'checking'
-  const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix)
   const resourceAvailable = await checkPreviewResource(nextUrl)
   if (resourceAvailable) {
     previewStatus.value = 'ready'
@@ -498,7 +486,7 @@ const updatePreview = async () => {
     return
   }
   if (codeGenType === 'multi-file') {
-    const plainUrl = `${deployUrlPrefix}/multi-file/${appId}/index.html?t=${Date.now()}`
+    const plainUrl = `${deployUrlPrefix}/multi-file/${appId}/index.html${refresh ? `?t=${Date.now()}` : ''}`
     const plainAvailable = await checkPreviewResource(plainUrl)
     if (plainAvailable) {
       previewStatus.value = 'ready'
@@ -506,29 +494,50 @@ const updatePreview = async () => {
       return
     }
   }
-  const fallbackUrl = `${deployUrlPrefix}/${codeGenType === 'vue_project' ? 'vue_project' : codeGenType}/${appId}/index.html?t=${Date.now()}`
+  const fallbackUrl = `${deployUrlPrefix}/${codeGenType === 'vue_project' ? 'vue_project' : codeGenType}/${appId}/index.html${refresh ? `?t=${Date.now()}` : ''}`
   const fallbackAvailable = await checkPreviewResource(fallbackUrl)
   if (fallbackAvailable) {
     previewStatus.value = 'ready'
     iframeUrl.value = fallbackUrl
     return
   }
-  iframeUrl.value = ''
-  previewStatus.value = 'failed'
-  const latestFailureReason = extractLatestFailureReason()
-  previewWarning.value = latestFailureReason
-    ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
-    : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。'
+
+  // 资源检查全部失败
+  if (iframeUrl.value) {
+    // 已有预览 → 保留旧预览，只更新状态提示
+    previewStatus.value = 'ready'
+    previewWarning.value = '预览资源检查失败，显示的是上一次的预览结果'
+  } else {
+    // 从未有过预览 → idle
+    iframeUrl.value = ''
+    previewStatus.value = 'idle'
+  }
 }
 
-const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string) => {
+// SSE composable — 在 updatePreview 和 loadSessions 声明之后初始化，避免 TDZ
+// generating 必须取 composable 返回的 ref：startSSE 内部置 true/false，
+// 页面本地的 generating 之前是死 ref（恒 false），导致"AI 正在生成"指示与输入禁用失效。
+const { generating, startSSE, stopSSE, streamWarning } = useSSEChat({
+  appId,
+  messages,
+  onPreviewUpdate: () => updatePreview(true),
+  onSessionsUpdate: loadSessions,
+  onAppUpdate: (data) => {
+    if (data.codeGenType && app.value) {
+      app.value.codeGenType = data.codeGenType
+    }
+  },
+})
+
+const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string, refresh = false) => {
+  const cache = refresh ? `?t=${Date.now()}` : ''
   if (codeGenType === 'vue_project') {
-    return `${deployUrlPrefix}/vue_project/${appId}/dist/index.html?t=${Date.now()}`
+    return `${deployUrlPrefix}/vue_project/${appId}/dist/index.html${cache}`
   }
   if (codeGenType === 'multi-file') {
-    return `${deployUrlPrefix}/multi-file/${appId}/dist/index.html?t=${Date.now()}`
+    return `${deployUrlPrefix}/multi-file/${appId}/dist/index.html${cache}`
   }
-  return `${deployUrlPrefix}/${codeGenType}/${appId}/index.html?t=${Date.now()}`
+  return `${deployUrlPrefix}/${codeGenType}/${appId}/index.html${cache}`
 }
 
 const hasPreviewCandidate = () => {

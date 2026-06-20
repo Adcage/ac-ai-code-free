@@ -70,7 +70,7 @@ import {
   CloseCircleOutlined,
   LoadingOutlined,
 } from '@ant-design/icons-vue'
-import { listAppVersions } from '@/api/appVersionController'
+import { listVersions } from '@/api/appVersionController'
 import { createVisualEditor, type ElementInfo } from '@/utils/visualEditor'
 
 export interface PreviewStatusType {
@@ -187,7 +187,7 @@ const loadVersions = async () => {
   if (!props.appId) return
   versionLoading.value = true
   try {
-    const res = await listAppVersions({ appId: Number(props.appId) })
+    const res = await listVersions({ appId: Number(props.appId) })
     if (res.data?.code === 0) {
       versionList.value = res.data?.data || []
     }

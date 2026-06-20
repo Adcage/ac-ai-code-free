@@ -31,6 +31,7 @@ export function useSSEChat(options: SSEChatOptions) {
   const generating = ref(false)
   const streamWarning = ref('')
   let currentEventSource: EventSource | null = null
+  let previewUpdateTimer: ReturnType<typeof setTimeout> | null = null
 
   const normalizeId = (id?: string | number | null) => {
     if (id === undefined || id === null) return ''
@@ -165,23 +166,19 @@ export function useSSEChat(options: SSEChatOptions) {
         if (messageObj.name === 'ask_user') {
           const args = parseAskUserArgs(messageObj.arguments)
           if (!args) return
-          const inputType = args.inputType || 'text_input'
-          if (inputType === 'text_input') {
-            messages.value[aiMsgIndex].content += `\n\n**${args.question}**`
-          } else {
-            const planningJson = JSON.stringify({
-              questions: [
-                {
-                  id: 'q1',
-                  question: args.question,
-                  inputType,
-                  required: true,
-                  options: (args.options || []).map((o: string) => ({ value: o, label: o })),
-                },
-              ],
-            })
-            messages.value[aiMsgIndex].content += `\n<planning type="clarification">${planningJson}</planning>\n`
-          }
+          const inputType = args.inputType || 'single_select'
+          const planningJson = JSON.stringify({
+            questions: [
+              {
+                id: 'q1',
+                question: args.question,
+                inputType,
+                required: true,
+                options: (args.options || []).map((o: string) => ({ value: o, label: o })),
+              },
+            ],
+          })
+          messages.value[aiMsgIndex].content += `\n<planning type="clarification">${planningJson}</planning>\n`
           return
         }
         const text = formatToolText(messageObj.name, messageObj.arguments, 'request')
@@ -216,6 +213,14 @@ export function useSSEChat(options: SSEChatOptions) {
       targetMessage.toolEvents = []
     }
     targetMessage.toolEvents.push(eventItem)
+    // 工具执行完成 → 文件可能已变化，防抖触发预览检查
+    if (eventItem.type === 'executed') {
+      if (previewUpdateTimer) clearTimeout(previewUpdateTimer)
+      previewUpdateTimer = setTimeout(() => {
+        onPreviewUpdate()
+        previewUpdateTimer = null
+      }, 2000)
+    }
   }
 
   const parseAskUserArgs = (argumentsData?: string | Record<string, unknown>) => {
@@ -229,7 +234,7 @@ export function useSSEChat(options: SSEChatOptions) {
       }
       return {
         question: (argsObj.question as string) || '',
-        inputType: (argsObj.input_type as string) || (argsObj.inputType as string) || 'text_input',
+        inputType: (argsObj.input_type as string) || (argsObj.inputType as string) || 'single_select',
         options: Array.isArray(argsObj.options) ? (argsObj.options as string[]) : [],
       }
     } catch (e) {
@@ -239,7 +244,7 @@ export function useSSEChat(options: SSEChatOptions) {
           const argsObj = JSON.parse(normalized)
           return {
             question: (argsObj.question as string) || '',
-            inputType: (argsObj.input_type as string) || (argsObj.inputType as string) || 'text_input',
+            inputType: (argsObj.input_type as string) || (argsObj.inputType as string) || 'single_select',
             options: Array.isArray(argsObj.options) ? (argsObj.options as string[]) : [],
           }
         } catch {
@@ -264,7 +269,7 @@ export function useSSEChat(options: SSEChatOptions) {
     if (!argumentsText) return ''
     try {
       const argsObj = JSON.parse(argumentsText)
-      return argsObj.relativeFilePath || argsObj.relativeDirPath || ''
+      return argsObj.relative_path || argsObj.relativeFilePath || argsObj.relative_dir_path || argsObj.relativeDirPath || ''
     } catch {
       return ''
     }
@@ -278,25 +283,42 @@ export function useSSEChat(options: SSEChatOptions) {
   ) => {
     const path = parsePathFromArguments(argumentsText)
     const requestMap: Record<string, string> = {
+      write_file: path ? `准备写入文件 ${path}` : '准备写入文件',
       writeFile: path ? `准备写入文件 ${path}` : '准备写入文件',
+      read_file: path ? `准备读取文件 ${path}` : '准备读取文件',
       readFile: path ? `准备读取文件 ${path}` : '准备读取文件',
+      modify_file: path ? `准备修改文件 ${path}` : '准备修改文件',
       modifyFile: path ? `准备修改文件 ${path}` : '准备修改文件',
+      delete_file: path ? `准备删除文件 ${path}` : '准备删除文件',
       deleteFile: path ? `准备删除文件 ${path}` : '准备删除文件',
+      read_dir: path ? `准备读取目录 ${path}` : '准备读取目录结构',
       readDir: path ? `准备读取目录 ${path}` : '准备读取目录结构',
+      read_asset: '准备读取资源文件',
+      run_command: '正在执行终端命令',
     }
     const executedMap: Record<string, string> = {
+      write_file: path ? `已写入文件 ${path}` : '文件写入成功',
       writeFile: path ? `已写入文件 ${path}` : '文件写入成功',
+      read_file: path ? `已读取文件 ${path}` : '文件读取成功',
       readFile: path ? `已读取文件 ${path}` : '文件读取成功',
+      modify_file: path ? `已修改文件 ${path}` : '文件修改成功',
       modifyFile: path ? `已修改文件 ${path}` : '文件修改成功',
+      delete_file: path ? `已删除文件 ${path}` : '文件删除成功',
       deleteFile: path ? `已删除文件 ${path}` : '文件删除成功',
+      read_dir: path ? `目录结构读取完成 ${path}` : '目录结构读取完成',
       readDir: path ? `目录结构读取完成 ${path}` : '目录结构读取完成',
+      read_asset: '资源文件读取完成',
+      run_command: '终端命令执行完成',
     }
     if (stage === 'request') {
-      return requestMap[toolName || ''] || `正在执行工具 ${toolName || ''}`.trim()
+      return requestMap[toolName || ''] || `正在执行 ${toolName || '工具'}`
     }
-    if (result && String(result).startsWith('文件修改失败')) return result
-    if (result && String(result).startsWith('禁止删除关键文件')) return result
-    return executedMap[toolName || ''] || result || `工具执行成功 ${toolName || ''}`.trim()
+    // 已知错误消息原样展示
+    if (result && (String(result).startsWith('文件修改失败') || String(result).startsWith('禁止删除关键文件'))) {
+      return result
+    }
+    // 优先用映射，否则显示简短摘要（不展示原始 result，避免文件内容刷屏）
+    return executedMap[toolName || ''] || `已执行 ${toolName || '工具'}`
   }
 
   return {

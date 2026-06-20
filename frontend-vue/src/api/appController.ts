@@ -14,6 +14,18 @@ export async function addApp(body: API.AppAddRequest, options?: { [key: string]:
   })
 }
 
+/** 此处后端没有提供注释 POST /app/add/test */
+export async function addTestApp(body: API.AppAddRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseLong>('/app/add/test', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/admin/get/vo */
 export async function getAppVoByIdByAdmin(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -181,6 +193,18 @@ export async function editApp(body: API.AppEditRequest, options?: { [key: string
   })
 }
 
+/** 此处后端没有提供注释 POST /app/enhance-prompt */
+export async function enhancePrompt(body: Record<string, any>, options?: { [key: string]: any }) {
+  return request<API.BaseResponseString>('/app/enhance-prompt', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/get */
 export async function getAppById(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -250,18 +274,6 @@ export async function listMyAppVoByPage(body: API.AppQueryRequest, options?: { [
 /** 此处后端没有提供注释 POST /app/update */
 export async function updateApp(body: API.AppAdminUpdateRequest, options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/app/update', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    data: body,
-    ...(options || {}),
-  })
-}
-
-/** 优化提示词 POST /app/enhance-prompt */
-export async function enhancePrompt(body: { prompt: string }, options?: { [key: string]: any }) {
-  return request<API.BaseResponseString>('/app/enhance-prompt', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

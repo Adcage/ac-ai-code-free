@@ -50,15 +50,6 @@
           </div>
         </template>
 
-        <template v-else-if="currentQuestion.inputType === 'text_input'">
-          <a-textarea
-            v-model:value="textAnswer"
-            :placeholder="currentQuestion.placeholder || '请输入...'"
-            :auto-size="{ minRows: 2, maxRows: 6 }"
-            :disabled="isReadonly"
-          />
-        </template>
-
         <div class="custom-answer-section">
           <div
             :class="['option-card', { selected: showCustomInput }]"
@@ -126,7 +117,7 @@ export interface PlanningOption {
 export interface PlanningQuestion {
   id: string
   question: string
-  inputType: 'single_select' | 'multi_select' | 'text_input'
+  inputType: 'single_select' | 'multi_select'
   required: boolean
   options?: PlanningOption[]
   reason?: string
@@ -168,7 +159,6 @@ const currentQuestion = computed(() => props.questions[currentStep.value])
 
 const currentAnswer = computed({
   get: () => {
-    if (currentQuestion.value.inputType === 'text_input') return textAnswer.value
     if (currentQuestion.value.inputType === 'multi_select') return multiSelected.value.join(',')
     if (showCustomInput.value && customAnswer.value) return customAnswer.value
     return singleAnswers.value[currentQuestion.value.id] || ''
@@ -182,7 +172,6 @@ const currentAnswer = computed({
 
 const hasCurrentAnswer = computed(() => {
   if (!currentQuestion.value.required) return true
-  if (currentQuestion.value.inputType === 'text_input') return !!textAnswer.value.trim()
   if (currentQuestion.value.inputType === 'multi_select') return multiSelected.value.length > 0
   if (showCustomInput.value && customAnswer.value.trim()) return true
   return !!singleAnswers.value[currentQuestion.value.id]
@@ -206,9 +195,7 @@ function toggleCustomInput() {
 
 function saveCurrentAnswer() {
   const q = currentQuestion.value
-  if (q.inputType === 'text_input') {
-    singleAnswers.value[q.id] = textAnswer.value.trim()
-  } else if (q.inputType === 'multi_select') {
+  if (q.inputType === 'multi_select') {
     singleAnswers.value[q.id] = multiSelected.value.join(', ')
   } else if (showCustomInput.value && customAnswer.value.trim()) {
     customUsed.value[q.id] = customAnswer.value.trim()
@@ -239,9 +226,7 @@ function loadCurrentState() {
   showCustomInput.value = false
   customAnswer.value = ''
 
-  if (q.inputType === 'text_input') {
-    textAnswer.value = singleAnswers.value[q.id] || ''
-  } else if (q.inputType === 'multi_select') {
+  if (q.inputType === 'multi_select') {
     multiSelected.value = (singleAnswers.value[q.id] || '').split(', ').filter(Boolean)
   } else {
     if (customUsed.value[q.id]) {

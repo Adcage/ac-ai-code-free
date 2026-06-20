@@ -12,7 +12,7 @@
         </a-button>
       </div>
 
-      <div v-if="loading" class="loading-state">
+      <div v-if="loading && dataList.length === 0" class="loading-state">
         <a-spin size="large" />
       </div>
 
@@ -38,9 +38,10 @@
           />
         </div>
 
-        <div class="list-footer" v-if="total > dataList.length">
-          <a-button class="load-more-btn" @click="loadMore" :loading="loading"> 加载更多 </a-button>
+        <div class="list-footer" v-if="loadingMore">
+          <a-spin size="small" /> 加载中...
         </div>
+        <div v-if="hasMore && !loadingMore" class="scroll-sentinel"></div>
       </template>
     </div>
 
@@ -49,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { Plus, FolderOpen } from '@lucide/vue'
@@ -59,9 +60,12 @@ import AppEditModal from '@/components/AppEditModal.vue'
 
 const router = useRouter()
 const loading = ref(false)
+const loadingMore = ref(false)
 const dataList = ref<API.AppVO[]>([])
 const total = ref(0)
 const editModalRef = ref()
+
+const hasMore = computed(() => dataList.value.length < total.value)
 
 const searchParams = ref<API.AppQueryRequest>({
   pageNum: 1,
@@ -69,7 +73,11 @@ const searchParams = ref<API.AppQueryRequest>({
 })
 
 const loadData = async (append = false) => {
-  loading.value = true
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+  }
   try {
     const res = await listMyAppVoByPage(searchParams.value)
     const pageData = res.data?.data
@@ -83,12 +91,35 @@ const loadData = async (append = false) => {
     }
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
 const loadMore = () => {
+  if (loadingMore.value || !hasMore.value) return
   searchParams.value.pageNum = (searchParams.value.pageNum ?? 1) + 1
-  loadData(true)
+  loadData(true).then(() => observeSentinel())
+}
+
+let listObserver: IntersectionObserver | null = null
+
+const setupObserver = () => {
+  listObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value) {
+        loadMore()
+      }
+    },
+    { rootMargin: '200px' },
+  )
+}
+
+const observeSentinel = () => {
+  if (!listObserver) setupObserver()
+  nextTick(() => {
+    const sentinel = document.querySelector('.scroll-sentinel')
+    if (sentinel) listObserver!.observe(sentinel)
+  })
 }
 
 const goToCreate = () => {
@@ -118,7 +149,11 @@ const handleEditApp = (app: API.AppVO) => {
 }
 
 onMounted(() => {
-  loadData()
+  loadData().then(() => observeSentinel())
+})
+
+onUnmounted(() => {
+  listObserver?.disconnect()
 })
 </script>
 
@@ -223,21 +258,16 @@ onMounted(() => {
 }
 
 .list-footer {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
   margin-top: var(--space-2xl);
+  color: var(--color-text-tertiary);
 }
 
-.load-more-btn {
-  background: var(--color-surface) !important;
-  border-color: var(--color-border) !important;
-  color: var(--color-text-secondary) !important;
-  transition: all var(--transition-normal);
-  cursor: pointer;
-}
-
-.load-more-btn:hover {
-  border-color: var(--color-cta) !important;
-  color: var(--color-cta) !important;
+.scroll-sentinel {
+  height: 1px;
 }
 
 @media (max-width: 1024px) {

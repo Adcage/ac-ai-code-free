@@ -1,27 +1,5 @@
 <template>
   <div class="test-chat-page">
-    <!-- 顶部导航 -->
-    <div class="top-nav">
-      <div class="left">
-        <a-button type="text" @click="router.push('/admin/appManage')">
-          <template #icon><LeftOutlined /></template>
-        </a-button>
-        <span class="page-title">AI 测试对话</span>
-        <a-tag color="orange" class="test-badge">🧪 测试模式</a-tag>
-      </div>
-      <div class="right">
-        <template v-if="selectedAppId">
-          <span class="app-info">{{ currentApp?.appName || '测试应用' }}</span>
-          <a-tag v-if="currentApp?.codeGenType" color="blue">{{ formatCodeGenType(currentApp.codeGenType) }}</a-tag>
-          <a-button type="link" size="small" @click="handleSwitchApp">切换应用</a-button>
-          <a-button type="primary" :loading="deployLoading" @click="doDeploy" class="deploy-btn">
-            <template #icon><CloudUploadOutlined /></template>
-            部署
-          </a-button>
-        </template>
-      </div>
-    </div>
-
     <!-- 未选择应用：应用选择区 -->
     <div v-if="!selectedAppId" class="app-selector">
       <div class="selector-content">
@@ -37,11 +15,11 @@
         </div>
         <div class="my-apps-section">
           <h3>我的应用</h3>
-          <div v-if="loadingApps" class="apps-loading"><LoadingOutlined /> 加载中...</div>
+          <div v-if="loadingApps && myApps.length === 0" class="apps-loading"><LoadingOutlined /> 加载中...</div>
           <div v-else-if="myApps.length === 0" class="apps-empty">
             <a-empty description="暂无应用，点击上方按钮新建测试应用" />
           </div>
-          <div v-else class="apps-grid">
+          <div v-if="myApps.length > 0" class="apps-grid">
             <div
               v-for="app in myApps"
               :key="app.id"
@@ -58,6 +36,8 @@
               </div>
             </div>
           </div>
+          <div v-if="loadingMoreApps" class="apps-loading-more"><LoadingOutlined /> 加载中...</div>
+          <div v-if="hasMoreApps && !loadingMoreApps" class="apps-scroll-sentinel"></div>
         </div>
       </div>
     </div>
@@ -66,6 +46,23 @@
     <div v-else class="main-content">
       <!-- 左侧对话区 -->
       <div class="chat-panel" :style="{ width: `${chatPanelWidth}px` }">
+        <div class="chat-panel-header">
+          <div class="chat-panel-header-left">
+            <a-button type="text" size="small" @click="handleSwitchApp">
+              <template #icon><LeftOutlined /></template>
+              返回
+            </a-button>
+            <a-tag color="orange" size="small">🧪 测试</a-tag>
+          </div>
+          <div class="chat-panel-header-right">
+            <span class="app-info">{{ currentApp?.appName || '测试应用' }}</span>
+            <a-tag v-if="currentApp?.codeGenType" color="blue" size="small">{{ formatCodeGenType(currentApp.codeGenType) }}</a-tag>
+            <a-button type="primary" size="small" :loading="deployLoading" @click="doDeploy">
+              <template #icon><CloudUploadOutlined /></template>
+              部署
+            </a-button>
+          </div>
+        </div>
         <ChatSessionPanel
           :sessions="sessions"
           :current-session-id="currentSessionId || ''"
@@ -118,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -155,7 +152,12 @@ const selectedAppId = ref('')
 const currentApp = ref<API.AppVO>()
 const myApps = ref<API.AppVO[]>([])
 const loadingApps = ref(false)
+const loadingMoreApps = ref(false)
 const creatingApp = ref(false)
+// 后端限制每页最多 20 条，这里做真分页而非一次性大 pageSize
+const APP_PAGE_SIZE = 20
+const appPageNum = ref(1)
+const appTotal = ref(0)
 
 // 对话状态
 const messages = ref<ChatMessage[]>([])
@@ -202,16 +204,56 @@ const normalizeId = (id?: string | number | null) => {
 
 // ======== 应用选择逻辑 ========
 
-const loadMyApps = async () => {
-  loadingApps.value = true
+const loadMyApps = async (append = false) => {
+  if (append) {
+    loadingMoreApps.value = true
+  } else {
+    loadingApps.value = true
+  }
   try {
-    const res = await listMyAppVoByPage({ pageNum: 1, pageSize: 50 })
+    const res = await listMyAppVoByPage({ pageNum: appPageNum.value, pageSize: APP_PAGE_SIZE, isTestApp: true })
     if (res.data?.code === 0) {
-      myApps.value = res.data.data?.records || []
+      const records = res.data.data?.records || []
+      if (append) {
+        myApps.value.push(...records)
+      } else {
+        myApps.value = records
+      }
+      appTotal.value = res.data.data?.totalRow || 0
     }
   } finally {
     loadingApps.value = false
+    loadingMoreApps.value = false
   }
+}
+
+const loadMoreApps = () => {
+  if (loadingMoreApps.value || !hasMoreApps.value) return
+  appPageNum.value++
+  loadMyApps(true).then(() => observeSentinel())
+}
+
+const hasMoreApps = computed(() => myApps.value.length < appTotal.value)
+
+let appsObserver: IntersectionObserver | null = null
+
+const setupAppsObserver = () => {
+  appsObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting && hasMoreApps.value && !loadingMoreApps.value) {
+        loadMoreApps()
+      }
+    },
+    { rootMargin: '200px' },
+  )
+}
+
+const observeSentinel = () => {
+  if (!appsObserver) setupAppsObserver()
+  nextTick(() => {
+    const sentinel = document.querySelector('.apps-scroll-sentinel')
+    if (sentinel) appsObserver!.observe(sentinel)
+  })
 }
 
 const handleCreateTestApp = async () => {
@@ -220,6 +262,7 @@ const handleCreateTestApp = async () => {
     const res = await addApp({ initPrompt: '测试应用', isTestApp: true })
     if (res.data?.code === 0 && res.data.data) {
       message.success('测试应用创建成功')
+      appPageNum.value = 1
       await loadMyApps()
       selectApp({ id: res.data.data } as API.AppVO)
     } else {
@@ -626,11 +669,12 @@ const formatTime = (time?: string) => {
 // ======== 生命周期 ========
 
 onMounted(() => {
-  loadMyApps()
+  loadMyApps().then(() => observeSentinel())
 })
 
 onUnmounted(() => {
   stopResize()
+  appsObserver?.disconnect()
 })
 </script>
 
@@ -642,58 +686,13 @@ onUnmounted(() => {
   background: var(--color-background);
 }
 
-.top-nav {
-  height: 56px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--color-surface);
-}
-
-.top-nav .left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.page-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--color-text);
-}
-
-.test-badge {
-  margin-left: 4px;
-}
-
-.top-nav .right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.app-info {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.deploy-btn {
-  border-radius: 6px;
-}
-
 /* 应用选择区 */
 .app-selector {
   flex: 1;
   display: flex;
-  align-items: center;
   justify-content: center;
   padding: 40px;
+  overflow-y: auto;
 }
 
 .selector-content {
@@ -784,6 +783,17 @@ onUnmounted(() => {
   color: var(--color-text-tertiary);
 }
 
+.apps-load-more,
+.apps-loading-more {
+  text-align: center;
+  padding: 16px 0;
+  color: var(--color-text-tertiary);
+}
+
+.apps-scroll-sentinel {
+  height: 1px;
+}
+
 /* 对话+预览区 */
 .main-content {
   flex: 1;
@@ -799,6 +809,37 @@ onUnmounted(() => {
   min-width: 320px;
   max-width: 70vw;
   flex-shrink: 0;
+}
+
+.chat-panel-header {
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.chat-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-panel-header .app-info {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-splitter {

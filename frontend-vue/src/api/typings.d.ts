@@ -14,12 +14,14 @@ declare namespace API {
     createTime?: string
     updateTime?: string
     isDelete?: number
+    isTestApp?: number
   }
 
   type AppAddRequest = {
     initPrompt?: string
     codeGenType?: string
     styleTemplate?: string
+    isTestApp?: boolean
   }
 
   type AppAdminUpdateRequest = {
@@ -52,6 +54,15 @@ declare namespace API {
     userId?: number
     userName?: string
     onlyFeatured?: boolean
+    isTestApp?: boolean
+  }
+
+  type AppVersionVO = {
+    id?: number
+    appId?: number
+    versionNo?: number
+    status?: string
+    createTime?: string
   }
 
   type AppVO = {
@@ -67,6 +78,7 @@ declare namespace API {
     userId?: number
     createTime?: string
     updateTime?: string
+    isTestApp?: number
     user?: UserVO
     coverTaskStatus?: string
     coverRetryCount?: number
@@ -88,6 +100,12 @@ declare namespace API {
   type BaseResponseBoolean = {
     code?: number
     data?: boolean
+    message?: string
+  }
+
+  type BaseResponseListAppVersionVO = {
+    code?: number
+    data?: AppVersionVO[]
     message?: string
   }
 
@@ -287,6 +305,11 @@ declare namespace API {
 
   type listChatSessionParams = {
     appId: number
+  }
+
+  type listVersionsParams = {
+    appId: number
+    limit?: number
   }
 
   type LoginUserVO = {
@@ -496,19 +519,5 @@ declare namespace API {
     userProfile?: string
     userRole?: string
     createTime?: string
-  }
-
-  type AppVersionVO = {
-    id?: number
-    appId?: number
-    versionNo?: number
-    status?: string
-    createTime?: string
-  }
-
-  type BaseResponseListAppVersionVO = {
-    code?: number
-    data?: AppVersionVO[]
-    message?: string
   }
 }
