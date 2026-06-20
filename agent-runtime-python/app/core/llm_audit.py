@@ -194,7 +194,7 @@ class LlmAuditWriter:
         if key not in self._first_timestamp:
             self._first_timestamp[key] = record.timestamp
 
-        dt = datetime.fromisoformat(self._first_timestamp[key])
+        dt = datetime.fromisoformat(self._first_timestamp[key]).astimezone()
         date_str = dt.strftime("%Y-%m-%d")
         hm = dt.strftime("%H%M")
         output_dir = self._base_dir / date_str / f"{hm}_{run_id}"
