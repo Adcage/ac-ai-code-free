@@ -56,6 +56,7 @@ class ValidateStepNode:
         run_checks.set_state(state)
         run_checks.set_workspace(self._context.workspace_path)
         run_checks.set_quality_checker(self._services.quality_checker)
+        run_checks.set_code_gen_type(self._context.code_gen_type)
 
         decide_validation = DecideValidationTool()
         decide_validation.set_state(state)

@@ -22,6 +22,7 @@ class RunChecksTool(BaseTool):
     _state: object | None = None
     _workspace_root: str = ""
     _quality_checker: object | None = None
+    _code_gen_type: str = ""
 
     def set_state(self, state) -> None:
         self._state = state
@@ -31,6 +32,9 @@ class RunChecksTool(BaseTool):
 
     def set_quality_checker(self, checker) -> None:
         self._quality_checker = checker
+
+    def set_code_gen_type(self, code_gen_type) -> None:
+        self._code_gen_type = getattr(code_gen_type, "value", str(code_gen_type or ""))
 
     def _run(self, **kwargs) -> str:
         raise NotImplementedError("Use async version")
@@ -48,17 +52,11 @@ class RunChecksTool(BaseTool):
         # 构建 ArtifactManifest
         from app.artifacts.manifest import ArtifactCollector
 
-        code_gen_type = ""
+        code_gen_type = self._code_gen_type
         # 优先使用推荐的类型
         recommended = getattr(state, "recommended_code_gen_type", None)
         if recommended:
             code_gen_type = recommended
-        else:
-            # 从 _context 获取
-            ctx = getattr(state, "_context", None)
-            if ctx and hasattr(ctx, "code_gen_type"):
-                cgt = getattr(ctx, "code_gen_type", None)
-                code_gen_type = cgt.value if cgt else ""
 
         files_touched = getattr(state, "files_touched", [])
 
