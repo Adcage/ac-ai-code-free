@@ -291,13 +291,6 @@ const selectApp = async (app: API.AppVO) => {
     if (newSessionId) {
       currentSessionId.value = newSessionId
     }
-    if (currentApp.value?.initPrompt && currentSessionId.value) {
-      messages.value.push({ role: 'user', content: currentApp.value.initPrompt, status: 'success', toolEvents: [] })
-      iframeUrl.value = ''
-      previewWarning.value = ''
-      previewStatus.value = 'generating'
-      startSSE(currentApp.value.initPrompt, currentSessionId.value, currentApp.value?.codeGenType)
-    }
   }
 }
 
