@@ -12,6 +12,7 @@ service CodeGenerationService {
   rpc StreamModify(CodeModificationRequest) returns (stream CodeGenerationEvent);
   rpc RouteCodeGenType(RouteCodeGenTypeRequest) returns (RouteCodeGenTypeResponse);
   rpc ValidatePrompt(ValidatePromptRequest) returns (ValidatePromptResponse);
+  rpc EnhancePrompt(EnhancePromptRequest) returns (EnhancePromptResponse);
 }
 
 message CodeGenerationRequest {
@@ -24,6 +25,8 @@ message CodeGenerationRequest {
   string workspace_path = 7;
   int64 model_config_id = 8;
   int32 config_version = 9;
+  string loop_state_json = 10;
+  bool is_test = 11;
 }
 
 message CodeModificationRequest {
@@ -37,6 +40,8 @@ message CodeModificationRequest {
   int64 model_config_id = 8;
   int32 config_version = 9;
   string original_content = 10;
+  string loop_state_json = 11;
+  bool is_test = 12;
 }
 
 message CodeGenerationEvent {
@@ -49,6 +54,7 @@ message CodeGenerationEvent {
     ToolExecutedData tool_executed = 6;
     ErrorData error = 7;
     DoneData done = 8;
+    StatusData status = 9;
   }
 }
 
@@ -67,4 +73,16 @@ message ValidatePromptRequest {
 message ValidatePromptResponse {
   bool valid = 1;
   string reason = 2;
+}
+
+message EnhancePromptRequest {
+  string prompt = 1;
+  int64 model_config_id = 2;
+  int32 config_version = 3;
+}
+
+message EnhancePromptResponse {
+  bool success = 1;
+  string enhanced_prompt = 2;
+  string error_message = 3;
 }

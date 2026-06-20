@@ -31,201 +31,88 @@
     <div class="main-content">
       <!-- 左侧对话区 -->
       <div class="chat-panel" :style="{ width: `${chatPanelWidth}px` }">
-        <div class="session-panel">
-          <div class="session-panel-header">
-            <span>会话记录</span>
-            <a-button type="link" size="small" :loading="sessionLoading" @click="handleCreateSession">新建会话</a-button>
-          </div>
-          <div class="session-list">
-            <div
-              v-for="(session, index) in sessions"
-              :key="session.id || index"
-              :class="['session-item', normalizeId(session.id) === currentSessionId ? 'active' : '']"
-              @click="handleSwitchSession(session.id)"
-            >
-              <div class="session-title">{{ session.title || `会话 ${index + 1}` }}</div>
-              <div class="session-time">{{ formatSessionTime(session.lastMessageTime) }}</div>
-            </div>
-          </div>
-        </div>
-        <div class="message-list" ref="messageListRef">
-          <div
-            v-for="(msg, index) in messages"
-            :key="index"
-            :class="['message-item', msg.role === 'user' ? 'user-msg' : 'ai-msg']"
-          >
-            <a-avatar :src="msg.role === 'user' ? loginUserStore.loginUser.userAvatar : '/ai-avatar.png'" />
-            <div class="message-body">
-              <div class="message-content">
-                <template v-if="msg.role === 'ai'">
-                  <template v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]" :key="`parsed-${index}`">
-                    <div v-if="parsed.aiText" class="message-text" v-html="renderMarkdown(parsed.aiText)"></div>
-                    <details v-if="parsed.toolEvents.length" class="tool-call-card">
-                      <summary class="tool-call-summary">
-                        <span class="tool-call-title">工具调用（{{ parsed.toolEvents.length }}）</span>
-                        <span class="tool-call-hint">点击查看执行详情</span>
-                      </summary>
-                      <div class="tool-call-list">
-                        <div
-                          v-for="(eventItem, toolIndex) in parsed.toolEvents"
-                          :key="`tool-${index}-${toolIndex}`"
-                          class="tool-call-item"
-                        >
-                          <span :class="['tool-call-tag', eventItem.type]">
-                            {{ eventItem.type === 'request' ? '调用中' : '已完成' }}
-                          </span>
-                          <span class="tool-call-text">{{ eventItem.text }}</span>
-                        </div>
-                      </div>
-                    </details>
-                    <div v-if="msg.workflowSteps?.length" class="workflow-steps message-workflow-steps">
-                      <div class="workflow-steps-title">工作流进度</div>
-                      <div class="workflow-steps-list">
-                        <div
-                          v-for="step in msg.workflowSteps"
-                          :key="step.step"
-                          :class="['workflow-step-item', step.status]"
-                        >
-                          <div class="workflow-step-icon">
-                            <check-circle-outlined v-if="step.status === 'completed'" />
-                            <loading-outlined v-else-if="step.status === 'running'" />
-                            <close-circle-outlined v-else-if="step.status === 'error'" />
-                            <clock-circle-outlined v-else />
-                          </div>
-                          <div class="workflow-step-content">
-                            <div class="workflow-step-name">{{ step.message }}</div>
-                            <div v-if="step.status === 'error'" class="workflow-step-error">{{ step.errorMessage || step.message }}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                </template>
-                <div v-else class="message-text" v-html="renderMarkdown(msg.content)"></div>
-              </div>
-            </div>
-          </div>
-          <div v-if="generating" class="generating-indicator">
-            <loading-outlined /> AI 正在思考并生成代码...
-          </div>
-        </div>
-
-        <div v-if="streamWarning" class="stream-warning">
-          <a-alert type="warning" show-icon :message="streamWarning" />
-          <a-button type="link" size="small" @click="handleReloadCurrentSession">重新加载当前会话</a-button>
-        </div>
-
-        <div v-if="selectedElement" class="selected-element-panel">
-          <a-alert type="info" show-icon>
-            <template #message>当前选中元素</template>
-            <template #description>
-              <div class="selected-element-content">
-                <div>标签：{{ selectedElement.tagName }}</div>
-                <div>页面路径：{{ selectedElement.pagePath || '/' }}</div>
-                <div>选择器：{{ selectedElement.selector || '未生成' }}</div>
-                <div>文本：{{ selectedElement.textContent || '（无可见文本）' }}</div>
-              </div>
-            </template>
-            <template #action>
-              <a-button size="small" type="link" @click="clearSelectedElement">清除</a-button>
-            </template>
-          </a-alert>
-        </div>
-
-        <div class="input-area">
-          <div class="input-wrapper">
-            <a-textarea
-              v-model:value="inputText"
-              :placeholder="inputPlaceholder"
-              :auto-size="{ minRows: 2, maxRows: 6 }"
-              @pressEnter="handleEnter"
-            />
-            <div class="input-footer">
-              <a-space>
-                <a-button type="text" size="small"><template #icon><paper-clip-outlined /></template>上传</a-button>
-                <a-button type="text" size="small"><template #icon><thunderbolt-outlined /></template>优化</a-button>
-              </a-space>
-              <a-button 
-                type="primary" 
-                shape="circle" 
-                size="small" 
-                :disabled="generating || !inputText" 
-                @click="doChat"
-              >
-                <template #icon><arrow-up-outlined /></template>
-              </a-button>
-            </div>
-          </div>
-        </div>
+        <ChatSessionPanel
+          :sessions="sessions"
+          :current-session-id="currentSessionId || ''"
+          :loading="sessionLoading"
+          :editing-session-id="editingSessionId"
+          :editing-title="editingTitle"
+          @select="handleSwitchSession"
+          @create="handleCreateSession"
+          @start-rename="startRename"
+          @confirm-rename="confirmRename"
+          @delete="confirmDeleteSession"
+          @update:editing-title="editingTitle = $event"
+        />
+        <ChatMessageList
+          ref="chatMessageListRef"
+          :messages="messages"
+          :generating="generating"
+          :stream-warning="streamWarning"
+          :user-avatar="loginUserStore.loginUser.userAvatar || ''"
+          :selected-element="selectedElement"
+          @planning-submit="handlePlanningSubmit"
+          @planning-skip="handlePlanningSkip"
+          @plan-confirm="handlePlanConfirm"
+          @reload-session="handleReloadCurrentSession"
+          @clear-selected-element="clearSelectedElement"
+        />
+        <ChatInputArea
+          ref="chatInputAreaRef"
+          :generating="generating"
+          :enhancing="enhancingInput"
+          :placeholder="inputPlaceholder"
+          @send="doChatWithMessage"
+          @enhance="doEnhanceInput"
+        />
       </div>
 
       <div class="panel-splitter" @mousedown="startResize" />
 
       <!-- 右侧预览区 -->
-      <div class="preview-panel">
-        <div class="preview-header">
-          <a-radio-group v-model:value="previewType" size="small" button-style="solid">
-            <a-radio-button value="desktop">桌面端</a-radio-button>
-            <a-radio-button value="mobile">移动端</a-radio-button>
-          </a-radio-group>
-          <a-space>
-            <a-button size="small" :type="editMode ? 'primary' : 'default'" @click="toggleEditMode">
-              {{ editMode ? '退出编辑模式' : '进入编辑模式' }}
-            </a-button>
-            <a-button size="small" :disabled="!selectedElement" @click="clearSelectedElement">清除选中</a-button>
-            <a-button size="small" @click="refreshIframe">
-              <template #icon><reload-outlined /></template>
-            </a-button>
-          </a-space>
-        </div>
-        <a-alert
-          v-if="previewWarning"
-          class="preview-warning"
-          type="warning"
-          show-icon
-          :message="previewWarning"
-        />
-        <div :class="['preview-body', previewType]">
-          <iframe 
-            v-if="iframeUrl" 
-            :src="iframeUrl" 
-            frameborder="0" 
-            class="preview-iframe"
-            ref="iframeRef"
-            @load="handleIframeLoad"
-          ></iframe>
-          <div v-else class="preview-empty">
-            <div class="empty-content">
-              <div class="empty-icon">预览</div>
-              <p>{{ previewEmptyText }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PreviewPanel
+        ref="previewPanelRef"
+        :iframe-url="iframeUrl"
+        :preview-status="previewStatus"
+        :preview-warning="previewWarning"
+        :app-id="appId"
+        :selected-element="selectedElement"
+        @iframe-load="handleIframeLoad"
+        @element-selected="onElementSelected"
+        @mode-change="onPreviewModeChange"
+        @clear-selected-element="clearSelectedElement"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   LeftOutlined,
   CloudUploadOutlined,
   DownloadOutlined,
-  ReloadOutlined,
-  PaperClipOutlined, 
-  ThunderboltOutlined, 
-  ArrowUpOutlined,
-  LoadingOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined
 } from '@ant-design/icons-vue'
-import { createChatSession, deployApp, getAppVoById, listChatHistoryByPage, listChatSession } from '@/api/appController'
+import {
+  createChatSession,
+  deployApp,
+  getAppVoById,
+  listChatHistoryByPage,
+  listChatSession,
+  renameSession,
+  deleteSession,
+  enhancePrompt,
+} from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
-import { createVisualEditor, type ElementInfo } from '@/utils/visualEditor'
+import type { ElementInfo } from '@/utils/visualEditor'
+import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
+import ChatMessageList from '@/components/ChatMessageList.vue'
+import type { ChatMessage, ToolEvent } from '@/components/ChatMessageList.vue'
+import ChatInputArea from '@/components/ChatInputArea.vue'
+import PreviewPanel from '@/components/PreviewPanel.vue'
+import { useSSEChat } from '@/composables/useSSEChat'
 
 const route = useRoute()
 const router = useRouter()
@@ -233,45 +120,31 @@ const loginUserStore = useLoginUserStore()
 const appId = String(route.params.id ?? '')
 
 const app = ref<API.AppVO>()
-type WorkflowStep = {
-  step: string
-  status: 'pending' | 'running' | 'completed' | 'error'
-  message?: string
-  errorMessage?: string
-}
-
-type ChatMessage = {
-  role: 'user' | 'ai'
-  content: string
-  status?: string
-  toolEvents?: ToolEvent[]
-  workflowSteps?: WorkflowStep[]
-}
 
 const messages = ref<ChatMessage[]>([])
 const sessions = ref<API.ChatSessionVO[]>([])
 const currentSessionId = ref<string>()
-const inputText = ref('')
-const generating = ref(false)
-const workflowSteps = ref<WorkflowStep[]>([])
+const enhancingInput = ref(false)
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
 const sessionLoading = ref(false)
 const sessionInitializing = ref(false)
-const previewType = ref('desktop')
 const iframeUrl = ref('')
-const iframeRef = ref<HTMLIFrameElement>()
-const messageListRef = ref<HTMLElement>()
-const streamWarning = ref('')
 const previewWarning = ref('')
 const previewStatus = ref<'idle' | 'generating' | 'checking' | 'ready' | 'failed'>('idle')
-const entryPathStorageKey = `app_generate_entry_${appId}`
 const chatPanelWidth = ref(450)
 const resizing = ref(false)
 const resizeStartX = ref(0)
 const resizeStartWidth = ref(450)
 const selectedElement = ref<ElementInfo | null>(null)
 const editMode = ref(false)
+const editingSessionId = ref<string>('')
+const editingTitle = ref('')
+
+// 组件引用
+const chatMessageListRef = ref<InstanceType<typeof ChatMessageList>>()
+const chatInputAreaRef = ref<InstanceType<typeof ChatInputArea>>()
+const previewPanelRef = ref<InstanceType<typeof PreviewPanel>>()
 
 const isOwner = computed(() => {
   const loginUserId = loginUserStore.loginUser?.id
@@ -287,42 +160,8 @@ const inputPlaceholder = computed(() => {
   return '描述具体的需求，例如：修改配色为深色模式...'
 })
 
-const previewEmptyText = computed(() => {
-  if (previewStatus.value === 'generating') {
-    return '应用正在生成中，完成后将在此展示效果'
-  }
-  if (previewStatus.value === 'checking') {
-    return '正在检查预览资源...'
-  }
-  if (previewStatus.value === 'failed') {
-    return previewWarning.value || '本次生成未产出可预览页面，请根据左侧错误信息调整后重试'
-  }
-  return '暂无可预览内容，生成完成后将在此展示效果'
-})
-
-type ToolEvent = {
-  type: 'request' | 'executed'
-  text: string
-}
-
-const visualEditor = createVisualEditor({
-  getIframe: () => iframeRef.value,
-  onElementHover: () => {},
-  onElementSelected: (element) => {
-    selectedElement.value = element
-  },
-  onModeChange: (enabled) => {
-    editMode.value = enabled
-    if (!enabled) {
-      selectedElement.value = null
-    }
-  },
-})
-
 const normalizeId = (id?: string | number | null) => {
-  if (id === undefined || id === null) {
-    return ''
-  }
+  if (id === undefined || id === null) return ''
   return String(id)
 }
 
@@ -383,7 +222,11 @@ const loadRemoteHistory = async (sessionId: string) => {
       status: item.status || '',
       toolEvents: normalizeToolEvents(item.toolEvents || []),
     }))
-    scrollToBottom()
+    nextTick(() => {
+      if (chatMessageListRef.value) {
+        chatMessageListRef.value.scrollToBottom()
+      }
+    })
   }
 }
 
@@ -430,126 +273,10 @@ const loadApp = async () => {
   message.error('加载应用失败，' + (res.data?.message || '请稍后重试'))
 }
 
+
 /**
- * SSE 对话逻辑
+ * SSE startSSE 由 useSSEChat composable 提供
  */
-const startSSE = (userMsg: string, sessionId: string) => {
-  generating.value = true
-  streamWarning.value = ''
-  iframeUrl.value = ''
-  previewWarning.value = ''
-  previewStatus.value = 'generating'
-  workflowSteps.value = [
-    { step: 'image_collect', status: 'pending', message: '收集素材' },
-    { step: 'prompt_enhancer', status: 'pending', message: '增强 prompt' },
-    { step: 'router', status: 'pending', message: '判断类型' },
-    { step: 'code_generator', status: 'pending', message: '生成代码' },
-    { step: 'code_quality_check', status: 'pending', message: '质量检查' },
-    { step: 'project_builder', status: 'pending', message: '构建' },
-  ]
-  let streamCompleted = false
-  const aiMsgIndex = messages.value.length
-  messages.value.push({ role: 'ai', content: '', status: 'running', workflowSteps: workflowSteps.value })
-  const isStructuredToolMode =
-    app.value?.codeGenType === 'vue_project' ||
-    app.value?.codeGenType === 'multi-file' ||
-    app.value?.codeGenType === 'single_file'
-
-  const baseUrl = import.meta.env.VITE_API_BASE_URL
-  const eventSource = new EventSource(
-    `${baseUrl}/app/chat/gen/code/stream?appId=${appId}&sessionId=${sessionId}&message=${encodeURIComponent(userMsg)}`,
-    { withCredentials: true }
-  )
-
-  eventSource.addEventListener('meta', (event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data)
-      if (data.sessionId) {
-        currentSessionId.value = normalizeId(data.sessionId)
-      }
-    } catch (e) {
-      console.error('SSE Meta Parse Error', e)
-    }
-  })
-
-  const stopGenerating = (delayPreviewRefresh = false) => {
-    eventSource.close()
-    if (streamCompleted) {
-      streamWarning.value = ''
-    }
-    if (generating.value) {
-      generating.value = false
-      loadSessions()
-      if (delayPreviewRefresh) {
-        setTimeout(() => {
-          messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
-          updatePreview()
-        }, 500)
-      } else {
-        messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
-        updatePreview()
-      }
-    }
-  }
-
-  eventSource.addEventListener('business-error', (event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data)
-      const errorMsg = data.message || '操作失败'
-      messages.value[aiMsgIndex].content += `\n\n[错误] ${errorMsg}`
-      messages.value[aiMsgIndex].status = 'failed'
-      previewStatus.value = 'failed'
-      previewWarning.value = errorMsg
-      message.error(errorMsg)
-    } catch {
-      message.error('操作失败')
-    }
-    stopGenerating()
-  })
-
-  eventSource.addEventListener('done', () => {
-    streamCompleted = true
-    stopGenerating(true)
-  })
-
-  eventSource.onmessage = (event) => {
-    const rawData = event.data
-    if (rawData === '[DONE]') {
-      streamCompleted = true
-      stopGenerating(true)
-      return
-    }
-    
-    try {
-      const data = JSON.parse(rawData)
-      if (data.d === '[DONE]') {
-        streamCompleted = true
-        stopGenerating(true)
-        return
-      }
-      const chunk = data.d || ''
-      appendStreamChunk(aiMsgIndex, chunk, isStructuredToolMode)
-      scrollToBottom()
-    } catch {
-      if (rawData.includes('[DONE]')) {
-        streamCompleted = true
-        stopGenerating(true)
-      }
-    }
-  }
-
-  eventSource.onerror = (err) => {
-    console.error('SSE Error', err)
-    if (!streamCompleted) {
-      streamWarning.value = '连接中断，本次 AI 输出可能未完整保存。可重新加载当前会话查看已落库内容。'
-      messages.value[aiMsgIndex].status = 'failed'
-      previewStatus.value = 'failed'
-      previewWarning.value = '连接中断，本次 AI 输出可能未完整保存。'
-      message.warning('连接中断，已停止本次生成')
-    }
-    stopGenerating()
-  }
-}
 
 const handleReloadCurrentSession = async () => {
   if (!currentSessionId.value) {
@@ -578,140 +305,8 @@ const buildSelectedElementPrompt = (userInput: string) => {
   ].join('\n')
 }
 
-const appendStreamChunk = (aiMsgIndex: number, chunk: string, structuredToolMode: boolean) => {
-  if (!structuredToolMode) {
-    messages.value[aiMsgIndex].content += chunk
-    return
-  }
-  try {
-    const messageObj = JSON.parse(chunk)
-    const type = messageObj.type
-    if (type === 'ai_response') {
-      messages.value[aiMsgIndex].content += messageObj.data || ''
-      return
-    }
-    if (type === 'tool_request') {
-      const text = `\n[工具调用] ${formatToolText(messageObj.name, messageObj.arguments, 'request')}`
-      messages.value[aiMsgIndex].content += text
-      return
-    }
-    if (type === 'tool_executed') {
-      const executedText = formatToolText(messageObj.name, messageObj.arguments, 'executed', messageObj.result)
-      const text = `\n[工具完成] ${executedText}`
-      messages.value[aiMsgIndex].content += text
-      return
-    }
-    if (type === 'workflow_event') {
-      handleWorkflowEvent(messageObj, aiMsgIndex)
-      return
-    }
-    messages.value[aiMsgIndex].content += chunk
-  } catch {
-    messages.value[aiMsgIndex].content += chunk
-  }
-}
-
-const handleWorkflowEvent = (eventData: any, aiMsgIndex: number) => {
-  const eventType = eventData.event
-  const data = eventData.data || {}
-
-  if (eventType === 'workflow_start') {
-    workflowSteps.value.forEach((step, index) => {
-      step.status = index === 0 ? 'running' : 'pending'
-    })
-    return
-  }
-
-  if (eventType === 'step_started') {
-    const stepName = data.step
-    workflowSteps.value.forEach(step => {
-      if (step.step === stepName) {
-        step.status = 'running'
-      } else if (step.status === 'running') {
-        step.status = 'pending'
-      }
-    })
-    return
-  }
-
-  if (eventType === 'step_completed') {
-    const stepName = data.step
-    const stepIndex = workflowSteps.value.findIndex(s => s.step === stepName)
-    if (stepIndex >= 0) {
-      workflowSteps.value[stepIndex].status = 'completed'
-      if (stepIndex + 1 < workflowSteps.value.length) {
-        workflowSteps.value[stepIndex + 1].status = 'running'
-      }
-    }
-    return
-  }
-
-  if (eventType === 'workflow_completed') {
-    workflowSteps.value.forEach(step => {
-      if (step.status !== 'completed') {
-        step.status = 'completed'
-      }
-    })
-    if (data.codeGenType && app.value) {
-      app.value.codeGenType = data.codeGenType
-    }
-    if (!messages.value[aiMsgIndex].content.trim()) {
-      const codeGenTypeText = data.codeGenType ? formatCodeGenType(data.codeGenType) : '代码'
-      messages.value[aiMsgIndex].content = `代码生成完成：已生成 ${codeGenTypeText} 产物`
-    }
-    return
-  }
-
-  if (eventType === 'workflow_error') {
-    workflowSteps.value.forEach(step => {
-      if (step.status === 'running') {
-        step.status = 'error'
-        step.errorMessage = data.message || '执行失败'
-      }
-    })
-    return
-  }
-}
-
-const parsePathFromArguments = (argumentsText?: string) => {
-  if (!argumentsText) {
-    return ''
-  }
-  try {
-    const argsObj = JSON.parse(argumentsText)
-    return argsObj.relativeFilePath || argsObj.relativeDirPath || ''
-  } catch {
-    return ''
-  }
-}
-
-const formatToolText = (toolName?: string, argumentsText?: string, stage: 'request' | 'executed' = 'request', result?: string) => {
-  const path = parsePathFromArguments(argumentsText)
-  const requestMap: Record<string, string> = {
-    writeFile: path ? `准备写入文件 ${path}` : '准备写入文件',
-    readFile: path ? `准备读取文件 ${path}` : '准备读取文件',
-    modifyFile: path ? `准备修改文件 ${path}` : '准备修改文件',
-    deleteFile: path ? `准备删除文件 ${path}` : '准备删除文件',
-    readDir: path ? `准备读取目录 ${path}` : '准备读取目录结构',
-  }
-  const executedMap: Record<string, string> = {
-    writeFile: path ? `已写入文件 ${path}` : '文件写入成功',
-    readFile: path ? `已读取文件 ${path}` : '文件读取成功',
-    modifyFile: path ? `已修改文件 ${path}` : '文件修改成功',
-    deleteFile: path ? `已删除文件 ${path}` : '文件删除成功',
-    readDir: path ? `目录结构读取完成 ${path}` : '目录结构读取完成',
-  }
-  if (stage === 'request') {
-    return requestMap[toolName || ''] || `正在执行工具 ${toolName || ''}`.trim()
-  }
-  if (result && String(result).startsWith('文件修改失败')) {
-    return result
-  }
-  if (result && String(result).startsWith('禁止删除关键文件')) {
-    return result
-  }
-  return executedMap[toolName || ''] || (result || `工具执行成功 ${toolName || ''}`.trim())
-}
+// appendStreamChunk, appendToolEvent, parseAskUserArgs, handleWorkflowEvent,
+// parsePathFromArguments, formatToolText → 已移到 useSSEChat composable
 
 const ensureSessionReady = async () => {
   if (currentSessionId.value) {
@@ -732,8 +327,8 @@ const ensureSessionReady = async () => {
   }
 }
 
-const doChat = async () => {
-  const rawMessage = inputText.value.trim()
+const doChatWithMessage = async (rawMessage: string) => {
+  if (hasActivePlanning()) return
   if (generating.value || !rawMessage) return
   const sessionId = await ensureSessionReady()
   if (!sessionId) {
@@ -742,54 +337,207 @@ const doChat = async () => {
   }
   const promptMessage = buildSelectedElementPrompt(rawMessage)
   messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
-  inputText.value = ''
-  startSSE(promptMessage, sessionId)
+  previewWarning.value = ''
+  previewStatus.value = 'generating'
+  startSSE(promptMessage, sessionId, app.value?.codeGenType)
 }
 
-const handleEnter = (e: KeyboardEvent) => {
-  if (!e.shiftKey) {
-    e.preventDefault()
-    doChat()
+function hasActivePlanning(): boolean {
+  const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
+  return messages.value.some((msg) => {
+    if (msg.role !== 'ai') return false
+    const match = msg.content.match(PLANNING_TAG_RE)
+    if (!match) return false
+    // 检查是否有未回答的 clarification
+    if (match[1] === 'clarification') {
+      const msgIndex = messages.value.indexOf(msg)
+      const nextUserMsg = messages.value.slice(msgIndex + 1).find((m) => m.role === 'user')
+      return !nextUserMsg
+    }
+    return false
+  })
+}
+
+// appendStreamChunk, appendToolEvent, parseAskUserArgs, handleWorkflowEvent,
+// parsePathFromArguments, formatToolText → 已移到 useSSEChat composable
+// doChat, handleEnter → 已移到 doChatWithMessage 和 ChatInputArea
+
+async function handlePlanningSubmit(answers: Record<string, string>) {
+  const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
+  const pdList: { questions: { id: string; question: string }[] }[] = []
+  for (let i = 0; i < messages.value.length; i++) {
+    const msg = messages.value[i]
+    if (msg.role !== 'ai') continue
+    const match = msg.content.match(PLANNING_TAG_RE)
+    if (match && match[1] === 'clarification') {
+      try {
+        const data = JSON.parse(match[2])
+        pdList.push(data)
+      } catch { /* skip */ }
+    }
+  }
+  const latest = pdList[pdList.length - 1]
+  if (!latest) return
+  const answersList: string[] = []
+  for (const q of latest.questions) {
+    const a = answers[q.id]
+    if (a && a !== '（未回答）') {
+      answersList.push(`${q.question}：答：${a}`)
+    }
+  }
+  const prompt = answersList.length > 0
+    ? `需求补充：${answersList.join('；')}\n\n请继续生成。`
+    : '跳过补充需求，请继续生成。'
+  const sessionId = currentSessionId.value
+  if (!sessionId) return
+  messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
+  previewWarning.value = ''
+  previewStatus.value = 'generating'
+  startSSE(prompt, sessionId, app.value?.codeGenType)
+}
+
+async function handlePlanConfirm(index: number) {
+  const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
+  const msg = messages.value[index]
+  if (!msg) return
+  const match = msg.content.match(PLANNING_TAG_RE)
+  let title = ''
+  if (match && match[1] === 'plan_confirmation') {
+    try {
+      const data = JSON.parse(match[2])
+      title = data.title || ''
+    } catch { /* skip */ }
+  }
+  const prompt = `确认实施计划「${title}」，请按计划开始生成。`
+  const sessionId = currentSessionId.value
+  if (!sessionId) return
+  messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
+  previewWarning.value = ''
+  previewStatus.value = 'generating'
+  startSSE(prompt, sessionId, app.value?.codeGenType)
+}
+
+function handlePlanningSkip(_index: number) {
+  // ChatInputArea 中的 inputText 由组件自行管理
+}
+
+const doEnhanceInput = async (promptText: string) => {
+  const prompt = promptText.trim()
+  if (!prompt) return
+  if (looksLikeRiskRejection(prompt)) {
+    message.error('当前输入包含安全拦截信息，请重新输入需求描述')
+    return
+  }
+  enhancingInput.value = true
+  try {
+    const res = await enhancePrompt({ prompt })
+    if (res.data?.code === 0) {
+      const enhanced = res.data?.data
+      if (enhanced && enhanced.trim() && !looksLikeRiskRejection(enhanced)) {
+        // 设置 ChatInputArea 的 inputText
+        if (chatInputAreaRef.value) {
+          chatInputAreaRef.value.inputText = enhanced
+        }
+        message.success('提示词优化完成')
+      } else if (enhanced && looksLikeRiskRejection(enhanced)) {
+        message.error('提示词被内容安全策略拦截，请修改后重试')
+      } else {
+        message.warning('AI 未返回有效的优化结果，请重试或直接发送')
+      }
+    } else {
+      message.error('优化失败，' + (res.data?.message ?? '未知错误'))
+    }
+  } catch (e: unknown) {
+    message.error('优化失败，' + (e instanceof Error ? e.message : String(e)))
+  } finally {
+    enhancingInput.value = false
   }
 }
+
+// handleEnter → 已移到 ChatInputArea
 
 /**
  * 更新预览
  */
-const updatePreview = async () => {
+const updatePreview = async (refresh = false) => {
   const codeGenType = app.value?.codeGenType || 'single_file'
   const deployUrlPrefix = import.meta.env.VITE_APP_DEPLOY_URL_PREFIX
   previewWarning.value = ''
   selectedElement.value = null
-  if (!hasPreviewCandidate()) {
-    iframeUrl.value = ''
-    previewStatus.value = hasLatestGenerationFailure() ? 'failed' : 'idle'
-    if (previewStatus.value === 'failed') {
-      previewWarning.value = extractLatestFailureReason() || '本次生成未产出可预览页面，请根据左侧错误信息调整后重试'
+
+  const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix, refresh)
+
+  // 非刷新模式下，如果 URL 基础路径相同（不含时间戳），跳过重复检查
+  if (!refresh && iframeUrl.value) {
+    const currentBase = iframeUrl.value.split('?')[0]
+    const nextBase = nextUrl.split('?')[0]
+    if (currentBase === nextBase && previewStatus.value === 'ready') {
+      return
     }
-    return
   }
+
+  // 无论当前会话是否有消息，都尝试检查服务器上的预览资源
+  // （之前的会话可能已经生成过，资源仍然存在）
   previewStatus.value = 'checking'
-  const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix)
   const resourceAvailable = await checkPreviewResource(nextUrl)
-  if (!resourceAvailable) {
-    iframeUrl.value = ''
-    previewStatus.value = 'failed'
-    const latestFailureReason = extractLatestFailureReason()
-    previewWarning.value = latestFailureReason
-      ? `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
-      : '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。'
+  if (resourceAvailable) {
+    previewStatus.value = 'ready'
+    iframeUrl.value = nextUrl
     return
   }
-  previewStatus.value = 'ready'
-  iframeUrl.value = nextUrl
+  if (codeGenType === 'multi-file') {
+    const plainUrl = `${deployUrlPrefix}/multi-file/${appId}/index.html${refresh ? `?t=${Date.now()}` : ''}`
+    const plainAvailable = await checkPreviewResource(plainUrl)
+    if (plainAvailable) {
+      previewStatus.value = 'ready'
+      iframeUrl.value = plainUrl
+      return
+    }
+  }
+  const fallbackUrl = `${deployUrlPrefix}/${codeGenType === 'vue_project' ? 'vue_project' : codeGenType}/${appId}/index.html${refresh ? `?t=${Date.now()}` : ''}`
+  const fallbackAvailable = await checkPreviewResource(fallbackUrl)
+  if (fallbackAvailable) {
+    previewStatus.value = 'ready'
+    iframeUrl.value = fallbackUrl
+    return
+  }
+
+  // 资源检查全部失败
+  if (iframeUrl.value) {
+    // 已有预览 → 保留旧预览，只更新状态提示
+    previewStatus.value = 'ready'
+    previewWarning.value = '预览资源检查失败，显示的是上一次的预览结果'
+  } else {
+    // 从未有过预览 → idle
+    iframeUrl.value = ''
+    previewStatus.value = 'idle'
+  }
 }
 
-const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string) => {
+// SSE composable — 在 updatePreview 和 loadSessions 声明之后初始化，避免 TDZ
+// generating 必须取 composable 返回的 ref：startSSE 内部置 true/false，
+// 页面本地的 generating 之前是死 ref（恒 false），导致"AI 正在生成"指示与输入禁用失效。
+const { generating, startSSE, stopSSE, streamWarning } = useSSEChat({
+  appId,
+  messages,
+  onPreviewUpdate: () => updatePreview(true),
+  onSessionsUpdate: loadSessions,
+  onAppUpdate: (data) => {
+    if (data.codeGenType && app.value) {
+      app.value.codeGenType = data.codeGenType
+    }
+  },
+})
+
+const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string, refresh = false) => {
+  const cache = refresh ? `?t=${Date.now()}` : ''
   if (codeGenType === 'vue_project') {
-    return `${deployUrlPrefix}/vue_project_${appId}/dist/index.html?t=${Date.now()}`
+    return `${deployUrlPrefix}/vue_project/${appId}/dist/index.html${cache}`
   }
-  return `${deployUrlPrefix}/${codeGenType}_${appId}/index.html?t=${Date.now()}`
+  if (codeGenType === 'multi-file') {
+    return `${deployUrlPrefix}/multi-file/${appId}/dist/index.html${cache}`
+  }
+  return `${deployUrlPrefix}/${codeGenType}/${appId}/index.html${cache}`
 }
 
 const hasPreviewCandidate = () => {
@@ -802,14 +550,28 @@ const hasPreviewCandidate = () => {
 
 const hasLatestGenerationFailure = () => {
   const latestAiMessage = [...messages.value].reverse().find((item) => item.role === 'ai')
-  return !!latestAiMessage && (latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content))
+  return (
+    !!latestAiMessage && (latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content))
+  )
 }
 
 const hasFileWriteSignal = (messageItem: ChatMessage) => {
-  if (messageItem.toolEvents?.some((eventItem) => eventItem.type === 'executed' && eventItem.text.includes('写入文件'))) {
+  if (
+    messageItem.toolEvents?.some((eventItem) => eventItem.type === 'executed' && eventItem.text.includes('写入文件'))
+  ) {
     return true
   }
   return messageItem.content.includes('[工具完成]') || messageItem.content.includes('已写入文件')
+}
+
+const looksLikeRiskRejection = (content: string) => {
+  const lowerContent = content.toLowerCase()
+  return (
+    lowerContent.includes('the request was rejected') ||
+    lowerContent.includes('considered high risk') ||
+    lowerContent.includes('内容安全') ||
+    lowerContent.includes('内容违规')
+  )
 }
 
 const looksLikeGenerationFailure = (content: string) => {
@@ -873,59 +635,24 @@ const isTimeoutFailureReason = (reason: string) => {
   return lowerReason.includes('timeout') || lowerReason.includes('timed out') || lowerReason.includes('read timed out')
 }
 
-const handleIframeLoad = () => {
-  if (!iframeRef.value) {
-    return
+// handleIframeLoad, clearSelectedElement, toggleEditMode, refreshIframe
+// → 已移到 PreviewPanel 组件，以下为事件适配函数
+
+const onElementSelected = (element: ElementInfo) => {
+  selectedElement.value = element
+}
+
+const onPreviewModeChange = (enabled: boolean) => {
+  editMode.value = enabled
+  if (!enabled) {
+    selectedElement.value = null
   }
-  try {
-    const text = iframeRef.value.contentDocument?.body?.innerText || ''
-    if (text.includes('Whitelabel Error Page') || text.includes('No static resource')) {
-      iframeUrl.value = ''
-      previewStatus.value = 'failed'
-      const latestFailureReason = extractLatestFailureReason()
-      if (latestFailureReason) {
-        previewWarning.value = isTimeoutFailureReason(latestFailureReason)
-          ? `预览资源不存在，AI 服务响应超时导致本次代码未完整生成。建议重试一次，或先缩短需求范围后再次生成。最近一次失败原因：${latestFailureReason}`
-          : `预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。最近一次失败原因：${latestFailureReason}`
-      } else {
-        previewWarning.value = '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。请先查看最新 AI 消息中的构建结果。'
-      }
-      return
-    }
-    previewWarning.value = ''
-    previewStatus.value = 'ready'
-  } catch {
-    previewWarning.value = ''
-  }
-  visualEditor.handleIframeLoad()
 }
 
 const clearSelectedElement = () => {
   selectedElement.value = null
-  visualEditor.clearSelection()
-}
-
-const toggleEditMode = () => {
-  if (!iframeUrl.value) {
-    message.warning('暂无可编辑预览，请先生成页面内容')
-    return
-  }
-  if (editMode.value) {
-    visualEditor.exitEditMode()
-    return
-  }
-  const entered = visualEditor.enterEditMode()
-  if (!entered) {
-    message.warning('编辑模式初始化失败，请刷新预览后重试')
-  }
-}
-
-const refreshIframe = () => {
-  if (iframeUrl.value) {
-    clearSelectedElement()
-    const url = new URL(iframeUrl.value)
-    url.searchParams.set('t', Date.now().toString())
-    iframeUrl.value = url.toString()
+  if (previewPanelRef.value?.visualEditor) {
+    previewPanelRef.value.visualEditor.clearSelection()
   }
 }
 
@@ -954,16 +681,85 @@ const handleSwitchSession = async (sessionId?: string | number) => {
   await updatePreview()
 }
 
-const formatSessionTime = (time?: string) => {
-  if (!time) {
-    return '暂无消息'
-  }
-  const date = new Date(time)
-  if (Number.isNaN(date.getTime())) {
-    return '暂无消息'
-  }
-  return date.toLocaleString()
+const startRename = (session: API.ChatSessionVO) => {
+  editingSessionId.value = normalizeId(session.id)
+  editingTitle.value = session.title || ''
+  nextTick(() => {
+    const input = document.querySelector('.session-edit-input') as HTMLInputElement
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
 }
+
+const confirmRename = async (session: API.ChatSessionVO) => {
+  const sid = normalizeId(session.id)
+  if (editingSessionId.value !== sid) {
+    return
+  }
+  const newTitle = editingTitle.value.trim()
+  editingSessionId.value = ''
+  if (!newTitle || newTitle === session.title) {
+    return
+  }
+  try {
+    const res = await renameSession({ sessionId: session.id as number, title: newTitle })
+    if (res.data?.code === 0) {
+      session.title = newTitle
+      message.success('重命名成功')
+    } else {
+      message.error('重命名失败，' + (res.data?.message || '请稍后重试'))
+    }
+  } catch {
+    message.error('重命名失败')
+  }
+}
+
+const confirmDeleteSession = (session: API.ChatSessionVO) => {
+  const sid = normalizeId(session.id)
+  if (!sid) {
+    return
+  }
+  Modal.confirm({
+    title: '确认删除会话',
+    content: `确定要删除「${session.title || '未命名会话'}」吗？删除后不可恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const res = await deleteSession({ id: session.id as number })
+        if (res.data?.code === 0) {
+          message.success('会话已删除')
+          if (currentSessionId.value === sid) {
+            const remaining = sessions.value.filter((s) => normalizeId(s.id) !== sid)
+            if (remaining.length > 0 && remaining[0].id) {
+              currentSessionId.value = normalizeId(remaining[0].id)
+              await loadRemoteHistory(currentSessionId.value)
+            } else {
+              currentSessionId.value = undefined
+              messages.value = []
+              const newSessionId = await createSession()
+              if (newSessionId) {
+                currentSessionId.value = newSessionId
+              }
+            }
+            await updatePreview()
+          }
+          await loadSessions()
+        } else {
+          message.error('删除失败，' + (res.data?.message || '请稍后重试'))
+        }
+      } catch {
+        message.error('删除失败')
+      }
+    },
+  })
+}
+
+// formatSessionTime → 已移到 ChatSessionPanel
+// formatVersionTime, loadVersions → 已移到 PreviewPanel
 
 /**
  * 部署应用
@@ -1089,85 +885,10 @@ const pollCoverAfterDeploy = async () => {
   }, 4000)
 }
 
-const renderMarkdown = (text: string) => {
-  return text
-    .replace(/\n/g, '<br/>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-}
+// renderMarkdown, parseAiMessage, stripToolEventLines, scrollToBottom
+// → 已移到 ChatMessageList 组件
 
-const parseAiMessage = (content: string, presetToolEvents: ToolEvent[] = []): { aiText: string; toolEvents: ToolEvent[] } => {
-  if (presetToolEvents.length > 0) {
-    return {
-      aiText: stripToolEventLines(content).trim(),
-      toolEvents: presetToolEvents,
-    }
-  }
-  const lines = content.split('\n')
-  const aiTextLines: string[] = []
-  const toolEvents: ToolEvent[] = []
-
-  lines.forEach((line) => {
-    const trimmedLine = line.trim()
-    if (trimmedLine.startsWith('[工具调用]')) {
-      toolEvents.push({
-        type: 'request',
-        text: trimmedLine.replace('[工具调用]', '').trim() || '执行工具调用',
-      })
-      return
-    }
-    if (trimmedLine.startsWith('[工具完成]')) {
-      toolEvents.push({
-        type: 'executed',
-        text: trimmedLine.replace('[工具完成]', '').trim() || '工具执行成功',
-      })
-      return
-    }
-    if (trimmedLine.startsWith('准备写入文件')) {
-      toolEvents.push({
-        type: 'request',
-        text: trimmedLine,
-      })
-      return
-    }
-    if (trimmedLine.startsWith('已写入文件')) {
-      toolEvents.push({
-        type: 'executed',
-        text: trimmedLine,
-      })
-      return
-    }
-    aiTextLines.push(line)
-  })
-
-  return {
-    aiText: aiTextLines.join('\n').trim(),
-    toolEvents,
-  }
-}
-
-const stripToolEventLines = (content: string) => {
-  return content
-    .split('\n')
-    .filter((line) => {
-      const trimmedLine = line.trim()
-      return !(
-        trimmedLine.startsWith('[工具调用]') ||
-        trimmedLine.startsWith('[工具完成]') ||
-        trimmedLine.startsWith('准备写入文件') ||
-        trimmedLine.startsWith('已写入文件')
-      )
-    })
-    .join('\n')
-}
-
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (messageListRef.value) {
-      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
-    }
-  })
-}
+const entryPathStorageKey = `app_generate_entry_${appId}`
 
 onMounted(() => {
   const backPath = (window.history.state?.back as string | undefined) || ''
@@ -1220,8 +941,7 @@ const startResize = (event: MouseEvent) => {
 }
 
 onUnmounted(() => {
-  visualEditor.exitEditMode()
-  visualEditor.dispose()
+  // visualEditor 已移到 PreviewPanel，由组件内部管理 dispose
   stopResize()
 })
 </script>
@@ -1231,23 +951,24 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fdfdfd;
+  background: var(--color-background);
 }
 
 .top-nav {
   height: 56px;
   padding: 0 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .app-name {
   font-weight: 600;
   font-size: 16px;
   margin-left: 8px;
+  color: var(--color-text);
 }
 
 .main-content {
@@ -1258,10 +979,10 @@ onUnmounted(() => {
 
 /* 对话面板 */
 .chat-panel {
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--color-surface);
   min-width: 320px;
   max-width: 70vw;
   flex-shrink: 0;
@@ -1276,384 +997,19 @@ onUnmounted(() => {
 }
 
 .panel-splitter:hover {
-  background: #f0f0f0;
+  background: var(--color-border);
 }
 
-.session-panel {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.session-panel-header {
-  display: flex;
+.status-tag {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #595959;
-}
-
-.session-list {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.session-item {
-  min-width: 140px;
-  max-width: 180px;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
-  padding: 8px 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #fff;
-}
-
-.session-item:hover {
-  border-color: #d9d9d9;
-}
-
-.session-item.active {
-  border-color: #1a1a1a;
-  background: #fafafa;
-}
-
-.session-title {
-  font-size: 13px;
-  color: #1f1f1f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.session-time {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #8c8c8c;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.message-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  scroll-behavior: smooth;
-}
-
-.message-item {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.user-msg {
-  flex-direction: row-reverse;
-}
-
-.message-body {
-  max-width: 80%;
-}
-
-.message-content {
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.message-text {
-  white-space: normal;
-}
-
-.user-msg .message-content {
-  background: #f5f5f5;
-  color: #1a1a1a;
-}
-
-.ai-msg .message-content {
-  background: #fff;
-  border: 1px solid #f0f0f0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-}
-
-.tool-call-card {
-  margin-top: 10px;
-  border: 1px solid #e7e9ee;
-  border-radius: 10px;
-  background: #f8fafc;
-  overflow: hidden;
-}
-
-.tool-call-summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.tool-call-summary::-webkit-details-marker {
-  display: none;
-}
-
-.tool-call-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.tool-call-hint {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.tool-call-list {
-  border-top: 1px solid #e7e9ee;
-  background: #fff;
-}
-
-.tool-call-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.tool-call-item:last-child {
-  border-bottom: none;
-}
-
-.tool-call-tag {
-  flex-shrink: 0;
-  font-size: 11px;
-  line-height: 1;
-  padding: 5px 7px;
-  border-radius: 99px;
-  border: 1px solid transparent;
-}
-
-.tool-call-tag.request {
-  color: #1d4ed8;
-  background: #dbeafe;
-  border-color: #bfdbfe;
-}
-
-.tool-call-tag.executed {
-  color: #047857;
-  background: #d1fae5;
-  border-color: #a7f3d0;
-}
-
-.tool-call-text {
-  font-size: 13px;
-  color: #374151;
-  word-break: break-all;
-}
-
-.generating-indicator {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin-top: -12px;
-  margin-left: 44px;
-}
-
-.workflow-steps {
-  margin-top: 12px;
-  margin-left: 44px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 8px;
-  border: 1px solid #f0f0f0;
-}
-
-.workflow-steps-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #8c8c8c;
-  margin-bottom: 8px;
-}
-
-.workflow-steps-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.workflow-step-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.workflow-step-item.running {
-  color: #1890ff;
-}
-
-.workflow-step-item.completed {
-  color: #52c41a;
-}
-
-.workflow-step-item.error {
-  color: #ff4d4f;
-}
-
-.workflow-step-icon {
-  font-size: 14px;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.workflow-step-content {
-  flex: 1;
-}
-
-.workflow-step-name {
-  font-weight: 500;
-}
-
-.workflow-step-error {
-  font-size: 11px;
-  color: #ff4d4f;
-  margin-top: 2px;
-}
-
-.stream-warning {
-  padding: 0 20px 12px;
-}
-
-.stream-warning :deep(.ant-alert) {
-  border-radius: 10px;
-}
-
-.selected-element-panel {
-  padding: 0 20px 12px;
-}
-
-.selected-element-panel :deep(.ant-alert) {
-  border-radius: 10px;
-}
-
-.selected-element-content {
-  display: grid;
-  gap: 4px;
-  font-size: 12px;
-  color: #334155;
-  word-break: break-all;
-}
-
-.input-area {
-  padding: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.input-wrapper {
-  border: 1px solid #e8e8e8;
-  border-radius: 16px;
-  padding: 8px;
-  transition: all 0.3s;
-}
-
-.input-wrapper:focus-within {
-  border-color: #1a1a1a;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.02);
-}
-
-.input-wrapper :deep(textarea) {
-  border: none !important;
-  box-shadow: none !important;
-  padding: 8px 12px;
-}
-
-.input-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-}
-
-/* 预览面板 */
-.preview-panel {
-  flex: 1;
-  background: #f7f8fa;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  overflow: hidden;
-}
-
-.preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.preview-warning {
-  margin-bottom: 12px;
-  border-radius: 10px;
-}
-
-.preview-body {
-  flex: 1;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-  overflow: hidden;
-  position: relative;
-  transition: all 0.3s;
-  height: 0; /* 强制子元素计算高度 */
-}
-
-.preview-body.mobile {
-  max-width: 375px;
-  margin: 0 auto;
-  height: 667px;
-  flex: none;
-}
-
-.preview-iframe {
-  width: 100%;
-  height: 100%;
-}
-
-.preview-empty {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #bfbfbf;
-}
-
-.empty-content {
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.deploy-btn {
-  border-radius: 20px;
-  background: #1a1a1a;
-  border-color: #1a1a1a;
 }
 
 .download-btn {
-  border-radius: 20px;
+  border-radius: 6px;
+}
+
+.deploy-btn {
+  border-radius: 6px;
 }
 </style>

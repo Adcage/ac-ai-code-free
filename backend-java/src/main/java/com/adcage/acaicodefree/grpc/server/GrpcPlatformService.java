@@ -1,25 +1,28 @@
 package com.adcage.acaicodefree.grpc.server;
 
+import java.util.List;
+
+import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
 import com.adcage.acaicodefree.grpc.platform.*;
-import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
+import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.model.entity.App;
+import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
-import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
-import com.adcage.acaicodefree.core.build.VueProjectBuildService;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.AppVersionService;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.UserService;
+
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
-import jakarta.annotation.Resource;
-
-import com.mybatisflex.core.paginate.Page;
 
 @Slf4j
 @GrpcService
@@ -37,11 +40,66 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     private UserService userService;
     @Resource
     private VueProjectBuildService vueProjectBuildService;
+    @Resource
+    private ChatHistoryMapper chatHistoryMapper;
+
+    @Override
+    public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
+                                          StreamObserver<ResolveRuntimeModelBundleResponse> responseObserver) {
+        try {
+            String codeGenTypeStr = mapGrpcCodeGenTypeToString(request.getCodeGenType());
+            RuntimeModelBundle bundle = modelConfigService.resolveRuntimeModelBundle(
+                    request.getUserId(),
+                    request.getAppId(),
+                    request.getAgentRunId(),
+                    codeGenTypeStr
+            );
+
+            ResolveRuntimeModelBundleResponse.Builder builder = ResolveRuntimeModelBundleResponse.newBuilder()
+                    .setSuccess(bundle.isSuccess())
+                    .setPolicyVersion(bundle.getPolicyVersion() != null ? bundle.getPolicyVersion() : "")
+                    .setBillingContext(bundle.getBillingContext() != null ? bundle.getBillingContext() : "");
+
+            if (bundle.getErrorMessage() != null) {
+                builder.setErrorMessage(bundle.getErrorMessage());
+            }
+
+            if (bundle.getConfigs() != null) {
+                for (RuntimeModelConfig config : bundle.getConfigs()) {
+                    builder.addConfigs(com.adcage.acaicodefree.grpc.platform.RuntimeModelConfig.newBuilder()
+                            .setRole(config.getRole() != null ? config.getRole() : "")
+                            .setModelConfigId(config.getModelConfigId() != null ? config.getModelConfigId() : 0L)
+                            .setConfigVersion(config.getConfigVersion() != null ? config.getConfigVersion() : 0)
+                            .setProvider(config.getProvider() != null ? config.getProvider() : "")
+                            .setModelName(config.getModelName() != null ? config.getModelName() : "")
+                            .setBaseUrl(config.getBaseUrl() != null ? config.getBaseUrl() : "")
+                            .setApiKey(config.getApiKey() != null ? config.getApiKey() : "")
+                            .setSource(config.getSource() != null ? config.getSource() : "")
+                            .setBillingMode(config.getBillingMode() != null ? config.getBillingMode() : "")
+                            .build());
+                }
+            }
+
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("gRPC resolveRuntimeModelBundle failed", e);
+            responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
+                    .setSuccess(false)
+                    .setErrorMessage(e.getMessage() != null ? e.getMessage() : "unknown error")
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
 
     @Override
     public void getModelConfig(GetModelConfigRequest request, StreamObserver<GetModelConfigResponse> responseObserver) {
         try {
-            ModelConfig modelConfig = modelConfigService.getById(request.getModelConfigId());
+            long configId = request.getModelConfigId();
+            ModelConfig modelConfig = configId > 0 ? modelConfigService.getById(configId) : null;
+            if (modelConfig == null) {
+                modelConfig = modelConfigService.getServerDefaultConfig();
+            }
             if (modelConfig == null) {
                 responseObserver.onNext(GetModelConfigResponse.newBuilder()
                         .setProvider("")
@@ -144,7 +202,10 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     @Override
     public void completeAgentRun(CompleteAgentRunRequest request, StreamObserver<CompleteAgentRunResponse> responseObserver) {
         try {
-            if (request.getSuccess()) {
+            String loopStateJson = request.getLoopStateJson();
+            if (!loopStateJson.isEmpty()) {
+                agentRunService.pauseAgentRun(request.getAgentRunId(), loopStateJson);
+            } else if (request.getSuccess()) {
                 agentRunService.completeAgentRun(
                         request.getAgentRunId(),
                         request.getWorkspacePath(),
@@ -188,16 +249,17 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     @Override
     public void getChatHistory(GetChatHistoryRequest request, StreamObserver<GetChatHistoryResponse> responseObserver) {
         try {
-            ChatHistoryQueryRequest query = new ChatHistoryQueryRequest();
-            query.setSessionId(request.getSessionId());
-            query.setPageSize(request.getLimit() > 0 ? request.getLimit() : 50);
-            query.setPageNum(1);
-            User adminUser = new User();
-            adminUser.setId(0L);
-            adminUser.setUserRole("admin");
-            Page<ChatHistoryVO> page = appService.listChatHistoryByPage(query, adminUser);
+            long sessionId = request.getSessionId();
+            int limit = request.getLimit() > 0 ? request.getLimit() : 50;
+            // gRPC 内部调用已有 x-internal-secret 认证，无需用户级权限校验
+            // 直接通过 Mapper 查询，绕过 listChatHistoryByPage 的 getAndCheckApp 权限检查
+            com.mybatisflex.core.query.QueryWrapper queryWrapper = com.mybatisflex.core.query.QueryWrapper.create()
+                    .eq("sessionId", sessionId)
+                    .orderBy("seqNo", true)
+                    .limit(limit);
+            List<ChatHistory> historyList = chatHistoryMapper.selectListByQuery(queryWrapper);
             GetChatHistoryResponse.Builder builder = GetChatHistoryResponse.newBuilder();
-            for (ChatHistoryVO record : page.getRecords()) {
+            for (ChatHistory record : historyList) {
                 ChatHistoryEntry entry = ChatHistoryEntry.newBuilder()
                         .setId(record.getId() != null ? record.getId() : 0L)
                         .setRole(record.getMessageType() != null ? record.getMessageType() : "")
@@ -324,6 +386,15 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             case MULTI_FILE -> CodeGenTypeEnum.MULTI_FILE;
             case VUE_PROJECT -> CodeGenTypeEnum.VUE_PROJECT;
             default -> null;
+        };
+    }
+
+    private String mapGrpcCodeGenTypeToString(CodeGenType grpcType) {
+        return switch (grpcType) {
+            case SINGLE_FILE -> "single_file";
+            case MULTI_FILE -> "multi-file";
+            case VUE_PROJECT -> "vue_project";
+            default -> "vue_project";
         };
     }
 

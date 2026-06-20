@@ -1,6 +1,7 @@
 package com.adcage.acaicodefree.runtime;
 
 import com.adcage.acaicodefree.exception.BusinessException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -10,10 +11,16 @@ import java.util.List;
 
 class CodeGenerationRuntimeRouterTest {
 
-    @Test
-    void select_shouldReturnConfiguredRuntime() {
-        CodeGenerationRuntimeRouter router = new CodeGenerationRuntimeRouter();
+    private CodeGenerationRuntimeRouter router;
+
+    @BeforeEach
+    void setUp() {
+        router = new CodeGenerationRuntimeRouter();
         ReflectionTestUtils.setField(router, "runtimes", List.of(new StubRuntime("java-agent"), new StubRuntime("python-agent")));
+    }
+
+    @Test
+    void select_shouldReturnPythonAgentByDefault() {
         ReflectionTestUtils.setField(router, "runtimeName", "python-agent");
 
         CodeGenerationRuntime selected = router.select();
@@ -22,8 +29,25 @@ class CodeGenerationRuntimeRouterTest {
     }
 
     @Test
+    void select_shouldReturnConfiguredPythonRuntime() {
+        ReflectionTestUtils.setField(router, "runtimeName", "python-agent");
+
+        CodeGenerationRuntime selected = router.select();
+
+        Assertions.assertEquals("python-agent", selected.getName());
+    }
+
+    @Test
+    void select_shouldRejectJavaAgentRuntime() {
+        ReflectionTestUtils.setField(router, "runtimeName", "java-agent");
+
+        BusinessException exception = Assertions.assertThrows(BusinessException.class, router::select);
+
+        Assertions.assertTrue(exception.getMessage().contains("Java AI runtime 已禁用"));
+    }
+
+    @Test
     void select_shouldThrowWhenRuntimeMissing() {
-        CodeGenerationRuntimeRouter router = new CodeGenerationRuntimeRouter();
         ReflectionTestUtils.setField(router, "runtimes", List.of(new StubRuntime("java-agent")));
         ReflectionTestUtils.setField(router, "runtimeName", "python-agent");
 

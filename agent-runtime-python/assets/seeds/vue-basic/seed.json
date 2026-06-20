@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "ac-seed/v1",
+  "id": "vue-basic",
+  "name": "Vue Basic Seed",
+  "description": "Vue 3 basic starter with App.vue and src structure.",
+  "codeGenType": "vue_project",
+  "triggers": ["vue", "前端", "web应用"],
+  "entry": "src/App.vue",
+  "filesDir": "files",
+  "copyMode": "missing-only"
+}

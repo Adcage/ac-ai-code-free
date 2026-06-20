@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "ac-design-system/v1",
+  "id": "default",
+  "name": "Default",
+  "category": "Product UI",
+  "description": "Default product UI design system. Provides consistent color, typography, spacing, and component rules for Vue project generation.",
+  "files": {
+    "design": "DESIGN.md",
+    "tokens": "tokens.css"
+  },
+  "importMode": "normalized",
+  "craft": {
+    "suggested": ["accessibility-baseline"]
+  }
+}

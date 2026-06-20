@@ -148,15 +148,17 @@ dashscope:
   image-model: ${DASHSCOPE_IMAGE_MODEL:wanx2.2-t2i-flash}
 
 agent:
-  runtime: ${AGENT_RUNTIME:java-agent}
+  runtime: ${AGENT_RUNTIME:python-agent}
   python:
     base-url: ${AGENT_PYTHON_BASE_URL:http://localhost:9000}
   runtime-internal-secret: ${AGENT_RUNTIME_INTERNAL_SECRET:}
+  grpc:
+    stream-deadline-seconds: 600
 
 grpc:
   server:
     port: 9090
   client:
     python-agent:
-      address: 'static://localhost:9091'
+      address: 'dns:///localhost:9091'
       negotiationType: plaintext

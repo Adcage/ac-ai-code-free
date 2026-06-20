@@ -1,7 +1,7 @@
 package com.adcage.acaicodefree.core.saver;
 
 import cn.hutool.core.util.StrUtil;
-import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
+import com.adcage.acaicodefree.legacy.ai.model.MultiFileCodeResult;
 import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;

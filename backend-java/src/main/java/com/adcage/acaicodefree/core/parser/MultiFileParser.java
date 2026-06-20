@@ -1,6 +1,6 @@
 package com.adcage.acaicodefree.core.parser;
 
-import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
+import com.adcage.acaicodefree.legacy.ai.model.MultiFileCodeResult;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

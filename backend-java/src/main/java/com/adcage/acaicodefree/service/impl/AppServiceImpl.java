@@ -10,13 +10,12 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.common.ErrorCode;
-import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingService;
-import com.adcage.acaicodefree.ai.AiCodeGenTypeRoutingServiceFactory;
 import com.adcage.acaicodefree.config.properties.ScreenshotProperties;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
-import com.adcage.acaicodefree.core.AiCodeGeneratorFacade;
+import com.adcage.acaicodefree.constant.UserConstant;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
+import com.adcage.acaicodefree.core.build.VueProjectBuildService.BuildResult;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
@@ -39,12 +38,11 @@ import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.adcage.acaicodefree.service.ScreenshotService;
-import com.adcage.acaicodefree.workflow.config.WorkflowProperties;
-import com.adcage.acaicodefree.workflow.service.WorkflowCodeGeneratorService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.adcage.acaicodefree.model.entity.App;
@@ -57,6 +55,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
@@ -97,9 +96,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private UserService userService;
 
     @Resource
-    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
-
-    @Resource
     private ChatSessionMapper chatSessionMapper;
 
     @Resource
@@ -112,16 +108,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private VueProjectBuildService vueProjectBuildService;
 
     @Resource
-    private AiCodeGenTypeRoutingServiceFactory aiCodeGenTypeRoutingServiceFactory;
-
-    @Resource
     private ScreenshotService screenshotService;
-
-    @Resource
-    private WorkflowCodeGeneratorService workflowCodeGeneratorService;
-
-    @Resource
-    private WorkflowProperties workflowProperties;
 
     @Resource
     private ScreenshotProperties screenshotProperties;
@@ -155,8 +142,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));//TODO 后续优化成AI生成应用名称
         app.setInitPrompt(initPrompt);
         app.setCodeGenType(codeGenTypeEnum.getValue());
+        app.setStyleTemplate(appAddRequest.getStyleTemplate());
         app.setUserId(loginUser.getId());
         app.setPriority(AppConstant.DEFAULT_APP_PRIORITY);
+        // 设置测试应用标记
+        app.setIsTestApp(Boolean.TRUE.equals(appAddRequest.getIsTestApp()) ? 1 : 0);
         boolean saveResult = this.save(app);
         ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "创建应用失败");
         return app.getId();
@@ -198,6 +188,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         Long userId = appQueryRequest.getUserId();
         String userName = appQueryRequest.getUserName();
         Boolean onlyFeatured = appQueryRequest.getOnlyFeatured();
+        Boolean isTestApp = appQueryRequest.getIsTestApp();
         String sortField = appQueryRequest.getSortField();
         String sortOrder = appQueryRequest.getSortOrder();
 
@@ -220,6 +211,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 // 未匹配到用户，强行使结果为空
                 queryWrapper.eq("id", -1L);
             }
+        }
+
+        // 测试应用过滤
+        if (isTestApp != null) {
+            queryWrapper.eq("isTestApp", isTestApp ? 1 : 0);
         }
 
         // 精选应用查询（优先级大于0）
@@ -272,6 +268,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
@@ -282,24 +279,60 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = getAndCheckApp(appId, loginUser);
         // 3. 校验会话归属
         getAndCheckChatSession(sessionId, appId, loginUser);
-        // 4. 保存用户消息
-        saveHistoryMessage(sessionId, appId, loginUser.getId(), message, "user", "success", app.getCodeGenType(), 0, null);
-        updateSessionSummary(sessionId);
-        // 5. 获取应用的代码生成类型
+        // 锁定会话行，确保恢复、运行中检查与新建 AgentRun 在并发请求下严格串行
+        chatSessionMapper.selectByIdForUpdate(sessionId);
+        // 4. 获取应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 6. 通过 Runtime Router 选择运行时
+        // 5. 通过 Runtime Router 选择运行时，并优先认领已有的暂停运行
         CodeGenerationRuntime runtime = codeGenerationRuntimeRouter.select();
-        ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
-        Long modelConfigId = modelConfig == null ? null : modelConfig.getId();
-        Integer configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
-        Long agentRunId = agentRunService.createAgentRun(appId, sessionId, loginUser.getId(), runtime.getName(),
-                modelConfigId, configVersion, null);
-        String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" + agentRunId + "/source";
-        agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
+        AgentRun resumedRun = agentRunService.claimLatestPausedRun(
+                appId, sessionId, loginUser.getId());
+
+        Long agentRunId;
+        Long modelConfigId;
+        Integer configVersion;
+        String loopStateJson;
+        String workspacePath;
+
+        if (resumedRun != null) {
+            agentRunId = resumedRun.getId();
+            modelConfigId = resumedRun.getModelConfigId();
+            configVersion = resumedRun.getConfigVersion();
+            loopStateJson = resumedRun.getLoopStateJson();
+            workspacePath = StrUtil.blankToDefault(
+                    resumedRun.getWorkspacePath(),
+                    workspaceProperties.getAgentWorkspaceDir() + "/" +
+                            getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId
+            );
+            log.info("resuming paused agent_run, sessionId={}, agentRunId={}", sessionId, agentRunId);
+        } else {
+            ThrowUtils.throwIf(
+                    agentRunService.hasRunningRun(appId, sessionId, loginUser.getId()),
+                    ErrorCode.OPERATION_ERROR,
+                    "当前会话正在生成，请勿重复提交"
+            );
+            ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
+            modelConfigId = modelConfig == null ? null : modelConfig.getId();
+            configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
+            agentRunId = agentRunService.createAgentRun(
+                    appId, sessionId, loginUser.getId(), runtime.getName(),
+                    modelConfigId, configVersion, null
+            );
+            loopStateJson = "";
+            workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" +
+                    getCodeGenOutputPrefix(codeGenTypeEnum) + "/" + appId;
+            agentRunService.updateAgentRunWorkspacePath(agentRunId, workspacePath);
+        }
+
+        // 6. 运行准备完成后再保存用户消息；同步失败时事务会回滚 AgentRun 认领/创建
+        saveHistoryMessage(sessionId, appId, loginUser.getId(), message, "user", "success",
+                app.getCodeGenType(), 0, null);
+        updateSessionSummary(sessionId);
+
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
                 .appId(appId)
@@ -311,6 +344,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .modelConfigId(modelConfigId)
                 .configVersion(configVersion)
                 .workspacePath(workspacePath)
+                .loopStateJson(loopStateJson)
+                .isTest(UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole()))
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();
@@ -343,8 +378,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     }
                     if (actualCodeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
                         try {
-                            log.info("Vue 项目构建开始, appId={}, sessionId={}", appId, sessionId);
-                            vueProjectBuildService.buildVueProject(appId);
+                            log.info("Vue 项目构建开始, appId={}, sessionId={}, workspacePath={}", appId, sessionId, workspacePath);
+                            vueProjectBuildService.buildVueProject(appId, workspacePath);
                             aiMessage = aiMessage + "\n构建完成：已生成 dist 产物";
                             log.info("Vue 项目构建完成, appId={}, sessionId={}, latencyMs={}", appId, sessionId, latencyMs);
                         } catch (Exception e) {
@@ -356,6 +391,31 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             ));
                             log.error("Vue 项目构建失败, appId={}, sessionId={}, codeGenType={}, userId={}, message={}",
                                     appId, sessionId, codeGenTypeStr, loginUser.getId(), message, e);
+                        }
+                    } else if (actualCodeGenTypeEnum == CodeGenTypeEnum.MULTI_FILE) {
+                        Path multiFileProjectDir = AppConstant.getMultiFileOutputDir(appId);
+                        if (workspacePath != null && !workspacePath.isBlank()) {
+                            Path wsDir = Path.of(workspacePath).toAbsolutePath().normalize();
+                            if (Files.exists(wsDir) && Files.exists(wsDir.resolve("package.json"))) {
+                                multiFileProjectDir = wsDir;
+                            }
+                        }
+                        if (Files.exists(multiFileProjectDir.resolve("package.json"))) {
+                            try {
+                                log.info("多文件模式检测到 package.json，触发构建, appId={}, sessionId={}, projectDir={}", appId, sessionId, multiFileProjectDir);
+                                vueProjectBuildService.buildProject(multiFileProjectDir);
+                                aiMessage = aiMessage + "\n构建完成：已生成 dist 产物";
+                                log.info("多文件模式构建完成, appId={}, sessionId={}, latencyMs={}", appId, sessionId, latencyMs);
+                            } catch (Exception e) {
+                                status = "failed";
+                                aiMessage = aiMessage + "\n构建失败：" + e.getMessage();
+                                extra = JSONUtil.toJsonStr(Map.of(
+                                        "buildError", e.getMessage(),
+                                        "buildErrorType", e.getClass().getSimpleName()
+                                ));
+                                log.error("多文件模式构建失败, appId={}, sessionId={}, userId={}, message={}",
+                                        appId, sessionId, loginUser.getId(), message, e);
+                            }
                         }
                     }
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
@@ -478,6 +538,33 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
+    public void renameChatSession(Long sessionId, String title, User loginUser) {
+        ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(title), ErrorCode.PARAMS_ERROR, "会话标题不能为空");
+        ThrowUtils.throwIf(title.length() > 200, ErrorCode.PARAMS_ERROR, "会话标题过长");
+        ChatSession chatSession = chatSessionMapper.selectOneById(sessionId);
+        ThrowUtils.throwIf(chatSession == null, ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        if (!chatSession.getUserId().equals(loginUser.getId()) && !UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该会话");
+        }
+        chatSession.setTitle(title);
+        int updateResult = chatSessionMapper.update(chatSession);
+        ThrowUtils.throwIf(updateResult <= 0, ErrorCode.OPERATION_ERROR, "重命名会话失败");
+    }
+
+    @Override
+    public void deleteChatSession(Long sessionId, User loginUser) {
+        ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 无效");
+        ChatSession chatSession = chatSessionMapper.selectOneById(sessionId);
+        ThrowUtils.throwIf(chatSession == null, ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        if (!chatSession.getUserId().equals(loginUser.getId()) && !UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该会话");
+        }
+        int deleteResult = chatSessionMapper.deleteById(sessionId);
+        ThrowUtils.throwIf(deleteResult <= 0, ErrorCode.OPERATION_ERROR, "删除会话失败");
+    }
+
+    @Override
     public String deployApp(Long appId, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
@@ -499,16 +586,25 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String codeGenType = app.getCodeGenType();
         File sourceDir;
         if (CodeGenTypeEnum.VUE_PROJECT.getValue().equals(codeGenType)) {
-            Path vueProjectPath = AppConstant.getVueProjectOutputDir(appId);
+            Path workspaceDir = Path.of(workspaceProperties.getAgentWorkspaceDir()).toAbsolutePath().normalize();
+            Path vueProjectPath = workspaceDir.resolve(AppConstant.VUE_PROJECT_OUTPUT_PREFIX).resolve(String.valueOf(appId));
             Path distPath = vueProjectPath.resolve(AppConstant.DIST_DIR_NAME);
             if (!Files.exists(distPath) || !Files.isDirectory(distPath)) {
-                distPath = vueProjectBuildService.buildVueProject(appId).distPath();
+                distPath = AppConstant.getVueProjectOutputDir(appId).resolve(AppConstant.DIST_DIR_NAME);
+            }
+            if (!Files.exists(distPath) || !Files.isDirectory(distPath)) {
+                BuildResult buildResult = vueProjectBuildService.buildVueProject(appId, null);
+                distPath = buildResult.distPath();
             }
             sourceDir = distPath.toFile();
         } else {
-            String sourceDirName = codeGenType + "_" + appId;
-            String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
-            sourceDir = new File(sourceDirPath);
+            Path workspaceDir = Path.of(workspaceProperties.getAgentWorkspaceDir()).toAbsolutePath().normalize();
+            Path sourcePath = workspaceDir.resolve(getCodeGenOutputPrefix(CodeGenTypeEnum.getEnumByValue(codeGenType))).resolve(String.valueOf(appId));
+            if (!Files.exists(sourcePath)) {
+                String sourceDirName = codeGenType + "_" + appId;
+                sourcePath = Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR).resolve(sourceDirName);
+            }
+            sourceDir = sourcePath.toFile();
         }
         // 6. 检查源目录是否存在
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
@@ -619,38 +715,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "代码生成类型错误");
             return codeGenTypeEnum;
         }
-        try {
-            AiCodeGenTypeRoutingService routingService = aiCodeGenTypeRoutingServiceFactory.createService();
-            CodeGenTypeEnum routed = routingService.routeCodeGenType(initPrompt);
-            if (routed != null) {
-                return routed;
-            }
-        } catch (Exception e) {
-            if (isAiSafetyRejection(e)) {
-                log.warn("AI 路由被模型服务拒绝，终止创建应用, prompt={}, reason={}", initPrompt, e.getMessage());
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "AI 模型服务拒绝处理本次提示词，请调整描述后重试");
-            }
-            log.warn("AI 路由失败，将使用兜底模式, prompt={}", initPrompt, e);
-        }
         return CodeGenTypeEnum.MULTI_FILE;
-    }
-
-    private boolean isAiSafetyRejection(Throwable throwable) {
-        Throwable current = throwable;
-        while (current != null) {
-            String message = current.getMessage();
-            if (StrUtil.isNotBlank(message)) {
-                String lowerMessage = message.toLowerCase();
-                if (lowerMessage.contains("high risk")
-                        || lowerMessage.contains("request was rejected")
-                        || lowerMessage.contains("content policy")
-                        || lowerMessage.contains("safety")) {
-                    return true;
-                }
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 
     private CodeGenTypeEnum parseCodeGenType(String valueOrName) {
@@ -825,6 +890,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             return type;
         }
         return "";
+    }
+
+    private String getCodeGenOutputPrefix(CodeGenTypeEnum codeGenType) {
+        return switch (codeGenType) {
+            case SINGLE_FILE -> AppConstant.SINGLE_FILE_OUTPUT_PREFIX;
+            case MULTI_FILE -> AppConstant.MULTI_FILE_OUTPUT_PREFIX;
+            case VUE_PROJECT -> AppConstant.VUE_PROJECT_OUTPUT_PREFIX;
+        };
     }
 
 }

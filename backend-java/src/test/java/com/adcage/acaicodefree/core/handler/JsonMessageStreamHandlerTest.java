@@ -4,8 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolExecutedMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
-import com.adcage.acaicodefree.ai.tools.FileWriteTool;
-import com.adcage.acaicodefree.ai.tools.ToolManager;
+import com.adcage.acaicodefree.service.FileOperationService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -59,10 +58,8 @@ class JsonMessageStreamHandlerTest {
 
     private JsonMessageStreamHandler createHandler() {
         JsonMessageStreamHandler handler = new JsonMessageStreamHandler();
-        ToolManager toolManager = new ToolManager();
-        ReflectionTestUtils.setField(toolManager, "tools", new com.adcage.acaicodefree.ai.tools.BaseTool[]{new FileWriteTool()});
-        toolManager.init();
-        ReflectionTestUtils.setField(handler, "toolManager", toolManager);
+        FileOperationService fileOperationService = new FileOperationService();
+        ReflectionTestUtils.setField(handler, "fileOperationService", fileOperationService);
         return handler;
     }
 }

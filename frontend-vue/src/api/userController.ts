@@ -155,3 +155,11 @@ export async function updateUser(body: API.UserUpdateRequest, options?: { [key: 
     ...(options || {}),
   })
 }
+
+/** 此处后端没有提供注释 GET /user/usage/stats */
+export async function getUsageStats(options?: { [key: string]: any }) {
+  return request<API.BaseResponseUsageStatsVO>('/user/usage/stats', {
+    method: 'GET',
+    ...(options || {}),
+  })
+}

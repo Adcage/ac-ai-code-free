@@ -3,9 +3,8 @@ package com.adcage.acaicodefree.core.handler;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.adcage.acaicodefree.ai.tools.BaseTool;
-import com.adcage.acaicodefree.ai.tools.ToolManager;
 import com.adcage.acaicodefree.ai.model.message.StreamMessageTypeEnum;
+import com.adcage.acaicodefree.service.FileOperationService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -17,7 +16,7 @@ import java.util.Set;
 public class JsonMessageStreamHandler {
 
     @Resource
-    private ToolManager toolManager;
+    private FileOperationService fileOperationService;
 
     public Flux<String> handle(Flux<String> stream, StringBuilder readableOutput) {
         Set<String> printedToolRequestIds = new HashSet<>();
@@ -35,6 +34,9 @@ public class JsonMessageStreamHandler {
             String type = jsonObject.getStr("type");
             if (StreamMessageTypeEnum.AI_RESPONSE.getValue().equals(type)) {
                 String data = jsonObject.getStr("data", "");
+                if ("waiting_for_user".equals(data) || data.startsWith("Agent loop completed:")) {
+                    return Flux.just(chunk);
+                }
                 readableOutput.append(data);
                 return Flux.just(chunk);
             }
@@ -44,21 +46,30 @@ public class JsonMessageStreamHandler {
                     return Flux.empty();
                 }
                 String toolName = jsonObject.getStr("name", "");
+                if ("ask_user".equals(toolName) || "finish".equals(toolName)) {
+                    return Flux.just(chunk);
+                }
                 JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
                 String requestText = buildToolRequestText(toolName, arguments);
                 if (StrUtil.isNotBlank(requestText)) {
-                    readableOutput.append("\n[工具调用] ").append(requestText);
+                    readableOutput.append("\n[工具调用] ").append(requestText).append('\n');
                 }
                 return Flux.just(chunk);
             }
             if (StreamMessageTypeEnum.TOOL_EXECUTED.getValue().equals(type)) {
                 String toolName = jsonObject.getStr("name", "");
+                if ("ask_user".equals(toolName) || "finish".equals(toolName)) {
+                    return Flux.just(chunk);
+                }
                 String result = jsonObject.getStr("result", "");
                 JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
                 String executedText = buildToolExecutedText(toolName, arguments, result);
                 if (StrUtil.isNotBlank(executedText)) {
-                    readableOutput.append("\n[工具完成] ").append(executedText);
+                    readableOutput.append("\n[工具完成] ").append(executedText).append('\n');
                 }
+                return Flux.just(chunk);
+            }
+            if (StreamMessageTypeEnum.STATUS.getValue().equals(type)) {
                 return Flux.just(chunk);
             }
             if ("workflow_event".equals(type)) {
@@ -81,9 +92,11 @@ public class JsonMessageStreamHandler {
     }
 
     private String buildToolRequestText(String toolName, JSONObject arguments) {
-        BaseTool tool = toolManager == null ? null : toolManager.getTool(toolName);
-        if (tool != null) {
-            return StrUtil.nullToEmpty(tool.generateToolRequestResponse(arguments));
+        if (fileOperationService != null) {
+            String text = fileOperationService.generateToolRequestResponse(toolName, arguments);
+            if (StrUtil.isNotBlank(text)) {
+                return text;
+            }
         }
         String path = extractPath(arguments);
         if (StrUtil.isNotBlank(path)) {
@@ -93,17 +106,18 @@ public class JsonMessageStreamHandler {
     }
 
     private String buildToolExecutedText(String toolName, JSONObject arguments, String result) {
-        BaseTool tool = toolManager == null ? null : toolManager.getTool(toolName);
-        if (tool != null) {
-            return StrUtil.nullToEmpty(tool.generateToolExecutedResult(arguments, result));
+        if (fileOperationService != null) {
+            String text = fileOperationService.generateToolExecutedResult(toolName, arguments, result);
+            if (StrUtil.isNotBlank(text)) {
+                return text;
+            }
         }
         String path = extractPath(arguments);
         if (StrUtil.isNotBlank(path)) {
             return "已处理文件 " + path;
         }
-        if (StrUtil.isNotBlank(result)) {
-            return result;
-        }
+        // 不原样返回 result：多行结果（文件内容、校验输出）会破坏持久化消息的行解析，
+        // 刷新时泄漏进对话气泡。统一回退到单行摘要。
         return StrUtil.isBlank(toolName) ? "工具执行成功" : "工具执行成功 " + toolName;
     }
 

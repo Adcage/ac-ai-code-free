@@ -45,7 +45,11 @@ def test_create_rejects_unsupported_provider():
 
 
 def test_create_rejects_missing_api_key():
-    config = {"provider": "openai", "modelName": "gpt-test", "baseUrl": "https://api.example.com/v1"}
+    config = {
+        "provider": "openai",
+        "modelName": "gpt-test",
+        "baseUrl": "https://api.example.com/v1",
+    }
 
     with pytest.raises(AgentRuntimeError, match="模型 API Key 不能为空"):
         ChatModelFactory().create(config)

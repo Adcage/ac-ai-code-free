@@ -22,5 +22,15 @@ public class AppAddRequest implements Serializable {
      */
     private String codeGenType;
 
+    /**
+     * 格模板
+     */
+    private String styleTemplate;
+
+    /**
+     * 是否测试应用（管理员创建测试应用时为 true）
+     */
+    private Boolean isTestApp;
+
     private static final long serialVersionUID = 1L;
 }

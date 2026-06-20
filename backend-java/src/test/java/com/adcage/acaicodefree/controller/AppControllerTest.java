@@ -17,6 +17,7 @@ import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.service.AppService;
+import com.adcage.acaicodefree.service.PythonPromptEnhanceService;
 import com.adcage.acaicodefree.service.ProjectDownloadService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -58,6 +59,9 @@ class AppControllerTest {
 
     @Mock
     private ProjectDownloadService projectDownloadService;
+
+    @Mock
+    private PythonPromptEnhanceService pythonPromptEnhanceService;
 
     @InjectMocks
     private AppController appController;
@@ -144,6 +148,21 @@ class AppControllerTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.PARAMS_ERROR.getCode()));
 
         verify(appService, never()).createApp(any(AppAddRequest.class), any(User.class));
+    }
+
+    @Test
+    void enhancePromptShouldDelegateToPythonBridge() throws Exception {
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(pythonPromptEnhanceService.enhancePrompt("做一个登录页", 1L)).thenReturn("优化后的登录页提示词");
+
+        mockMvc.perform(post("/app/enhance-prompt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"prompt\":\"做一个登录页\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").value("优化后的登录页提示词"));
+
+        verify(pythonPromptEnhanceService).enhancePrompt("做一个登录页", 1L);
     }
 
     @Test

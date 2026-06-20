@@ -3,8 +3,8 @@ package com.adcage.acaicodefree.core;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
-import com.adcage.acaicodefree.ai.model.SingleCodeResult;
-import com.adcage.acaicodefree.ai.model.MultiFileCodeResult;
+import com.adcage.acaicodefree.legacy.ai.model.SingleCodeResult;
+import com.adcage.acaicodefree.legacy.ai.model.MultiFileCodeResult;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 
 import java.io.File;

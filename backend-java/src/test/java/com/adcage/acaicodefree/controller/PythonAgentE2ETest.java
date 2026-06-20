@@ -128,6 +128,7 @@ class PythonAgentE2ETest {
                 .appName("Python Agent E2E应用")
                 .initPrompt("生成一个Vue首页")
                 .codeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue())
+                .isTestApp(0)
                 .userId(user.getId())
                 .priority(0)
                 .editTime(LocalDateTime.now())

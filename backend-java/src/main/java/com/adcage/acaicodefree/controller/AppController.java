@@ -21,6 +21,7 @@ import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatSessionCreateRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatSessionRenameRequest;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
@@ -28,6 +29,7 @@ import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.ratelimit.annotation.RateLimit;
 import com.adcage.acaicodefree.ratelimit.enums.RateLimitType;
 import com.adcage.acaicodefree.service.AppService;
+import com.adcage.acaicodefree.service.PythonPromptEnhanceService;
 import com.adcage.acaicodefree.service.ProjectDownloadService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -65,6 +67,9 @@ public class AppController {
     @Resource
     private ProjectDownloadService projectDownloadService;
 
+    @Resource
+    private PythonPromptEnhanceService pythonPromptEnhanceService;
+
     /**
      * 创建应用
      *
@@ -80,6 +85,41 @@ public class AppController {
         User loginUser = userService.getLoginUser(request);
         Long appId = appService.createApp(appAddRequest, loginUser);
         return ResultUtils.success(appId);
+    }
+
+    /**
+     * 管理员创建测试应用
+     *
+     * @param appAddRequest 创建应用请求
+     * @param request       请求
+     * @return 应用 id
+     */
+    @PostMapping("/add/test")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Long> addTestApp(@RequestBody AppAddRequest appAddRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(StrUtil.isBlank(appAddRequest.getInitPrompt()), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        // 强制标记为测试应用
+        appAddRequest.setIsTestApp(true);
+        User loginUser = userService.getLoginUser(request);
+        Long appId = appService.createApp(appAddRequest, loginUser);
+        return ResultUtils.success(appId);
+    }
+
+    /**
+     * 优化提示词
+     *
+     * @param body 请求体，包含 prompt 字段
+     * @param request 请求
+     * @return 优化后的提示词
+     */
+    @PostMapping("/enhance-prompt")
+    public BaseResponse<String> enhancePrompt(@RequestBody Map<String, String> body, HttpServletRequest request) {
+        String prompt = body != null ? body.get("prompt") : null;
+        ThrowUtils.throwIf(StrUtil.isBlank(prompt), ErrorCode.PARAMS_ERROR, "提示词不能为空");
+        User loginUser = userService.getLoginUser(request);
+        log.info("优化提示词, userId={}, promptLength={}", loginUser.getId(), prompt.length());
+        return ResultUtils.success(pythonPromptEnhanceService.enhancePrompt(prompt, loginUser.getId()));
     }
 
     /**
@@ -318,6 +358,38 @@ public class AppController {
         User loginUser = userService.getLoginUser(request);
         List<ChatSessionVO> chatSessionVOList = appService.listChatSession(appId, loginUser);
         return ResultUtils.success(chatSessionVOList);
+    }
+
+    /**
+     * 重命名会话
+     *
+     * @param renameRequest 重命名请求
+     * @param request       请求
+     * @return 是否成功
+     */
+    @PostMapping("/chat/session/rename")
+    public BaseResponse<Boolean> renameSession(@RequestBody ChatSessionRenameRequest renameRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(renameRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(renameRequest.getSessionId() == null || renameRequest.getSessionId() <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(renameRequest.getTitle()), ErrorCode.PARAMS_ERROR, "会话标题不能为空");
+        User loginUser = userService.getLoginUser(request);
+        appService.renameChatSession(renameRequest.getSessionId(), renameRequest.getTitle(), loginUser);
+        return ResultUtils.success(true);
+    }
+
+    /**
+     * 删除会话
+     *
+     * @param deleteRequest 删除请求
+     * @param request       请求
+     * @return 是否成功
+     */
+    @PostMapping("/chat/session/delete")
+    public BaseResponse<Boolean> deleteSession(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(deleteRequest == null || deleteRequest.getId() <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 无效");
+        User loginUser = userService.getLoginUser(request);
+        appService.deleteChatSession(deleteRequest.getId(), loginUser);
+        return ResultUtils.success(true);
     }
 
     /**

@@ -6,6 +6,7 @@ import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
 import com.adcage.acaicodefree.ai.model.message.StreamMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolExecutedMessage;
+import com.adcage.acaicodefree.ai.model.message.StatusMessage;
 import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import cn.hutool.json.JSONUtil;
@@ -84,6 +85,15 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
                 .setModelConfigId(request.getModelConfigId() != null ? request.getModelConfigId() : 0L)
                 .setConfigVersion(request.getConfigVersion() != null ? request.getConfigVersion() : 0);
 
+        if (request.getLoopStateJson() != null && !request.getLoopStateJson().isEmpty()) {
+            builder.setLoopStateJson(request.getLoopStateJson());
+        }
+
+        // is_test: 从请求中获取（由 Java Service 层根据用户角色设置）
+        if (request.getIsTest() != null && request.getIsTest()) {
+            builder.setIsTest(true);
+        }
+
         if (request.getCodeGenTypeEnum() != null) {
             builder.setCodeGenType(mapJavaCodeGenType(request.getCodeGenTypeEnum()));
         } else if (request.getApp() != null && request.getApp().getCodeGenType() != null) {
@@ -125,6 +135,8 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
                 return JSONUtil.toJsonStr(new AiResponseMessage("生成失败：" + event.getError().getMessage()));
             case DONE:
                 return JSONUtil.toJsonStr(new AiResponseMessage(event.getDone().getMessage()));
+            case STATUS:
+                return JSONUtil.toJsonStr(new StatusMessage(event.getStatus().getMessage()));
             case AGENT_START:
                 return null;
             default:

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "ac-assets/v1",
+  "enabled": {
+    "skills": ["dashboard", "landing-page", "web-prototype", "frontend-design", "ui-ux-pro-max"],
+    "seeds": ["vue-basic"],
+    "templates": ["dashboard", "landing", "web-prototype"],
+    "designSystems": ["default", "ant", "enterprise", "clean", "dashboard"],
+    "craft": [
+      "anti-ai-slop",
+      "accessibility-baseline",
+      "state-coverage",
+      "typography",
+      "color",
+      "laws-of-ux"
+    ]
+  },
+  "defaults": {
+    "single_file": {
+      "designSystem": "default",
+      "craft": ["anti-ai-slop", "state-coverage"]
+    },
+    "multi_file": {
+      "designSystem": "default",
+      "craft": ["anti-ai-slop", "state-coverage"]
+    },
+    "vue_project": {
+      "seed": "vue-basic",
+      "designSystem": "default",
+      "craft": ["anti-ai-slop", "state-coverage", "accessibility-baseline"]
+    }
+  }
+}

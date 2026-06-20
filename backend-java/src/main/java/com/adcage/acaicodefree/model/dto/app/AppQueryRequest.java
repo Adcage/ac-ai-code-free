@@ -60,5 +60,10 @@ public class AppQueryRequest extends PageRequest implements Serializable {
      */
     private Boolean onlyFeatured;
 
+    /**
+     * 是否测试应用
+     */
+    private Boolean isTestApp;
+
     private static final long serialVersionUID = 1L;
 }

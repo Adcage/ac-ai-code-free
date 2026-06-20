@@ -6,7 +6,9 @@ import com.adcage.acaicodefree.mapper.AgentRunMapper;
 import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import com.mybatisflex.core.query.QueryWrapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -51,6 +53,7 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .status("completed")
                 .workspacePath(workspacePath)
                 .latencyMs(latencyMs)
+                .loopStateJson("")
                 .build();
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 状态失败");
@@ -65,6 +68,7 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .id(id)
                 .status("failed")
                 .errorMessage(errorMessage)
+                .loopStateJson("")
                 .build();
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 状态失败");
@@ -81,5 +85,45 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .build();
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 工作空间路径失败");
+    }
+
+    @Override
+    public void pauseAgentRun(Long id, String loopStateJson) {
+        ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "AgentRun ID 不能为空");
+        AgentRun agentRun = this.getById(id);
+        ThrowUtils.throwIf(agentRun == null, ErrorCode.NOT_FOUND_ERROR, "AgentRun 不存在");
+        AgentRun update = AgentRun.builder()
+                .id(id)
+                .status("waiting_for_user")
+                .loopStateJson(loopStateJson)
+                .build();
+        boolean result = this.updateById(update);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 暂停状态失败");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AgentRun claimLatestPausedRun(Long appId, Long sessionId, Long userId) {
+        AgentRun paused = mapper.selectLatestWaitingForUpdate(appId, sessionId, userId);
+        if (paused == null) {
+            return null;
+        }
+        AgentRun update = AgentRun.builder()
+                .id(paused.getId())
+                .status("running")
+                .build();
+        boolean updated = updateById(update);
+        ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "恢复 AgentRun 失败");
+        paused.setStatus("running");
+        return paused;
+    }
+
+    @Override
+    public boolean hasRunningRun(Long appId, Long sessionId, Long userId) {
+        return count(QueryWrapper.create()
+                .eq("appId", appId)
+                .eq("sessionId", sessionId)
+                .eq("userId", userId)
+                .eq("status", "running")) > 0;
     }
 }

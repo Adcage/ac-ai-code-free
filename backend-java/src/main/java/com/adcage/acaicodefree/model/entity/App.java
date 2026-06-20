@@ -60,6 +60,12 @@ public class App implements Serializable {
     private String codeGenType;
 
     /**
+     * 风格模板
+     */
+    @Column("styleTemplate")
+    private String styleTemplate;
+
+    /**
      * 部署标识
      */
     @Column("deployKey")
@@ -105,5 +111,11 @@ public class App implements Serializable {
      */
     @Column(value = "isDelete", isLogicDelete = true)
     private Integer isDelete;
+
+    /**
+     * 是否测试应用
+     */
+    @Column("isTestApp")
+    private Integer isTestApp;
 
 }

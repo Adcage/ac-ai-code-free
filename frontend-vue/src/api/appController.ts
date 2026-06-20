@@ -14,6 +14,18 @@ export async function addApp(body: API.AppAddRequest, options?: { [key: string]:
   })
 }
 
+/** 此处后端没有提供注释 POST /app/add/test */
+export async function addTestApp(body: API.AppAddRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseLong>('/app/add/test', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/admin/get/vo */
 export async function getAppVoByIdByAdmin(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -80,6 +92,18 @@ export async function createChatSession(body: API.ChatSessionCreateRequest, opti
   })
 }
 
+/** 此处后端没有提供注释 POST /app/chat/session/delete */
+export async function deleteSession(body: API.DeleteRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseBoolean>('/app/chat/session/delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/chat/session/list */
 export async function listChatSession(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -91,6 +115,18 @@ export async function listChatSession(
     params: {
       ...params,
     },
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 POST /app/chat/session/rename */
+export async function renameSession(body: API.ChatSessionRenameRequest, options?: { [key: string]: any }) {
+  return request<API.BaseResponseBoolean>('/app/chat/session/rename', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
     ...(options || {}),
   })
 }
@@ -131,9 +167,35 @@ export async function deployApp(body: API.AppDeployRequest, options?: { [key: st
   })
 }
 
+/** 此处后端没有提供注释 GET /app/download/${param0} */
+export async function downloadAppProject(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.downloadAppProjectParams,
+  options?: { [key: string]: any }
+) {
+  const { appId: param0, ...queryParams } = params
+  return request<any>(`/app/download/${param0}`, {
+    method: 'GET',
+    params: { ...queryParams },
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /app/edit */
 export async function editApp(body: API.AppEditRequest, options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/app/edit', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 此处后端没有提供注释 POST /app/enhance-prompt */
+export async function enhancePrompt(body: Record<string, any>, options?: { [key: string]: any }) {
+  return request<API.BaseResponseString>('/app/enhance-prompt', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
