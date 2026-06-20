@@ -19,6 +19,24 @@ class StreamingModel:
         yield AIMessageChunk(content="好")
 
 
+class ToolCallingModel:
+    def bind_tools(self, _tools):
+        return self
+
+    async def astream(self, _messages):
+        yield AIMessageChunk(
+            content="",
+            tool_call_chunks=[
+                {
+                    "name": "read_file",
+                    "args": '{"relative_path":"missing.txt"}',
+                    "id": "tool-1",
+                    "index": 0,
+                }
+            ],
+        )
+
+
 def make_event_bus():
     event_bus = MagicMock()
     event_bus.emit = AsyncMock()
@@ -76,3 +94,75 @@ async def test_execute_single_step_does_not_reemit_aggregate_text():
 
     assert emitted_texts(event_bus) == ["你", "好"]
     assert result.model_response_text == "你好"
+
+
+@pytest.mark.asyncio
+async def test_execute_single_step_records_failed_tool_calls():
+    event_bus = make_event_bus()
+    factory = MagicMock()
+    factory.create.return_value = ToolCallingModel()
+    services = SimpleNamespace(chat_model_factory=factory, event_bus=event_bus)
+    state = AgentLoopState(
+        resolved_model={"provider": "test", "modelName": "tool-test", "apiKey": "sk-test"},
+    )
+    context = ExecutionContext(
+        agent_run_id=1,
+        app_id=1,
+        session_id=1,
+        user_id=1,
+        prompt="读取文件",
+        code_gen_type=CodeGenType.VUE_PROJECT,
+        workspace_path="C:/tmp/workspace",
+        run_mode=RunMode.GENERATE,
+    )
+
+    result = await _execute_single_step(
+        state,
+        context,
+        services,
+        "系统规则",
+        [],
+        {"read_file": AsyncMock(side_effect=RuntimeError("missing file"))},
+        MagicMock(),
+    )
+
+    assert len(result.executed_tool_calls) == 1
+    record = result.executed_tool_calls[0]
+    assert record.id == "tool-1"
+    assert record.name == "read_file"
+    assert record.arguments == {"relative_path": "missing.txt"}
+    assert record.result is None
+    assert "missing file" in record.error
+
+
+@pytest.mark.asyncio
+async def test_execute_single_step_marks_state_failed_after_tool_error():
+    event_bus = make_event_bus()
+    factory = MagicMock()
+    factory.create.return_value = ToolCallingModel()
+    services = SimpleNamespace(chat_model_factory=factory, event_bus=event_bus)
+    state = AgentLoopState(
+        resolved_model={"provider": "test", "modelName": "tool-test", "apiKey": "sk-test"},
+    )
+    context = ExecutionContext(
+        agent_run_id=1,
+        app_id=1,
+        session_id=1,
+        user_id=1,
+        prompt="读取文件",
+        code_gen_type=CodeGenType.VUE_PROJECT,
+        workspace_path="C:/tmp/workspace",
+        run_mode=RunMode.GENERATE,
+    )
+
+    result = await _execute_single_step(
+        state,
+        context,
+        services,
+        "系统规则",
+        [],
+        {"read_file": AsyncMock(side_effect=RuntimeError("missing file"))},
+        MagicMock(),
+    )
+
+    assert result.status == "failed"

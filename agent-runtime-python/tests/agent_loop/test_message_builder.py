@@ -72,6 +72,39 @@ def test_resume_answer_is_after_previous_tool_history():
     assert any(isinstance(message, ToolMessage) for message in messages[:-1])
 
 
+def test_write_file_history_compresses_content_in_tool_call():
+    state = AgentLoopState()
+    state.executed_tool_calls = [
+        ToolCallRecord(
+            id="write-1",
+            name="write_file",
+            arguments={
+                "relative_path": "style.css",
+                "content": "body { color: #111; }" * 200,
+            },
+            result="写入成功: style.css",
+        )
+    ]
+
+    messages = build_llm_messages("系统规则", make_context(prompt="继续"), state)
+
+    tool_call_messages = [
+        message for message in messages
+        if isinstance(message, AIMessage) and message.tool_calls
+    ]
+    assert len(tool_call_messages) == 1
+    call = tool_call_messages[0].tool_calls[0]
+    assert call["name"] == "write_file"
+    assert call["args"]["relative_path"] == "style.css"
+    assert "已省略" in call["args"]["content"]
+    assert "content_length" not in call["args"]
+    assert "content_omitted" not in call["args"]
+    assert any(
+        isinstance(message, ToolMessage) and "写入成功: style.css" in message.content
+        for message in messages
+    )
+
+
 def test_conversation_roles_are_preserved():
     state = AgentLoopState()
     state.conversation_messages = [

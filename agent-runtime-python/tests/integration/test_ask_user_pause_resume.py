@@ -3,8 +3,31 @@ import pytest
 
 from app.agent_loop.state import AgentLoopState
 from app.agent_loop.graph import route_after_step
+from app.agent_loop.nodes.init import InitNode
+from app.modeling.resolver import ResolvedModelConfig
+from app.modeling.roles import ModelRole
+from app.runtime.context import CodeGenType, ExecutionContext, RunMode
+from app.runtime.services import RuntimeServices
 from app.agent_loop.tools.ask_user import AskUserTool
 from app.runtime.state import ToolCallRecord
+
+
+class FakeModelResolver:
+    def __init__(self):
+        self.load_calls = 0
+        self.model_config = ResolvedModelConfig(
+            role=ModelRole.PRIMARY,
+            provider="openai",
+            model_name="gpt-4o-mini",
+            base_url="https://api.openai.com/v1",
+            api_key="sk-restored",
+        )
+
+    async def load_bundle(self, context):
+        self.load_calls += 1
+
+    def resolve(self, role):
+        return self.model_config
 
 
 class TestAskUserPauseFlow:
@@ -60,6 +83,43 @@ class TestAskUserPauseFlow:
 
 class TestResumeFlow:
     """测试从暂停状态恢复的完整流程"""
+
+    @pytest.mark.asyncio
+    async def test_resume_reloads_model_when_snapshot_strips_api_key(self):
+        """恢复快照缺少 apiKey 时应重新加载完整模型配置"""
+        original = AgentLoopState(status="waiting_for_user", iteration=2)
+        original.resolved_model = {
+            "provider": "openai",
+            "modelName": "gpt-4o-mini",
+            "baseUrl": "https://api.openai.com/v1",
+            "apiKey": "sk-original",
+        }
+        restored = AgentLoopState.deserialize(original.serialize())
+        restored.status = "running"
+
+        context = ExecutionContext(
+            agent_run_id=1,
+            app_id=1,
+            session_id=1,
+            user_id=1,
+            prompt="继续",
+            code_gen_type=CodeGenType.VUE_PROJECT,
+            workspace_path=".",
+            run_mode=RunMode.GENERATE,
+            is_resume=True,
+        )
+        resolver = FakeModelResolver()
+        services = RuntimeServices(model_resolver=resolver)
+
+        await InitNode(context, services)(restored)
+
+        assert resolver.load_calls == 1
+        assert restored.resolved_model == {
+            "provider": "openai",
+            "modelName": "gpt-4o-mini",
+            "baseUrl": "https://api.openai.com/v1",
+            "apiKey": "sk-restored",
+        }
 
     def test_deserialize_restores_all_persisted_fields(self):
         """反序列化应恢复所有持久化字段"""
