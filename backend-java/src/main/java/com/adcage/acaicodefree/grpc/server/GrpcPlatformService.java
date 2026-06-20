@@ -2,14 +2,14 @@ package com.adcage.acaicodefree.grpc.server;
 
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
 import com.adcage.acaicodefree.grpc.platform.*;
-import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.entity.App;
+import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
-import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
@@ -20,8 +20,7 @@ import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import jakarta.annotation.Resource;
-
-import com.mybatisflex.core.paginate.Page;
+import java.util.List;
 
 @Slf4j
 @GrpcService
@@ -39,6 +38,8 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     private UserService userService;
     @Resource
     private VueProjectBuildService vueProjectBuildService;
+    @Resource
+    private ChatHistoryMapper chatHistoryMapper;
 
     @Override
     public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
@@ -246,16 +247,17 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     @Override
     public void getChatHistory(GetChatHistoryRequest request, StreamObserver<GetChatHistoryResponse> responseObserver) {
         try {
-            ChatHistoryQueryRequest query = new ChatHistoryQueryRequest();
-            query.setSessionId(request.getSessionId());
-            query.setPageSize(request.getLimit() > 0 ? request.getLimit() : 50);
-            query.setPageNum(1);
-            User adminUser = new User();
-            adminUser.setId(0L);
-            adminUser.setUserRole("admin");
-            Page<ChatHistoryVO> page = appService.listChatHistoryByPage(query, adminUser);
+            long sessionId = request.getSessionId();
+            int limit = request.getLimit() > 0 ? request.getLimit() : 50;
+            // gRPC 内部调用已有 x-internal-secret 认证，无需用户级权限校验
+            // 直接通过 Mapper 查询，绕过 listChatHistoryByPage 的 getAndCheckApp 权限检查
+            com.mybatisflex.core.query.QueryWrapper queryWrapper = com.mybatisflex.core.query.QueryWrapper.create()
+                    .eq("sessionId", sessionId)
+                    .orderBy("seqNo", true)
+                    .limit(limit);
+            List<ChatHistory> historyList = chatHistoryMapper.selectListByQuery(queryWrapper);
             GetChatHistoryResponse.Builder builder = GetChatHistoryResponse.newBuilder();
-            for (ChatHistoryVO record : page.getRecords()) {
+            for (ChatHistory record : historyList) {
                 ChatHistoryEntry entry = ChatHistoryEntry.newBuilder()
                         .setId(record.getId() != null ? record.getId() : 0L)
                         .setRole(record.getMessageType() != null ? record.getMessageType() : "")

@@ -187,6 +187,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         Long userId = appQueryRequest.getUserId();
         String userName = appQueryRequest.getUserName();
         Boolean onlyFeatured = appQueryRequest.getOnlyFeatured();
+        Boolean isTestApp = appQueryRequest.getIsTestApp();
         String sortField = appQueryRequest.getSortField();
         String sortOrder = appQueryRequest.getSortOrder();
 
@@ -209,6 +210,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 // 未匹配到用户，强行使结果为空
                 queryWrapper.eq("id", -1L);
             }
+        }
+
+        // 测试应用过滤
+        if (isTestApp != null) {
+            queryWrapper.eq("isTestApp", isTestApp ? 1 : 0);
         }
 
         // 精选应用查询（优先级大于0）

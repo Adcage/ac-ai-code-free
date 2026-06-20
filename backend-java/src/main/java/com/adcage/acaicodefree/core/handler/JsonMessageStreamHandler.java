@@ -116,9 +116,8 @@ public class JsonMessageStreamHandler {
         if (StrUtil.isNotBlank(path)) {
             return "已处理文件 " + path;
         }
-        if (StrUtil.isNotBlank(result)) {
-            return result;
-        }
+        // 不原样返回 result：多行结果（文件内容、校验输出）会破坏持久化消息的行解析，
+        // 刷新时泄漏进对话气泡。统一回退到单行摘要。
         return StrUtil.isBlank(toolName) ? "工具执行成功" : "工具执行成功 " + toolName;
     }
 

@@ -177,20 +177,31 @@ public class FileOperationService {
         String relativePath = extractRelativePath(arguments);
         String displayName = getDisplayName(toolName);
         if (StrUtil.isNotBlank(result) && result.startsWith("文件修改失败")) {
-            return result;
+            return firstLine(result);
         }
         if (StrUtil.isNotBlank(relativePath)) {
             return "已" + displayName + " " + relativePath;
         }
         if (StrUtil.isNotBlank(result) && result.startsWith("文件删除成功")) {
             String path = extractRelativePath(arguments);
-            return StrUtil.isNotBlank(path) ? "已删除文件 " + path : result;
+            return StrUtil.isNotBlank(path) ? "已删除文件 " + path : firstLine(result);
         }
         if (StrUtil.isNotBlank(result) && result.startsWith("文件写入成功")) {
             String path = extractRelativePath(arguments);
-            return StrUtil.isNotBlank(path) ? "已写入文件 " + path : result;
+            return StrUtil.isNotBlank(path) ? "已写入文件 " + path : firstLine(result);
         }
-        return StrUtil.blankToDefault(result, displayName + "完成");
+        // 兜底：绝不返回原始 result。read_file 的文件内容、run_checks 的多行校验结果
+        // 都会走到这里（无 relativePath），若原样返回会以 `[工具完成] <多行>` 追加进持久化消息，
+        // 刷新时按行解析会把后续行泄漏进对话气泡。统一返回单行摘要，与前端流式展示一致。
+        return StrUtil.isBlank(toolName) ? "工具执行完成" : "已执行 " + toolName;
+    }
+
+    private String firstLine(String text) {
+        if (StrUtil.isBlank(text)) {
+            return text;
+        }
+        int idx = text.indexOf('\n');
+        return idx >= 0 ? text.substring(0, idx) : text;
     }
 
     private String getDisplayName(String toolName) {
