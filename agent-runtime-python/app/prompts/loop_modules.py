@@ -37,7 +37,7 @@ class PlanWorkflowModule(PromptModule):
             "\n"
             "**步骤 1：判断是否有 Skill（1 步）**\n"
             "\n"
-            "- 如果有选中的 Skill：用 `read_file(scope='skill', path='SKILL.md')` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。\n"
+            "- 如果有选中的 Skill：用 `read_asset(relative_path='skills/<skill_id>/SKILL.md')` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。\n"
             "- 如果没有选中的 Skill：**直接进入步骤 2**，不要反复查看空工作区。\n"
             "\n"
             "**步骤 2：编写实现计划（1 步）**\n"
@@ -264,13 +264,17 @@ class SkillContextModule(PromptModule):
 
     def enabled(self, context: Any, state: Any) -> bool:
         caps = getattr(state, "selected_capabilities", None)
-        return caps is not None and getattr(caps, "skill", None) is not None
+        if caps is not None and getattr(caps, "skill", None) is not None:
+            return True
+        index = getattr(state, "_asset_index", None)
+        if index is None:
+            return False
+        skills = index.skill_registry.all()
+        return bool(skills)
 
     def render(self, context: Any, state: Any) -> str:
         caps = getattr(state, "selected_capabilities", None)
-        if caps is None:
-            return ""
-        skill = getattr(caps, "skill", None)
+        skill = getattr(caps, "skill", None) if caps is not None else None
         if skill is None:
             # 显示可用 Skill 列表
             index = getattr(state, "_asset_index", None)

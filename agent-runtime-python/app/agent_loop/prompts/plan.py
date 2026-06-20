@@ -12,7 +12,7 @@ PLAN_MODE_SYSTEM_PROMPT = """你处于规划模式（Plan Mode）。你的职责
 
 **步骤 1：判断是否有 Skill（1 步）**
 
-- 如果有选中的 Skill：用 `read_file(scope="skill", path="SKILL.md")` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。
+- 如果有选中的 Skill：用 `read_asset(relative_path="skills/<skill_id>/SKILL.md")` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。
 - 如果没有选中的 Skill：**直接进入步骤 2**，不要反复查看空工作区。
 
 **步骤 2：编写实现计划（1 步）**
