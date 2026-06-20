@@ -9,6 +9,15 @@ from app.runtime.services import RuntimeServices
 logger = logging.getLogger("app.agent_loop.nodes.init")
 
 
+def _model_config_incomplete(resolved_model: dict | None) -> bool:
+    if not resolved_model:
+        return True
+    return not all(
+        resolved_model.get(key)
+        for key in ("provider", "modelName", "apiKey")
+    )
+
+
 class InitNode:
     def __init__(self, context: ExecutionContext, services: RuntimeServices):
         self._context = context
@@ -32,7 +41,7 @@ class InitNode:
                 except Exception as e:
                     logger.warning("init | asset loading failed on resume: %s", e)
 
-            if self._services.model_resolver is not None and state.resolved_model is None:
+            if self._services.model_resolver is not None and _model_config_incomplete(state.resolved_model):
                 try:
                     await self._services.model_resolver.load_bundle(self._context)
                     model_config = self._services.model_resolver.resolve(ModelRole.PRIMARY)
