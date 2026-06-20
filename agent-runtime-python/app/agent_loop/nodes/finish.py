@@ -14,6 +14,9 @@ class FinishNode:
         self._services = services
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
+        if state.status == "running":
+            state.status = "completed"
+
         logger.info(
             "finish | status=%s files=%d iterations=%d switches=%d",
             state.status,
@@ -42,10 +45,11 @@ class FinishNode:
                 )
             )
         else:
+            # AI 总结已通过 TEXT_DELTA 发出
+            final_summary = getattr(state, "final_summary", "") or ""
             await self._services.event_bus.emit(
-                RuntimeEvent(
-                    RuntimeEventType.DONE, {"message": f"Agent loop completed: {state.status}"}
-                )
+                RuntimeEvent(RuntimeEventType.DONE,
+                    {"message": final_summary if final_summary else ""})
             )
 
         return state

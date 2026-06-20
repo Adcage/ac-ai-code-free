@@ -66,9 +66,13 @@ class ValidateStepNode:
         # 构建系统提示词
         system_prompt = self._compose_prompt(state, lc_tools)
 
+        # 每步递增 validate_iterations，作为 AI 未调用 decide_validation 时的兜底计数。
+        # 否则 validate_iterations 恒为 0，上面的 max_validate_iterations 兜底永不触发，
+        # route_step 又因 validate_just_finished=False 而早返回跳过，形成 validate 死循环。
+        state.validate_iterations += 1
         logger.info(
             "validate_step | validate_iterations=%d mode=%s",
-            state.validate_iterations + 1,
+            state.validate_iterations,
             state.mode,
         )
 

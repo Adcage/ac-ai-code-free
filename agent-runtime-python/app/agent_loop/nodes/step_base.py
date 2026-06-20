@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from typing import Any
@@ -124,6 +125,29 @@ def _format_tool_args(tool: BaseTool) -> str:
     return "(" + ", ".join(fields) + ")"
 
 
+def _serialize_tool_arguments(arguments: Any) -> str:
+    """把工具调用参数序列化为合法 JSON 字符串。
+
+    早期实现用 ``str(dict)`` 产生 Python repr（单引号），不是合法 JSON，
+    导致下游 event_mapper / Java 无法 json.loads，工具参数（含文件路径）丢失，
+    进而使 read_file 的完整文件内容、run_checks 的多行校验结果被原样追加进
+    持久化消息，刷新时泄漏到对话气泡。这里统一用 json.dumps 输出标准 JSON。
+    """
+    if arguments is None:
+        return "{}"
+    if isinstance(arguments, str):
+        # 已经是字符串：校验是否为合法 JSON，是则原样返回，否则尝试再兜底
+        try:
+            json.loads(arguments)
+            return arguments
+        except (json.JSONDecodeError, ValueError):
+            return json.dumps({"raw": arguments}, ensure_ascii=False)
+    try:
+        return json.dumps(arguments, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return "{}"
+
+
 async def _invoke_tool_handler(
     tool_handlers: dict[str, Any], name: str, args: dict, lc_tools: list[BaseTool] | None = None
 ) -> str:
@@ -214,12 +238,20 @@ async def _execute_single_step(
         state.status = "failed"
         return state
 
+    # AI 可能在同一轮既输出文本又调用工具（如边 write_file 边给"写入成功"总结）。
+    # 之前有 tool_calls 时整段 text_content 被丢弃，前端看不到 AI 的过程说明与完成总结。
+    if text_content:
+        log_response(logger, text_content, label="model_response")
+        await services.event_bus.emit(
+            RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content})
+        )
+
     if tool_calls:
         for tc in tool_calls:
             await services.event_bus.emit(
                 RuntimeEvent(
                     RuntimeEventType.TOOL_CALL,
-                    {"id": tc["id"], "name": tc["name"], "arguments": str(tc["arguments"])},
+                    {"id": tc["id"], "name": tc["name"], "arguments": _serialize_tool_arguments(tc["arguments"])},
                 )
             )
 

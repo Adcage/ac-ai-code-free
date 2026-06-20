@@ -76,14 +76,9 @@ class TerminalTools:
                 )
 
         prefix = tokens[0]
-        mode_label = "readonly" if readonly else "all"
 
-        if prefix not in self._allowed:
-            raise AgentRuntimeError(
-                f"命令不在允许列表中 ({mode_label}): {prefix}",
-                code=AgentErrorCode.COMMAND_NOT_ALLOWED,
-            )
-
+        # 只读模式校验只读白名单（ls/cat/git/...），写模式校验写白名单（npm/npx/...）。
+        # 之前先统一查写白名单再查只读白名单，导致 ls 等只读命令在只读模式下永远被拒。
         if readonly:
             if prefix not in self._readonly:
                 raise AgentRuntimeError(
@@ -102,6 +97,12 @@ class TerminalTools:
                         f"脚本不在允许的目录中: {script_path}",
                         code=AgentErrorCode.COMMAND_NOT_ALLOWED,
                     )
+        else:
+            if prefix not in self._allowed:
+                raise AgentRuntimeError(
+                    f"命令不在允许列表中: {prefix}",
+                    code=AgentErrorCode.COMMAND_NOT_ALLOWED,
+                )
 
         timeout = min(timeout or self._default_timeout, self._max_timeout)
 

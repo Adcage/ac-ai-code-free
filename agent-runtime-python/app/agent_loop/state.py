@@ -22,12 +22,14 @@ _PERSIST_FIELDS = (
     "is_test",
     # 提示词追踪
     "prompt_modules_applied",
+    # AI 完成总结
+    "final_summary",
 )
 
 
 @dataclass
 class AgentLoopState:
-    mode: Literal["plan", "implement", "validate"] = "plan"
+    mode: Literal["plan", "implement", "validate", "route", "finish"] = "plan"
     status: Literal["running", "completed", "failed", "waiting_for_user"] = "running"
 
     iteration: int = 0
@@ -76,6 +78,9 @@ class AgentLoopState:
 
     # 提示词追踪
     prompt_modules_applied: list[str] = field(default_factory=list)
+
+    # AI 完成总结（由 finish 工具写入，finish 节点在 DONE 事件中发出）
+    final_summary: str = ""
 
     def serialize(self) -> str:
         data = {}

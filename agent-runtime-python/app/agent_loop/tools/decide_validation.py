@@ -59,7 +59,7 @@ class DecideValidationTool(BaseTool):
 
             state.validate_just_finished = True
             state.implement_just_finished = False
-            state.validate_iterations += 1
+            # validate_iterations 由 ValidateStepNode 每步统一递增，此处不再重复计数
 
         issues_count = len(issues or [])
         return f"校验结论：{verdict}" + (f"，发现 {issues_count} 个问题" if verdict == "fail" else "")

@@ -63,7 +63,7 @@ class RunChecksTool(BaseTool):
         files_touched = getattr(state, "files_touched", [])
 
         try:
-            manifest = ArtifactCollector.build_manifest(
+            manifest = ArtifactCollector().build_manifest(
                 code_gen_type=code_gen_type,
                 files_touched=files_touched,
                 workspace_root=self._workspace_root,

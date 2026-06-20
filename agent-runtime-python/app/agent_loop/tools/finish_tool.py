@@ -35,13 +35,13 @@ class FinishTool(BaseTool):
                 state.status = "running"
                 state.implement_just_finished = True
                 state.validate_just_finished = False
+                state.final_summary = summary
                 logger.info("finish | implement completed, routing to route_step | summary=%s", summary)
                 return f"代码生成完成：{summary}\n系统将判断是否需要校验。"
             else:
                 # plan / validate 等模式下直接完成
                 state.status = "completed"
-                if hasattr(state, "final_summary"):
-                    state.final_summary = summary
+                state.final_summary = summary
                 logger.info("finish | summary=%s", summary)
                 return f"任务已完成：{summary}"
 

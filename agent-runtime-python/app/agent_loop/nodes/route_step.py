@@ -29,8 +29,12 @@ class RouteStepNode:
         self._services = services
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
-        # 恢复状态时跳过路由
-        if state.route_decided and state.iteration > 0:
+        # 仅在从暂停状态恢复且没有模式刚完成时跳过路由；
+        # implement/validate 刚完成时必须重新决策，否则 stale route_decision
+        # 会让流程一直按首次决策（通常是 plan）循环，直到撞上 max_iterations。
+        if (state.route_decided and state.iteration > 0
+                and not state.implement_just_finished
+                and not state.validate_just_finished):
             return state
 
         # 超过步数上限，按默认规则路由
@@ -57,8 +61,12 @@ class RouteStepNode:
         lc_tools: list[BaseTool] = list(file_lc_tools) + [decide_route, ask_user]
         tool_handlers = _build_tool_handlers(file_tools, None)
 
-        # 构建系统提示词
+        # 构建系统提示词。为避免 plan/implement/validate 工作流模块因 state.mode
+        # 残留（如 init 设的 "plan"）而在 route_step 中错误渲染，临时屏蔽 mode。
+        original_mode = state.mode
+        state.mode = "route"  # 不匹配任何工作流模块的 enabled 条件
         system_prompt = self._compose_prompt(state, lc_tools)
+        state.mode = original_mode
 
         state.route_iterations += 1
         logger.info(
