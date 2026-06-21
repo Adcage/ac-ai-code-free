@@ -1,4 +1,6 @@
-from app.agent_loop.tool_history import compact_tool_records
+from langchain_core.messages import SystemMessage
+
+from app.agent_loop.tool_history import compact_tool_records, format_tool_observation_history
 from app.runtime.state import ToolCallRecord
 
 
@@ -60,3 +62,36 @@ def test_total_budget_prefers_latest_tool_records():
 
     assert compacted[-1].id == "4"
     assert sum(len(record.result or "") for record in compacted) <= 3_500
+
+
+def test_format_tool_observation_history_is_readonly_system_message():
+    records = [
+        ToolCallRecord(
+            id="w1",
+            name="write_file",
+            arguments={"relative_path": "src/App.vue", "content": "<template>secret</template>"},
+            result="文件写入成功",
+        ),
+        ToolCallRecord(
+            id="s1",
+            name="switch_mode",
+            arguments={"mode": "implement"},
+            result="已切换",
+        ),
+    ]
+
+    message = format_tool_observation_history(
+        records,
+        max_total_chars=10_000,
+        max_result_chars=2_000,
+    )
+
+    assert isinstance(message, SystemMessage)
+    assert "历史操作观察" in message.content
+    assert "不是当前待执行工具调用" in message.content
+    assert "不得重复执行" in message.content
+    assert "action=file_write" in message.content
+    assert "target=src/App.vue" in message.content
+    assert "contentLength=27" in message.content
+    assert "<template>secret</template>" not in message.content
+    assert "switch_mode" not in message.content
