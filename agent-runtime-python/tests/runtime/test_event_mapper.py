@@ -60,6 +60,30 @@ class TestProtoEventMapper:
         assert result.event_type == common_pb2.TOOL_EXECUTED
         assert result.tool_executed.result == "ok"
 
+    @pytest.mark.parametrize(
+        ("event_type", "expected_message"),
+        [
+            (RuntimeEventType.TOOL_CALL, "正在请求重新规划..."),
+            (RuntimeEventType.TOOL_RESULT, "正在请求重新规划完成"),
+        ],
+    )
+    def test_request_replan_maps_to_status(self, event_type, expected_message):
+        seq_event = _make_sequenced(
+            event_type,
+            {
+                "id": "call_replan",
+                "name": "request_replan",
+                "arguments": '{"reason": "计划缺少路由方案"}',
+                "result": "已提交重新规划请求",
+            },
+        )
+
+        result = self.mapper.map_event(seq_event)
+
+        assert result is not None
+        assert result.event_type == common_pb2.STATUS
+        assert result.status.message == expected_message
+
     def test_runtime_error_maps_to_error(self):
         seq_event = _make_sequenced(
             RuntimeEventType.RUNTIME_ERROR, {"message": "fail", "code": 60001}

@@ -68,6 +68,9 @@ class TestAgentLoopStateSerialization:
         state.implementation_outline = {"text": "test plan"}
         state.clarification_questions = [{"id": "q1", "question": "颜色？"}]
         state.files_touched = ["src/App.vue", "src/main.ts"]
+        state.implement_phase_files = ["src/App.vue"]
+        state.implement_replan_requested = True
+        state.implement_replan_reason = "计划缺少路由方案"
         state.executed_tool_calls = [
             ToolCallRecord(id="t1", name="read_file", arguments={"relative_path": "src/App.vue"}, result="file content"),
             ToolCallRecord(id="t2", name="ask_user", arguments={"question": "颜色？"}, result="已向用户提问"),
@@ -86,6 +89,9 @@ class TestAgentLoopStateSerialization:
         assert restored.implementation_outline == {"text": "test plan"}
         assert len(restored.clarification_questions) == 1
         assert restored.files_touched == ["src/App.vue", "src/main.ts"]
+        assert restored.implement_phase_files == ["src/App.vue"]
+        assert restored.implement_replan_requested is True
+        assert restored.implement_replan_reason == "计划缺少路由方案"
         assert len(restored.executed_tool_calls) == 2
         assert restored.executed_tool_calls[0].name == "read_file"
         assert restored.executed_tool_calls[1].name == "ask_user"

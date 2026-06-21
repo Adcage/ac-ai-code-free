@@ -2,7 +2,7 @@ import json
 import pytest
 
 from app.agent_loop.state import AgentLoopState
-from app.agent_loop.graph import route_after_step
+from app.agent_loop.graph import route_after_plan_step
 from app.agent_loop.nodes.init import InitNode
 from app.modeling.resolver import ResolvedModelConfig
 from app.modeling.roles import ModelRole
@@ -50,12 +50,12 @@ class TestAskUserPauseFlow:
     def test_route_after_step_routes_to_finish_on_waiting(self):
         """waiting_for_user 状态下路由应返回 finish"""
         state = AgentLoopState(status="waiting_for_user", iteration=3)
-        assert route_after_step(state) == "finish"
+        assert route_after_plan_step(state) == "finish"
 
     def test_route_after_step_waiting_priorities_over_running(self):
         """waiting_for_user 应优先于正常路由"""
         state = AgentLoopState(status="waiting_for_user", mode="plan", iteration=1)
-        assert route_after_step(state) == "finish"
+        assert route_after_plan_step(state) == "finish"
 
     @pytest.mark.asyncio
     async def test_full_pause_flow(self):
@@ -71,7 +71,7 @@ class TestAskUserPauseFlow:
         await tool._arun(question="选择配色方案？", input_type="single_select", options=["深色", "浅色"])
 
         assert state.status == "waiting_for_user"
-        assert route_after_step(state) == "finish"
+        assert route_after_plan_step(state) == "finish"
 
         json_str = state.serialize()
         data = json.loads(json_str)

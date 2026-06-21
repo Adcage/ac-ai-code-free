@@ -84,9 +84,11 @@ class TestAgentLoopPromptBoundary:
         assert "chat_history_summary" not in module_ids
         assert "user_prompt" not in module_ids
 
-    def test_fallback_prompts_do_not_embed_current_user_prompt(self):
-        from app.agent_loop.prompts.implement import IMPLEMENT_MODE_SYSTEM_PROMPT
-        from app.agent_loop.prompts.plan import PLAN_MODE_SYSTEM_PROMPT
+    def test_profile_prompts_do_not_embed_current_user_prompt(self):
+        from app.prompts.profiles import PROMPT_PROFILES
 
-        assert "{user_prompt}" not in PLAN_MODE_SYSTEM_PROMPT
-        assert "{user_prompt}" not in IMPLEMENT_MODE_SYSTEM_PROMPT
+        for profile_name, module_ids in PROMPT_PROFILES.items():
+            for module_id in module_ids:
+                assert "{user_prompt}" not in module_id, (
+                    f"Profile {profile_name} module {module_id} 不应包含 {{user_prompt}} 占位符"
+                )

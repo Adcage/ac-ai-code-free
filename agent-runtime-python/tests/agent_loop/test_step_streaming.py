@@ -3,11 +3,40 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessageChunk
+from langchain_core.tools import BaseTool
 
 from app.agent_loop.nodes.step_base import _execute_single_step, _stream_invoke
 from app.agent_loop.state import AgentLoopState
+from app.agent_loop.tool_resolver import ResolvedToolSet
+from app.agent_loop.tool_policy import AgentMode
 from app.runtime.context import CodeGenType, ExecutionContext, RunMode
 from app.runtime.events import RuntimeEventType
+
+
+class _FailingTool(BaseTool):
+    name: str = "read_file"
+    description: str = "read a file"
+
+    def _run(self, **kwargs):
+        raise RuntimeError("missing file")
+
+    async def _arun(self, **kwargs):
+        raise RuntimeError("missing file")
+
+
+class _NoopTool(BaseTool):
+    name: str = "read_file"
+    description: str = "read a file"
+
+    def _run(self, **kwargs):
+        return "ok"
+
+    async def _arun(self, **kwargs):
+        return "ok"
+
+
+def _make_toolset(mode=AgentMode.VALIDATE, tools=None):
+    return ResolvedToolSet(mode=mode, tools=tuple(tools or []))
 
 
 class StreamingModel:
@@ -82,13 +111,14 @@ async def test_execute_single_step_does_not_reemit_aggregate_text():
         run_mode=RunMode.GENERATE,
     )
 
+    toolset = _make_toolset()
+
     result = await _execute_single_step(
         state,
         context,
         services,
         "系统规则",
-        [],
-        {},
+        toolset,
         MagicMock(),
     )
 
@@ -116,13 +146,14 @@ async def test_execute_single_step_records_failed_tool_calls():
         run_mode=RunMode.GENERATE,
     )
 
+    toolset = _make_toolset(tools=[_FailingTool()])
+
     result = await _execute_single_step(
         state,
         context,
         services,
         "系统规则",
-        [],
-        {"read_file": AsyncMock(side_effect=RuntimeError("missing file"))},
+        toolset,
         MagicMock(),
     )
 
@@ -155,13 +186,14 @@ async def test_execute_single_step_marks_state_failed_after_tool_error():
         run_mode=RunMode.GENERATE,
     )
 
+    toolset = _make_toolset(tools=[_FailingTool()])
+
     result = await _execute_single_step(
         state,
         context,
         services,
         "系统规则",
-        [],
-        {"read_file": AsyncMock(side_effect=RuntimeError("missing file"))},
+        toolset,
         MagicMock(),
     )
 

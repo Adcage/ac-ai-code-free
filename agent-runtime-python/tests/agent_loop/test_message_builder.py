@@ -1,4 +1,4 @@
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.agent_loop.message_builder import build_llm_messages
 from app.agent_loop.state import AgentLoopState
@@ -69,7 +69,8 @@ def test_resume_answer_is_after_previous_tool_history():
     assert sum(message.content == prompt for message in messages) == 1
     assert isinstance(messages[-1], HumanMessage)
     assert messages[-1].content == prompt
-    assert any(isinstance(message, ToolMessage) for message in messages[:-1])
+    observation_messages = [m for m in messages if isinstance(m, SystemMessage) and "历史操作观察" in m.content]
+    assert len(observation_messages) >= 1
 
 
 def test_write_file_history_compresses_content_in_tool_call():
@@ -88,21 +89,16 @@ def test_write_file_history_compresses_content_in_tool_call():
 
     messages = build_llm_messages("系统规则", make_context(prompt="继续"), state)
 
-    tool_call_messages = [
+    observation_messages = [
         message for message in messages
-        if isinstance(message, AIMessage) and message.tool_calls
+        if isinstance(message, SystemMessage) and "历史操作观察" in message.content
     ]
-    assert len(tool_call_messages) == 1
-    call = tool_call_messages[0].tool_calls[0]
-    assert call["name"] == "write_file"
-    assert call["args"]["relative_path"] == "style.css"
-    assert "已省略" in call["args"]["content"]
-    assert "content_length" not in call["args"]
-    assert "content_omitted" not in call["args"]
-    assert any(
-        isinstance(message, ToolMessage) and "写入成功: style.css" in message.content
-        for message in messages
-    )
+    assert len(observation_messages) == 1
+    observation = observation_messages[0].content
+    assert "file_write" in observation
+    assert "style.css" in observation
+    assert "action=file_write" in observation
+    assert "body { color: #111; }" not in observation
 
 
 def test_conversation_roles_are_preserved():
