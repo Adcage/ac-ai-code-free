@@ -34,3 +34,32 @@ class PromptModuleRegistry:
     def modules_by_category(self, category: str) -> list[PromptModule]:
         """按类别筛选模块。"""
         return [m for m in self._modules if m.category == category]
+
+    def require_many(self, module_ids: tuple[str, ...]) -> list[PromptModule]:
+        """按 ID 列表严格解析模块，拒绝缺失或重复。
+
+        返回按 module_ids 顺序排列的模块列表。
+        """
+        result: list[PromptModule] = []
+        seen: set[str] = set()
+        for mid in module_ids:
+            if mid in seen:
+                from app.core.error_codes import AgentErrorCode
+                from app.core.exceptions import AgentRuntimeError
+
+                raise AgentRuntimeError(
+                    f"Profile 包含重复模块 ID: {mid}",
+                    code=AgentErrorCode.STATE_ERROR,
+                )
+            seen.add(mid)
+            module = self.get_by_id(mid)
+            if module is None:
+                from app.core.error_codes import AgentErrorCode
+                from app.core.exceptions import AgentRuntimeError
+
+                raise AgentRuntimeError(
+                    f"Profile 引用了不存在的模块: {mid}",
+                    code=AgentErrorCode.STATE_ERROR,
+                )
+            result.append(module)
+        return result

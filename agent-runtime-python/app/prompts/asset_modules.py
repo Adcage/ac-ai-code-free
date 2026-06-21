@@ -19,11 +19,10 @@ class ArtifactOutputContractModule(PromptModule):
         base_rules = (
             "## Artifact Output Contract\n"
             "\n"
-            "- Use file tools (write_file) to write real project files under the workspace.\n"
-            "- Do not answer with content wrapped in artifact tags or describe the result without writing files.\n"
-            "- Do not leave placeholder content like 'Metric A', 'Card 1', 'Lorem ipsum', or 'Feature One'.\n"
-            "- The runtime will collect an artifact manifest after tool execution.\n"
-            "- Ensure the entry file exists.\n"
+            "- 必须将真实项目文件写入工作区，不要在回复中输出代码内容或使用 artifact 标签。\n"
+            "- 不要使用占位符内容如 'Metric A'、'Card 1'、'Lorem ipsum' 或 'Feature One'。\n"
+            "- 运行时会在工具执行后收集产物清单。\n"
+            "- 确保入口文件存在。\n"
         )
 
         type_specific = {
@@ -48,7 +47,7 @@ class ArtifactOutputContractModule(PromptModule):
                 "- Output mode: Vue project.\n"
                 "- Preserve the seed project structure unless the user explicitly asks to replace it.\n"
                 "- Generate production-quality Vue 3 code with complete visible states.\n"
-                "- Write real Vue SFC files (.vue) using write_file tool.\n"
+                "- Write real Vue SFC files (.vue) into the workspace.\n"
                 "- Include loading, empty, error, and normal states for all data-dependent views.\n"
                 "- Use CSS custom properties (variables) for repeated colors, spacing, and type scale.\n"
             ),

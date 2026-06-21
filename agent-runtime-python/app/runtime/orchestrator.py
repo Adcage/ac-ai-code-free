@@ -48,7 +48,6 @@ class RuntimeOrchestrator:
             SafetyAndInjectionResistanceModule,
             ProjectRulesModule,
             TaskContextModule,
-            ToolContractModule,
             OutputContractModule,
             AntiRoleplayModule,
         )
@@ -64,6 +63,7 @@ class RuntimeOrchestrator:
         )
         from app.prompts.route_modules import (
             RouteInitialModule,
+            RouteAfterPlanModule,
             RouteAfterImplementModule,
             RouteAfterValidateModule,
         )
@@ -81,12 +81,11 @@ class RuntimeOrchestrator:
         registry.register(ProductionSecurityModule())  # is_test=False 时启用
         # strategic - 项目规则
         registry.register(ProjectRulesModule())
-        # strategic - 工具合约
-        registry.register(ToolContractModule())
         # strategic - 工具列表（动态注入）
         registry.register(ToolListModule())
         # strategic - 路由模块（互斥）
         registry.register(RouteInitialModule())
+        registry.register(RouteAfterPlanModule())
         registry.register(RouteAfterImplementModule())
         registry.register(RouteAfterValidateModule())
         # strategic - 大循环工作流（互斥）

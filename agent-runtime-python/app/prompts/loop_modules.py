@@ -16,7 +16,7 @@ class PlanWorkflowModule(PromptModule):
 
     def render(self, context: Any, state: Any) -> str:
         return (
-            "你处于规划模式（Plan Mode）。你的职责是充分理解用户需求，制定完整的实现计划，然后切换到实现模式。\n"
+            "你处于规划模式（Plan Mode）。你的职责是充分理解用户需求，制定完整的实现计划，然后提交规划结果。\n"
             "\n"
             "**核心原则：plan 模式的价值在于搞清楚用户要什么。需求不明确时，必须先问清楚再做计划。**\n"
             "\n"
@@ -24,43 +24,42 @@ class PlanWorkflowModule(PromptModule):
             "\n"
             "**步骤 0：澄清需求（必须先判断）**\n"
             "\n"
-            "如果用户需求不够清晰——只说了一句话、没有说明功能、没有描述页面内容——你必须调用 ask_user 发起选择式提问。\n"
+            "如果用户需求不够清晰——只说了一句话、没有说明功能、没有描述页面内容——你必须发起选择式提问。\n"
             "\n"
-            "**ask_user 调用规则（必须严格遵守）：**\n"
-            "- 使用 input_type='single_select'（单选）\n"
-            "- options 参数必须提供：至少 3 个、最多 5 个具体选项\n"
+            "**提问规则（必须严格遵守）：**\n"
+            "- 使用单选模式\n"
+            "- 提供至少 3 个、最多 5 个具体选项\n"
             "- 每个选项用简短的短语描述一种可能（如'登录注册页面'、'数据展示仪表盘'、'待办事项列表'）\n"
             "- 根据用户原始需求推断可能的意图来设计选项，不要把问题丢回给用户\n"
-            "- 示例调用：ask_user(question='请选择您要创建的应用类型', input_type='single_select', options=['登录注册页面', '数据展示仪表盘', '待办事项列表', '产品展示页'])\n"
             "用户回答后，根据回答继续下面的步骤。\n"
             "如果用户需求已经非常明确（如详细描述了功能和布局），可以跳过此步骤直接进入步骤 1。\n"
             "\n"
             "**步骤 1：判断是否有 Skill（1 步）**\n"
             "\n"
-            "- 如果有选中的 Skill：用 `read_asset(relative_path='skills/<skill_id>/SKILL.md')` 读取 Skill 正文，了解生成策略和约束；如需参考布局/清单，最多再读 1 个参考文件。然后进入步骤 2。\n"
+            "- 如果有选中的 Skill：Skill 正文已在上方「已选择的 Skill」段落中加载，直接阅读即可，**不要再读取 SKILL.md**。如需参考布局/清单，按需读取参考文件。然后进入步骤 2。\n"
             "- 如果没有选中的 Skill：**直接进入步骤 2**，不要反复查看空工作区。\n"
             "\n"
             "**步骤 2：编写实现计划（1 步）**\n"
             "\n"
-            "按照计划编写规范，调用 `write_plan(outline='...')` 写入实现计划。计划必须包含文件清单、生成顺序、技术选型和关键逻辑。\n"
+            "按照计划编写规范，写入实现计划。计划必须包含文件清单、生成顺序、技术选型和关键逻辑。\n"
             "\n"
-            "**步骤 3：切换到 Implement 模式**\n"
+            "**步骤 3：提交规划结果**\n"
             "\n"
-            "计划写入后立即调用 `switch_mode('implement')`。必须先调用 `write_plan` 写入计划，才能切换到 implement 模式。\n"
+            "计划写入后，提交当前阶段结果并停止，由编排层决定下一阶段。\n"
             "\n"
             "## 注意事项\n"
             "\n"
-            "- 你没有写文件权限，不要尝试调用 write_file\n"
-            "- 工作区为空时不要反复调用 read_dir，直接开始规划\n"
-            "- 如果连续 3 步没有进展，立即调用 `write_plan` 写入当前理解，然后 `switch_mode('implement')` 强行切换\n"
-            "- 不要在 plan 模式反复徘徊，目标是最多 3-4 步内进入 implement\n"
-            "- 对于配色、字体间距等不影响功能结构的纯视觉细节，你可以按最佳实践自主决定\n"
+            "- 你只能使用规划类工具（读取文件、询问用户、选择 Skill、编写计划）\n"
+            "- 工作区为空时不要反复查看目录，直接开始规划\n"
+            "- 如果连续 3 步没有进展，立即写入当前理解并提交规划结果\n"
+            "- 不要在 plan 模式反复徘徊，目标是最多 3-4 步内提交结果\n"
+            "- 对于配色、字体间距等不影响功能结构的纯视觉细节，可以在已确认需求、项目规则限定的范围内选择具体值\n"
             "- **不要在回复中复述 Skill 原文内容**，只提取关键规则和约束用于指导实现，对用户可见的回复必须是简洁的中文摘要"
         )
 
 
 class ImplementWorkflowModule(PromptModule):
-    """implement 模式工作流指令，从 IMPLEMENT_MODE_SYSTEM_PROMPT 拆解。"""
+    """implement 模式工作流指令。"""
 
     id = "implement_workflow"
     category = "strategic"
@@ -77,36 +76,59 @@ class ImplementWorkflowModule(PromptModule):
             else:
                 outline_text = str(outline)
 
-        return (
-            "你处于实现模式（Implement Mode）。你的职责是按照规划步骤生成完整的项目代码，生成完毕后调用 finish。\n"
-            "\n"
-            "**重要：进入 implement 模式后，专注于代码生成，不要再反复分析或重复读取已有文件。**\n"
-            "\n"
-            f"## 实现计划\n\n{outline_text}\n\n"
-            "## 工作流\n"
-            "\n"
-            "1. 按实现计划中的顺序，逐个创建文件。用 write_file 写入完整的、可直接运行的内容。\n"
-            "2. 文件路径使用正斜杠 /。每个文件一次性写完完整内容，不省略、不使用占位符。\n"
-            "3. 如果是 Vue 项目，写入所有文件后执行 npm install 安装依赖。\n"
-            "4. 全部文件创建完成后，先用一句话总结你完成了什么（如'登录页面已创建完成，包含三个文件'），然后调用 finish。\n"
-            "5. 如果实现计划为空或不完整，按用户需求的合理理解自主生成，不需要回 plan 模式。\n"
-            "\n"
-            "## 返回 Plan 模式的条件（极少使用）\n"
-            "\n"
-            "仅在以下情况切换回 plan：\n"
-            "- 用户项目非常大（10+ 个核心文件），你需要重新规划分工\n"
-            "- 规划中明确提到的关键资源（如特定 Skill 参考文件）不可用\n"
-            "- 用户在这一轮明确表达了新需求\n"
-            "\n"
-            "## 注意事项\n"
-            "\n"
-            "- 你有完整的文件读写和终端执行权限\n"
-            "- 每个文件写入完整可运行的代码，不要在文件之间拆分不完整的片段\n"
-            "- 不要伪造工具执行结果\n"
-            "- 生成过程直奔主题，3-5 个 write_file 内完成\n"
-            "- **任务完成后必须调用 finish**\n"
-            "- **不要在回复中复述 Skill 原文内容**，只引用关键规则和约束，对用户可见的回复必须是简洁的中文摘要"
-        )
+        code_gen_type = "unknown"
+        recommended = getattr(state, "recommended_code_gen_type", None)
+        if recommended:
+            code_gen_type = recommended
+        elif context and hasattr(context, "code_gen_type"):
+            ct = getattr(context, "code_gen_type", None)
+            if ct:
+                code_gen_type = ct.value if hasattr(ct, "value") else str(ct)
+
+        is_vue = code_gen_type == "vue_project"
+        dependency_step = ""
+        if is_vue:
+            dependency_step = (
+                "\n- 项目类型为 Vue 工程：所有文件写入后，如果终端工具可用，应安装依赖包；如果终端工具不可用，跳过此步。\n"
+            )
+
+        parts = [
+            "你处于实现模式（Implement Mode）。你的职责是按照实施计划将项目代码写入工作区。\n",
+            "\n**重要：进入 implement 模式后，专注于代码生成，不要再反复分析或重复读取已有文件。**\n",
+            f"\n## 实施计划\n\n{outline_text}\n",
+            "\n## 工作流 —— 新建\n",
+            "\n- 按实施计划中列出的文件顺序逐一创建文件。\n",
+            "- 每个文件一次性写入完整内容，不省略、不使用占位符。\n",
+            "- 文件路径使用正斜杠 /。\n",
+            "- 不需要为了确认空工作区而反复读取目录。\n",
+            dependency_step,
+            "- 所有计划文件创建完成后，提交完成结果并说明完成了什么。\n",
+            "\n## 工作流 —— 修改\n",
+            "\n- 先了解当前工作区的目录结构和已有文件。\n",
+            "- 再读取需要修改的文件当前内容。\n",
+            "- 只修改与当前需求直接相关的内容，保持未授权文件和既有行为不变。\n",
+            "- 每次修改都写入完整的文件内容。\n",
+            "- 修改完成后，提交完成结果并说明修改了什么。\n",
+            "\n## 计划不完整时的处理\n",
+            "\n如果实施计划缺少以下关键信息，不能继续实现：\n",
+            "- 缺少架构决策（框架选择、路由方案、状态管理模式等）；\n",
+            "- 缺少交互定义（页面跳转关系、表单行为、数据流向等）；\n",
+            "- 缺少文件范围（需要哪些文件、每个文件的职责）；\n",
+            "- 其他可能影响产品行为、结构或交互的未明确内容。\n",
+            "\n遇到上述情况时，不得自行补全后继续实现，也不得提交完成结果。应提交重新规划请求并说明具体缺失内容，由编排层决定下一阶段。\n",
+            "\n## 实现细节补全的边界\n",
+            "\n- 只能在用户已确认的需求、项目规则和已批准的实施计划范围内补充实现细节。\n",
+            "- 允许补全的非关键细节：配色微调、间距数值、字重选择等不影响功能和结构的视觉细节。\n",
+            "- 任何可能影响产品行为、架构、交互、权限、文件范围或视觉方向的内容都必须先确认，不得自行决定。\n",
+            "\n## 注意事项\n",
+            "\n- 当前模式的可用能力见上方工具列表，具体工具名称和参数由系统动态提供。\n",
+            "- 每个文件写入完整可运行的代码，不要在文件之间拆分不完整的片段。\n",
+            "- 不要伪造工具执行结果。\n",
+            "- 生成过程直奔主题，3-5 个文件内完成。\n",
+            "- **不要在回复中复述 Skill 原文内容**，只引用关键规则和约束，对用户可见的回复必须是简洁的中文摘要。\n",
+        ]
+
+        return "".join(parts)
 
 
 class ValidateWorkflowModule(PromptModule):
@@ -138,21 +160,21 @@ class ValidateWorkflowModule(PromptModule):
             "\n",
             "## 工作流\n",
             "\n",
-            "1. 首先调用 `run_checks` 执行项目结构校验，获取检查结果。\n",
-            "2. 根据检查结果，如有必要可调用 `read_file` 或 `read_dir` 进一步了解文件内容。\n",
-            "3. 综合判断后调用 `decide_validation` 输出校验结论。\n",
+            "1. 首先执行项目结构校验，获取检查结果。\n",
+            "2. 根据检查结果，如有必要可查看文件内容进一步了解详情。\n",
+            "3. 综合判断后输出校验结论。\n",
             "\n",
             "## 校验判断规则\n",
             "\n",
-            "- 如果存在 error 级别的失败（如入口文件缺失）：调用 `decide_validation(verdict=\"fail\", issues=[...], suggestions=[...])`\n",
-            "- 如果仅有 warning 级别的提醒（如占位符文本）：可接受，调用 `decide_validation(verdict=\"pass\")`\n",
-            "- 如果全部通过：调用 `decide_validation(verdict=\"pass\")`\n",
+            "- 如果存在 error 级别的失败（如入口文件缺失）：输出失败结论，列出问题和修复建议\n",
+            "- 如果仅有 warning 级别的提醒（如占位符文本）：可接受，输出通过结论\n",
+            "- 如果全部通过：输出通过结论\n",
             "\n",
             "**注意：3 步内必须输出校验结论。**",
         ]
 
         if check_results_text:
-            parts.append(f"\n\n## 已缓存的检查结果\n\n{check_results_text}\n\n（已执行过 run_checks，无需重复执行）")
+            parts.append(f"\n\n## 已缓存的检查结果\n\n{check_results_text}\n\n（已执行过结构校验，无需重复执行）")
 
         return "".join(parts)
 
@@ -189,20 +211,17 @@ class ToolListModule(PromptModule):
     id = "tool_list"
     category = "strategic"
 
-    def __init__(self) -> None:
+    def __init__(self, tools: list | tuple | None = None) -> None:
         super().__init__()
-        self._tools: list = []
-
-    def set_tools(self, tools: list) -> None:
-        self._tools = tools
+        self._tools: tuple = tuple(tools) if tools else ()
 
     def enabled(self, context: Any, state: Any) -> bool:
         return len(self._tools) > 0
 
     def render(self, context: Any, state: Any) -> str:
-        from app.agent_loop.nodes.step_base import _format_tool_list
+        from app.prompts.tool_summary import format_tool_summary
 
-        return "## 当前可用工具\n\n" + _format_tool_list(self._tools)
+        return format_tool_summary(self._tools)
 
 
 class PlanSpecModule(PromptModule):
@@ -218,7 +237,7 @@ class PlanSpecModule(PromptModule):
         return (
             "## 计划编写规范\n"
             "\n"
-            "请严格按照以下规范编写实现计划，调用 `write_plan(outline=\"...\")` 写入。\n"
+            "请严格按照以下规范编写实现计划并写入状态。\n"
             "\n"
             "### 1. 文件清单\n"
             "\n"
@@ -276,22 +295,31 @@ class SkillContextModule(PromptModule):
         caps = getattr(state, "selected_capabilities", None)
         skill = getattr(caps, "skill", None) if caps is not None else None
         if skill is None:
-            # 显示可用 Skill 列表
             index = getattr(state, "_asset_index", None)
             if index is not None:
                 skills = index.skill_registry.all()
                 if skills:
-                    lines = ["## 可用 Skill 列表\n", "\n你可以使用 `select_skill(skill_id, reason)` 选择一个适合当前任务的 Skill。\n"]
+                    lines = ["## 可用 Skill 列表\n", "\n你可以选择一个适合当前任务的 Skill。\n"]
                     for s in skills:
                         lines.append(f"- **{s.id}**: {s.description}")
                     return "\n".join(lines)
             return ""
 
         skill_dir = str(skill.source_path.parent)
-        return (
-            f"## 已选择的 Skill\n\n"
-            f"**{skill.name}** (ID: {skill.id}): {skill.description}\n\n"
-            f"Skill 目录：`{skill_dir}`\n\n"
-            f"你可以用 `read_asset(relative_path='skills/{skill.id}/SKILL.md')` 读取详细规则，"
-            f"或用 `run_command` 执行 `{skill_dir}/scripts/search.py` 等脚本。"
-        )
+        parts = [
+            "## 已选择的 Skill\n",
+            f"\n**{skill.name}** (ID: {skill.id}): {skill.description}\n",
+            f"\nSkill 目录：`{skill_dir}`\n",
+        ]
+
+        if skill.body:
+            parts.append(f"\n### Skill 规则（已加载，无需再读取 SKILL.md）\n\n{skill.body.strip()}\n")
+
+        if skill.references:
+            parts.append("\n### Skill 可用参考资源\n")
+            parts.append("\n如需参考布局/清单，按需读取以下文件：")
+            for ref in skill.references:
+                parts.append(f"\n  - {ref}")
+            parts.append("\n\n**注意：不要逐个读取所有参考文件，只按需读取最相关的。**")
+
+        return "".join(parts)
