@@ -139,7 +139,16 @@ class TestChooseSkill:
     async def test_choose_skill_records_capability_ref(self):
         state = AgentLoopState()
         _init_envelope(state)
-        state._state_envelope.workflow.plan.plan_stage = "select_skill"
+        state._state_envelope.workflow.plan.plan_stage = "inspect_existing_project"
+
+        inspection_tool = RecordProjectInspectionTool()
+        inspection_tool.set_state(state)
+        await inspection_tool._arun(
+            decision="inspected",
+            summary="Vue 3 项目",
+            evidence_files=["package.json"],
+        )
+        assert state._state_envelope.workflow.plan.plan_stage == "select_skill"
 
         tool = ChooseSkillTool()
         tool.set_state(state)
@@ -161,7 +170,14 @@ class TestChooseSkill:
     async def test_choose_skill_rejects_missing_reason(self):
         state = AgentLoopState()
         _init_envelope(state)
-        state._state_envelope.workflow.plan.plan_stage = "select_skill"
+        state._state_envelope.workflow.plan.plan_stage = "inspect_existing_project"
+
+        inspection_tool = RecordProjectInspectionTool()
+        inspection_tool.set_state(state)
+        await inspection_tool._arun(
+            decision="not_applicable",
+            summary="新建项目",
+        )
 
         tool = ChooseSkillTool()
         tool.set_state(state)
@@ -174,7 +190,14 @@ class TestChooseSkill:
     async def test_choose_skill_rejects_unknown_skill(self):
         state = AgentLoopState()
         _init_envelope(state)
-        state._state_envelope.workflow.plan.plan_stage = "select_skill"
+        state._state_envelope.workflow.plan.plan_stage = "inspect_existing_project"
+
+        inspection_tool = RecordProjectInspectionTool()
+        inspection_tool.set_state(state)
+        await inspection_tool._arun(
+            decision="not_applicable",
+            summary="新建项目",
+        )
 
         tool = ChooseSkillTool()
         tool.set_state(state)

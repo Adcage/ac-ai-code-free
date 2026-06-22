@@ -37,10 +37,10 @@ class TestResolverFiltersToolsByMode:
             })),
             (AgentMode.IMPLEMENT, frozenset({
                 "read_file", "read_dir", "read_asset", "write_file",
-                "run_command", "finish",
+                "run_command", "complete_implementation",
             })),
             (AgentMode.VALIDATE, frozenset({
-                "read_file", "read_dir", "run_checks", "decide_validation",
+                "read_file", "read_dir", "run_checks", "submit_validation_report",
             })),
         ],
     )
@@ -48,8 +48,8 @@ class TestResolverFiltersToolsByMode:
         all_tools = _make_tools([
             "read_file", "read_dir", "read_asset", "write_file",
             "run_command", "ask_user", "select_skill", "write_plan",
-            "finish", "decide_route", "run_checks",
-            "decide_validation",
+            "complete_implementation", "decide_route", "run_checks",
+            "submit_validation_report",
         ])
         toolset = ModeToolResolver.resolve(mode, all_tools)
         assert toolset.names == expected_names
@@ -95,8 +95,8 @@ class TestBoundToolsAreExactlyExecutableTools:
         all_tools = _make_tools([
             "read_file", "read_dir", "read_asset", "write_file",
             "run_command", "ask_user", "select_skill", "write_plan",
-            "finish", "decide_route", "run_checks",
-            "decide_validation",
+            "complete_implementation", "decide_route", "run_checks",
+            "submit_validation_report",
         ])
         toolset = ModeToolResolver.resolve(mode, all_tools)
 

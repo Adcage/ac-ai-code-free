@@ -45,15 +45,15 @@ class TestRouteAfterPlanStep:
         state = AgentLoopState(mode_switches=7, max_mode_switches=6)
         assert route_after_plan_step(state) == "finish"
 
-    def test_plan_iterations_exceeded_routes_to_route_step(self):
+    def test_plan_iterations_at_old_limit_stays_plan(self):
         state = AgentLoopState(mode="plan", status="running", plan_iterations=15, max_plan_iterations=15)
         result = route_after_plan_step(state)
-        assert result == "route_step"
+        assert result == "plan_step"
 
-    def test_plan_iterations_exceeded_boundary_routes_to_route_step(self):
+    def test_plan_iterations_above_old_limit_stays_plan(self):
         state = AgentLoopState(mode="plan", status="running", plan_iterations=16, max_plan_iterations=15)
         result = route_after_plan_step(state)
-        assert result == "route_step"
+        assert result == "plan_step"
 
     def test_plan_iterations_below_limit_stays_plan(self):
         state = AgentLoopState(mode="plan", status="running", plan_iterations=14, max_plan_iterations=15)

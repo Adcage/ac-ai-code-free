@@ -275,6 +275,14 @@ class ExecutionStateV2(BaseModel):
     implement_replan_reason: str = ""
     implement_just_finished: bool = False
     execution_run_kind: str = "initial"
+    source_plan_version: int = 0
+    active_task_id: str | None = None
+    execution_tasks: list[dict] = Field(default_factory=list)
+    active_issue_ids: list[str] = Field(default_factory=list)
+    call_budget_soft_limit: int = 0
+    call_budget_hard_limit: int = 0
+    call_budget_model_call_count: int = 0
+    completion_candidate: dict | None = None
 
 
 class ValidationStateV2(BaseModel):
@@ -283,6 +291,10 @@ class ValidationStateV2(BaseModel):
     validation_check_results: list[dict] | None = None
     validation_status: Literal["pending", "passed", "failed"] = "pending"
     validate_just_finished: bool = False
+    validation_issues: list[dict] = Field(default_factory=list)
+    validation_report_id: str | None = None
+    validation_coverage_gaps: list[str] = Field(default_factory=list)
+    validation_recommended_transition: str | None = None
 
 
 class RoutingStateV2(BaseModel):

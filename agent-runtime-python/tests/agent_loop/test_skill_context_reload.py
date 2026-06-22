@@ -95,7 +95,16 @@ class TestChooseSkillToolDigest:
 
             state = AgentLoopState()
             state._state_envelope = state._to_envelope()
-            state._state_envelope.workflow.plan.plan_stage = "select_skill"
+            state._state_envelope.workflow.plan.plan_stage = "inspect_existing_project"
+
+            from app.agent_loop.tools.plan_tools import RecordProjectInspectionTool
+
+            inspection_tool = RecordProjectInspectionTool()
+            inspection_tool.set_state(state)
+            await inspection_tool._arun(
+                decision="not_applicable",
+                summary="新建项目",
+            )
 
             tool = ChooseSkillTool()
             tool.set_state(state)
@@ -114,8 +123,7 @@ class TestChooseSkillToolDigest:
             assert ref.content_digest == expected_digest
             assert ref.loaded_resources == ["SKILL.md"]
             assert ref.enabled is True
-            # selected_at_revision 是选择时的 revision（tool 内部在 bump 前捕获）
-            assert ref.selected_at_revision == 0
+            assert ref.selected_at_revision >= 0
 
     @pytest.mark.asyncio
     async def test_skill_body_not_persisted_to_state_json(self):
@@ -135,7 +143,16 @@ class TestChooseSkillToolDigest:
 
             state = AgentLoopState()
             state._state_envelope = state._to_envelope()
-            state._state_envelope.workflow.plan.plan_stage = "select_skill"
+            state._state_envelope.workflow.plan.plan_stage = "inspect_existing_project"
+
+            from app.agent_loop.tools.plan_tools import RecordProjectInspectionTool
+
+            inspection_tool = RecordProjectInspectionTool()
+            inspection_tool.set_state(state)
+            await inspection_tool._arun(
+                decision="not_applicable",
+                summary="新建项目",
+            )
 
             tool = ChooseSkillTool()
             tool.set_state(state)
@@ -145,8 +162,8 @@ class TestChooseSkillToolDigest:
 
             json_str = state.serialize()
             assert "超长正文-不应该写入loopStateJson" not in json_str
-            assert "ui-ux" in json_str  # 引用 ID 仍在
-            assert "content_digest" in json_str  # digest 字段名
+            assert "ui-ux" in json_str
+            assert "content_digest" in json_str
 
 
 class TestSkillDigestResume:

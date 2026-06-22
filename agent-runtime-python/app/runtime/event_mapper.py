@@ -25,6 +25,13 @@ _STATUS_TOOLS: dict[str, str] = {
     "decide_route": "正在路由决策...",
     "decide_validation": "正在输出校验结论...",
     "request_replan": "正在请求重新规划...",
+    "submit_requirement_brief": "正在提交需求摘要...",
+    "record_project_inspection": "正在记录项目检查...",
+    "choose_skill": "正在选择设计方案...",
+    "propose_design": "正在提出设计建议...",
+    "confirm_design": "正在确认设计方案...",
+    "write_implementation_plan": "正在编写实施计划...",
+    "plan_stage_guard": "正在处理阶段状态...",
 }
 
 _HIDDEN_TOOLS = frozenset({"finish", "ask_user"})
@@ -35,6 +42,8 @@ _INTERNAL_TYPES = frozenset({
     RuntimeEventType.CAPABILITY_SELECTED,
     RuntimeEventType.MODEL_SELECTED,
     RuntimeEventType.MODE_SWITCHED,
+    RuntimeEventType.AGENT_LOOP_ITERATION,
+    RuntimeEventType.AGENT_LOOP_COMPLETED,
 })
 
 

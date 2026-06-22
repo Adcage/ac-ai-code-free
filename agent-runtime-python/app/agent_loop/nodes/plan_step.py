@@ -141,11 +141,10 @@ class PlanStepNode:
             profile_id="plan",
         )
 
-        state.plan_iterations += 1
         logger.info(
-            "plan_step | iteration=%d plan_iterations=%d mode=%s stage=%s session=%s",
+            "plan_step | iteration=%d model_call_count=%d mode=%s stage=%s session=%s",
             state.iteration + 1,
-            state.plan_iterations,
+            plan_state.model_call_count,
             state.mode,
             plan_state.plan_stage,
             plan_state.plan_session_id,

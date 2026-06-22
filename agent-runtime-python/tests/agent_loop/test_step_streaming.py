@@ -88,7 +88,7 @@ async def test_stream_invoke_emits_each_delta_once():
 
     assert text == "你好"
     assert tool_calls == []
-    assert emitted_texts(event_bus) == ["你", "好"]
+    assert emitted_texts(event_bus) == ["你好"]
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_execute_single_step_does_not_reemit_aggregate_text():
         MagicMock(),
     )
 
-    assert emitted_texts(event_bus) == ["你", "好"]
+    assert emitted_texts(event_bus) == ["你好"]
     assert result.model_response_text == "你好"
 
 

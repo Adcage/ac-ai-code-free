@@ -247,6 +247,13 @@ class RecordProjectInspectionTool(BaseTool):
             )
         _enforce_plan_partition_writable(envelope)
         plan_state: PlanStateV2 = envelope.workflow.plan
+
+        if plan_state.has_project_inspection():
+            raise AgentRuntimeError(
+                "project_inspection 已记录，不得重复提交；当前阶段不可回退",
+                code=AgentErrorCode.STATE_ERROR,
+            )
+
         _ensure_stage(plan_state, ("discover_scope", "inspect_existing_project"))
         _ensure_no_blocked_hard_limit(plan_state)
         _bump_model_call_count(plan_state)
@@ -273,14 +280,10 @@ class RecordProjectInspectionTool(BaseTool):
             "evidence_files": list(evidence_files or []),
             "recorded_at_revision": envelope.workflow.revision,
         }
-        if plan_state.plan_stage == "discover_scope":
-            plan_state.advance_stage("inspect_existing_project")
+        if plan_state.plan_stage in ("discover_scope", "inspect_existing_project"):
+            plan_state.advance_stage("select_skill")
         envelope.next_revision()
-        return (
-            "项目检查已记录；可进入 select_skill 阶段。"
-            if decision == "inspected"
-            else "项目为新建，无需检查；可进入 select_skill 阶段。"
-        )
+        return "项目检查已记录；已进入 select_skill 阶段。"
 
 
 class ChooseSkillInput(BaseModel):
@@ -326,9 +329,15 @@ class ChooseSkillTool(BaseTool):
             )
         _enforce_plan_partition_writable(envelope)
         plan_state: PlanStateV2 = envelope.workflow.plan
-        _ensure_stage(plan_state, ("select_skill", "discover_scope", "inspect_existing_project"))
+        _ensure_stage(plan_state, ("select_skill",))
         _ensure_no_blocked_hard_limit(plan_state)
         _bump_model_call_count(plan_state)
+
+        if not plan_state.has_project_inspection():
+            raise AgentRuntimeError(
+                "project_inspection 尚未记录，不得跳过项目检查直接选择 Skill",
+                code=AgentErrorCode.STATE_ERROR,
+            )
 
         if not reason.strip():
             raise AgentRuntimeError(
@@ -691,6 +700,11 @@ class WriteImplementationPlanTool(BaseTool):
         plan_state.implementation_plan_revision = plan_model.plan_version
         plan_state.advance_stage("completed")
         plan_state.plan_just_finished = True
+        from app.agent_loop.state import AgentLoopState as _AgentLoopState
+
+        if isinstance(self._state, _AgentLoopState):
+            self._state.plan_just_finished = True
+            self._state.implementation_outline = {"text": summary[:200] or "实施计划已写入", "tasks": len(impl_tasks)}
         envelope.next_revision()
         return (
             f"已写入 ImplementationPlan v{plan_model.plan_version}（来源设计版本 v{design_version}），"

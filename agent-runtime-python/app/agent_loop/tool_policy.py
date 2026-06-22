@@ -38,19 +38,21 @@ IMPLEMENT_TOOLS = frozenset(
         "read_asset",
         "write_file",
         "run_command",
-        "finish",
+        "complete_implementation",
         "request_replan",
     }
 )
 
 ROUTE_TOOLS = frozenset({"read_file", "read_dir", "decide_route"})
 
-VALIDATE_TOOLS = frozenset({"read_file", "read_dir", "run_checks", "decide_validation"})
+VALIDATE_TOOLS = frozenset(
+    {"read_file", "read_dir", "run_checks", "submit_validation_report"}
+)
 
 PLAN_REQUIRED_TOOLS: frozenset[str] = frozenset({"write_plan"})
-IMPLEMENT_REQUIRED_TOOLS: frozenset[str] = frozenset({"write_file", "finish"})
+IMPLEMENT_REQUIRED_TOOLS: frozenset[str] = frozenset({"write_file", "complete_implementation"})
 ROUTE_REQUIRED_TOOLS: frozenset[str] = frozenset({"decide_route"})
-VALIDATE_REQUIRED_TOOLS: frozenset[str] = frozenset({"run_checks", "decide_validation"})
+VALIDATE_REQUIRED_TOOLS: frozenset[str] = frozenset({"run_checks", "submit_validation_report"})
 
 
 @dataclass(frozen=True)

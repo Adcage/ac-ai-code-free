@@ -47,9 +47,9 @@ def _make_prompt_cases() -> list[PromptCase]:
                                                    "ask_user", "select_skill", "write_plan"})),
         PromptCase(profile_id="implement", mode=AgentMode.IMPLEMENT, state=state_implement,
                     expected_tool_names=frozenset({"read_file", "read_dir", "read_asset", "write_file",
-                                                   "run_command", "finish", "request_replan"})),
+                                                   "run_command", "complete_implementation", "request_replan"})),
         PromptCase(profile_id="validate", mode=AgentMode.VALIDATE, state=state_validate,
-                    expected_tool_names=frozenset({"read_file", "read_dir", "run_checks", "decide_validation"})),
+                    expected_tool_names=frozenset({"read_file", "read_dir", "run_checks", "submit_validation_report"})),
     ]
 
 

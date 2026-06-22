@@ -19,7 +19,17 @@ class TestSelectSkillCompatibility:
     async def test_select_skill_delegates_to_choose_skill(self):
         state = AgentLoopState()
         _init_envelope(state)
-        state._state_envelope.workflow.plan.plan_stage = "select_skill"
+        state._state_envelope.workflow.plan.plan_stage = "inspect_existing_project"
+
+        from app.agent_loop.tools.plan_tools import RecordProjectInspectionTool
+
+        inspection_tool = RecordProjectInspectionTool()
+        inspection_tool.set_state(state)
+        await inspection_tool._arun(
+            decision="not_applicable",
+            summary="新建项目",
+        )
+        assert state._state_envelope.workflow.plan.plan_stage == "select_skill"
 
         skill = SimpleNamespace(
             id="dashboard",

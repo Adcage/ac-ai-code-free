@@ -21,6 +21,9 @@ _TOOL_OBSERVATION_LABELS: dict[str, str | None] = {
     "request_replan": "replan_request",
 }
 
+# 已退役工具:不进入生产 schema，但历史记录中可能仍存在，应被忽略
+_RETIRED_TOOLS = frozenset({"switch_mode", "compose_prompt"})
+
 
 def _compact_arguments(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     compacted = dict(arguments)
@@ -66,6 +69,8 @@ def format_tool_observation_history(
 
     observation_lines: list[str] = []
     for record in compacted_records:
+        if record.name in _RETIRED_TOOLS:
+            continue
         label = _TOOL_OBSERVATION_LABELS.get(record.name, record.name)
         if label is None:
             continue

@@ -34,12 +34,16 @@ _PERSIST_FIELDS = (
     "validate_iterations", "validation_failures", "validation_check_results",
     "validation_status", "implement_just_finished", "validate_just_finished",
     "plan_just_finished",
+    "validation_issues", "validation_report_id",
+    "validation_coverage_gaps", "validation_recommended_transition",
     # 测试模式
     "is_test",
     # 提示词追踪
     "prompt_modules_applied",
     # AI 完成总结
     "final_summary",
+    # Phase 4: 执行状态
+    "execution_state",
 )
 
 
@@ -86,6 +90,10 @@ class AgentLoopState:
     validation_failures: list[dict] = field(default_factory=list)
     validation_check_results: list[dict] | None = None
     validation_status: Literal["pending", "passed", "failed"] = "pending"
+    validation_issues: list[dict] = field(default_factory=list)
+    validation_report_id: str | None = None
+    validation_coverage_gaps: list[str] = field(default_factory=list)
+    validation_recommended_transition: str | None = None
 
     # 阶段标记（用于 route_step 提示词模块判断）
     plan_just_finished: bool = False
@@ -105,6 +113,9 @@ class AgentLoopState:
     _state_envelope: Any = None
     _state_changed: bool = False
     artifact_type_state: Any | None = None
+
+    # Phase 4: 执行状态
+    execution_state: Any | None = None
 
     def record_state_change(self) -> None:
         self._state_changed = True
@@ -241,6 +252,27 @@ class AgentLoopState:
         )
 
     def _build_execution_state(self):
+        from app.agent_loop.execution_state import ExecutionState
+
+        exec_state = self.execution_state
+        if exec_state is not None and isinstance(exec_state, ExecutionState):
+            budget = exec_state.call_budget
+            return ExecutionStateV2(
+                files_touched=list(self.files_touched),
+                implement_phase_files=list(self.implement_phase_files),
+                implement_replan_requested=self.implement_replan_requested,
+                implement_replan_reason=self.implement_replan_reason,
+                implement_just_finished=self.implement_just_finished,
+                execution_run_kind=exec_state.run_kind,
+                source_plan_version=exec_state.source_plan_version,
+                active_task_id=exec_state.active_task_id,
+                execution_tasks=[t.model_dump() for t in exec_state.tasks],
+                active_issue_ids=list(exec_state.active_issue_ids),
+                call_budget_soft_limit=budget.soft_limit if budget else 0,
+                call_budget_hard_limit=budget.hard_limit if budget else 0,
+                call_budget_model_call_count=budget.model_call_count if budget else 0,
+                completion_candidate=exec_state.completion_candidate,
+            )
         return ExecutionStateV2(
             files_touched=list(self.files_touched),
             implement_phase_files=list(self.implement_phase_files),
@@ -256,6 +288,10 @@ class AgentLoopState:
             validation_check_results=self.validation_check_results,
             validation_status=self.validation_status,
             validate_just_finished=self.validate_just_finished,
+            validation_issues=getattr(self, "validation_issues", []),
+            validation_report_id=getattr(self, "validation_report_id", None),
+            validation_coverage_gaps=getattr(self, "validation_coverage_gaps", []),
+            validation_recommended_transition=getattr(self, "validation_recommended_transition", None),
         )
 
     def _build_routing_state(self):
@@ -367,12 +403,45 @@ class AgentLoopState:
         state.implement_replan_reason = execution.implement_replan_reason
         state.implement_just_finished = execution.implement_just_finished
 
+        from app.agent_loop.execution_state import (
+            CallBudget,
+            ExecutionState,
+            ExecutionTaskState,
+        )
+
+        exec_tasks = []
+        for td in execution.execution_tasks:
+            if isinstance(td, dict):
+                exec_tasks.append(ExecutionTaskState(**td))
+            elif isinstance(td, ExecutionTaskState):
+                exec_tasks.append(td)
+        call_budget = None
+        if execution.call_budget_soft_limit > 0 or execution.call_budget_hard_limit > 0:
+            call_budget = CallBudget(
+                soft_limit=execution.call_budget_soft_limit,
+                hard_limit=execution.call_budget_hard_limit,
+                model_call_count=execution.call_budget_model_call_count,
+            )
+        state.execution_state = ExecutionState(
+            run_kind=execution.execution_run_kind if execution.execution_run_kind in ("initial", "user_modification", "validation_repair") else "initial",
+            source_plan_version=execution.source_plan_version,
+            active_task_id=execution.active_task_id,
+            tasks=exec_tasks,
+            active_issue_ids=list(execution.active_issue_ids),
+            call_budget=call_budget,
+            completion_candidate=execution.completion_candidate,
+        )
+
         validation = wf.validation
         state.validate_iterations = validation.validate_iterations
         state.validation_failures = list(validation.validation_failures)
         state.validation_check_results = validation.validation_check_results
         state.validation_status = validation.validation_status
         state.validate_just_finished = validation.validate_just_finished
+        state.validation_issues = list(validation.validation_issues)
+        state.validation_report_id = validation.validation_report_id
+        state.validation_coverage_gaps = list(validation.validation_coverage_gaps)
+        state.validation_recommended_transition = validation.validation_recommended_transition
 
         routing = wf.routing
         state.route_decided = routing.route_decided

@@ -86,9 +86,9 @@ class TestOnlyRouteDecisionCanChangeMode:
     def test_route_safe_fallback_uses_apply_route_decision(self):
         """Route 安全回退应调用 apply_route_decision 提交默认决策。"""
         from app.agent_loop.nodes.route_step import RouteStepNode
-        source = inspect.getsource(RouteStepNode._apply_default_route)
+        source = inspect.getsource(RouteStepNode._apply_safe_fallback)
         assert "apply_route_decision" in source, (
-            "RouteStepNode._apply_default_route 应调用 apply_route_decision"
+            "RouteStepNode._apply_safe_fallback 应调用 apply_route_decision"
         )
 
     def test_init_mode_assignment_is_initialization_only(self):

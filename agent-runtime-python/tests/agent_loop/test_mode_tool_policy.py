@@ -151,7 +151,7 @@ class TestPermissionDenialIsRecorded:
         workspace = Workspace(context.workspace_path)
         file_tools = FileTools(workspace)
 
-        validate_tools = _make_tools(["run_checks", "decide_validation"])
+        validate_tools = _make_tools(["run_checks", "submit_validation_report"])
         toolset = ModeToolResolver.resolve(AgentMode.VALIDATE, validate_tools)
 
         result = await _execute_single_step(

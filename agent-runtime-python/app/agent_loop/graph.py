@@ -25,8 +25,22 @@ def _route_finished(state) -> bool:
     if _get_state_attr(state, "status") in ("completed", "failed"):
         return True
     if _get_state_attr(state, "iteration") >= _get_state_attr(state, "max_iterations"):
+        if hasattr(state, 'status') and state.status == "running":
+            state.status = "failed"
+            if not state.final_summary:
+                state.final_summary = (
+                    f"全局迭代上限 {state.max_iterations} 已到 "
+                    f"(mode={state.mode}, iteration={state.iteration})"
+                )
         return True
     if _get_state_attr(state, "mode_switches") >= _get_state_attr(state, "max_mode_switches"):
+        if hasattr(state, 'status') and state.status == "running":
+            state.status = "failed"
+            if not state.final_summary:
+                state.final_summary = (
+                    f"模式切换上限 {state.max_mode_switches} 已到 "
+                    f"(mode={state.mode}, mode_switches={state.mode_switches})"
+                )
         return True
     return False
 
@@ -55,20 +69,14 @@ def route_after_plan_step(state: AgentLoopState) -> str:
     Plan 不再直接进入 Implement：
     - plan_just_finished=True → route_step
     - 达到终止条件 → finish
-    - plan_iterations 超限 → route_step
     - 否则 → plan_step
+
+    Plan 硬上限由 PlanStepNode 内部处理（设置 plan_stage="blocked" 和 status="failed"），
+    由 _route_finished() 捕获。不再使用 max_plan_iterations 作为路由条件。
     """
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "plan_just_finished"):
-        _submit_phase_report(state)
-        return "route_step"
-    if _get_state_attr(state, "plan_iterations") >= _get_state_attr(state, "max_plan_iterations"):
-        logger.warning(
-            "route | plan_iterations=%d exceeded max_plan_iterations=%d, routing to route_step",
-            _get_state_attr(state, "plan_iterations"),
-            _get_state_attr(state, "max_plan_iterations"),
-        )
         _submit_phase_report(state)
         return "route_step"
     return "plan_step"

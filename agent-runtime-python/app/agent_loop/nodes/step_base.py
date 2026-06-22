@@ -128,7 +128,7 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
     - finish / request_replan 行为不变。
     """
     from app.agent_loop.tools.ask_user import AskUserTool
-    from app.agent_loop.tools.finish_tool import FinishTool
+    from app.agent_loop.tools.complete_implementation import CompleteImplementationTool
     from app.agent_loop.tools.plan_tools import (
         ChooseSkillTool,
         ConfirmDesignTool,
@@ -140,16 +140,19 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
     )
     from app.agent_loop.tools.request_replan import RequestReplanTool
     from app.agent_loop.tools.select_skill import SelectSkillTool
+    from app.agent_loop.tools.submit_validation_report import SubmitValidationReportTool
     from app.agent_loop.tools.write_plan import WritePlanTool
 
     ask = AskUserTool()
     ask.set_state(state)
     ask.set_event_bus(event_bus)
 
-    finish = FinishTool()
-    finish.set_state(state)
+    complete_impl = CompleteImplementationTool()
+    complete_impl.set_state(state)
     request_replan = RequestReplanTool()
     request_replan.set_state(state)
+    submit_validation = SubmitValidationReportTool()
+    submit_validation.set_state(state)
 
     submit_brief = SubmitRequirementBriefTool()
     submit_brief.set_state(state)
@@ -187,7 +190,8 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
         select_skill,
         write_plan,
         ask,
-        finish,
+        complete_impl,
+        submit_validation,
         request_replan,
     ]
 
@@ -457,9 +461,6 @@ async def _stream_invoke(chat_model, lc_messages, event_bus):
     collected_chunks: list[AIMessageChunk] = []
     async for chunk in chat_model.astream(lc_messages):
         collected_chunks.append(chunk)
-        delta = chunk.content or ""
-        if delta:
-            await event_bus.emit(RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": delta}))
 
     if not collected_chunks:
         return "", [], None
@@ -475,5 +476,13 @@ async def _stream_invoke(chat_model, lc_messages, event_bus):
             {"id": tc["id"], "name": tc["name"], "arguments": tc["args"]}
             for tc in full_response.tool_calls
         ]
+
+    if text_content and not tool_calls:
+        await event_bus.emit(RuntimeEvent(RuntimeEventType.TEXT_DELTA, {"text": text_content}))
+    elif text_content and tool_calls:
+        logger.debug(
+            "internal model text suppressed before tool call | length=%d",
+            len(text_content),
+        )
 
     return text_content, tool_calls, full_response

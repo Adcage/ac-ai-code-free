@@ -7,6 +7,14 @@ from app.agent_loop.nodes.route_step import RouteStepNode
 from app.agent_loop.state import AgentLoopState
 from app.agent_loop.tools.decide_route import apply_route_decision
 from app.agent_loop.tools.request_replan import RequestReplanTool
+from app.agent_loop.transition_guard import RouteContext
+
+
+def _build_minimal_context(state: AgentLoopState) -> RouteContext:
+    from app.agent_loop.progress import ProgressDetector
+    pd = ProgressDetector()
+    from app.agent_loop.nodes.route_step import _build_route_context
+    return _build_route_context(state, pd)
 
 
 @pytest.mark.asyncio
@@ -34,7 +42,7 @@ def test_route_fallback_returns_to_plan_for_structured_replan_request():
     )
     node = object.__new__(RouteStepNode)
 
-    node._apply_default_route(state)
+    node._apply_safe_fallback(state, _build_minimal_context(state))
 
     assert state.mode == "plan"
     assert state.route_decision["mode"] == "plan"
