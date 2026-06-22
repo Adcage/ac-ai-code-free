@@ -52,11 +52,23 @@ class RunChecksTool(BaseTool):
         # 构建 ArtifactManifest
         from app.artifacts.manifest import ArtifactCollector
 
-        code_gen_type = self._code_gen_type
-        # 优先使用推荐的类型
-        recommended = getattr(state, "recommended_code_gen_type", None)
-        if recommended:
-            code_gen_type = recommended
+        # 使用 ArtifactTypeState 的 effective 类型作为单一事实来源
+        # 不再用 recommended_code_gen_type 覆盖 effective
+        artifact_type_state = getattr(state, "artifact_type_state", None)
+        if artifact_type_state is not None:
+            code_gen_type = artifact_type_state.effective
+            # 将推荐值写入 recommended 字段（不覆盖 effective）
+            if self._code_gen_type and self._code_gen_type != artifact_type_state.effective:
+                if not artifact_type_state.recommended:
+                    from app.agent_loop.state_v2 import ArtifactTypeState
+                    state.artifact_type_state = ArtifactTypeState(
+                        requested=artifact_type_state.requested,
+                        effective=artifact_type_state.effective,
+                        recommended=self._code_gen_type,
+                        recommendation_reason="run_checks 检测到不同类型",
+                    )
+        else:
+            code_gen_type = self._code_gen_type
 
         files_touched = getattr(state, "files_touched", [])
 
