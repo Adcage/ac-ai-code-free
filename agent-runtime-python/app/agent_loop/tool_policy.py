@@ -21,6 +21,13 @@ PLAN_TOOLS = frozenset(
         "ask_user",
         "select_skill",
         "write_plan",
+        "submit_requirement_brief",
+        "record_project_inspection",
+        "choose_skill",
+        "propose_design",
+        "confirm_design",
+        "write_implementation_plan",
+        "plan_stage_guard",
     }
 )
 

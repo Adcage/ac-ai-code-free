@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from langchain_core.tools import BaseTool
 
@@ -10,8 +11,10 @@ from app.agent_loop.nodes.step_base import (
     _make_loop_tools,
 )
 from app.agent_loop.state import AgentLoopState
+from app.agent_loop.state_v2 import PlanStateV2
 from app.agent_loop.tool_policy import AgentMode
 from app.agent_loop.tool_resolver import ModeToolResolver
+from app.capabilities.skills.selector import SkillRegistryProvider
 from app.core.error_codes import AgentErrorCode
 from app.core.exceptions import AgentRuntimeError
 from app.prompts.composer import PromptComposer
@@ -59,12 +62,37 @@ def _compose_system_prompt(
     )
 
 
+def _ensure_plan_envelope(state: AgentLoopState) -> PlanStateV2:
+    envelope = getattr(state, "_state_envelope", None)
+    if envelope is None:
+        envelope = state._to_envelope()
+        state._state_envelope = envelope
+    plan_state: PlanStateV2 = envelope.workflow.plan
+    if not plan_state.plan_session_id:
+        plan_state.plan_session_id = f"plan_{uuid.uuid4().hex[:12]}"
+    return plan_state
+
+
 class PlanStepNode:
     def __init__(self, context: ExecutionContext, services: RuntimeServices):
         self._context = context
         self._services = services
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
+        plan_state = _ensure_plan_envelope(state)
+        plan_state.increment_model_call()
+
+        if plan_state.reached_hard_limit():
+            state.status = "failed"
+            await self._services.event_bus.emit(
+                RuntimeEvent(
+                    RuntimeEventType.STATUS,
+                    {"message": "Plan 调用硬上限已到；进入 blocked 状态"},
+                )
+            )
+            plan_state.plan_stage = "blocked"
+            return state
+
         await self._services.event_bus.emit(
             RuntimeEvent(RuntimeEventType.STATUS, {"message": f"Plan step {state.iteration + 1}"})
         )
@@ -96,7 +124,15 @@ class PlanStepNode:
 
         lc_tools.append(ReadAssetTool(file_tools=file_tools))
 
-        lc_tools.extend(_make_loop_tools(state, self._services.event_bus))
+        loop_tools = _make_loop_tools(state, self._services.event_bus)
+        # 为 ChooseSkillTool 注入 SkillRegistryProvider（Plan 阶段专用）
+        provider = build_skill_registry_provider(state)
+        if provider is not None:
+            for tool in loop_tools:
+                if tool.name == "choose_skill":
+                    setattr(tool, "_skill_registry_provider", provider)
+                    break
+        lc_tools.extend(loop_tools)
 
         toolset = ModeToolResolver.resolve(AgentMode.PLAN, lc_tools)
 
@@ -107,10 +143,12 @@ class PlanStepNode:
 
         state.plan_iterations += 1
         logger.info(
-            "plan_step | iteration=%d plan_iterations=%d mode=%s",
+            "plan_step | iteration=%d plan_iterations=%d mode=%s stage=%s session=%s",
             state.iteration + 1,
             state.plan_iterations,
             state.mode,
+            plan_state.plan_stage,
+            plan_state.plan_session_id,
         )
 
         return await _execute_single_step(
@@ -169,3 +207,10 @@ class ImplementStepNode:
         )
 
         return result
+
+
+def build_skill_registry_provider(state: AgentLoopState) -> SkillRegistryProvider | None:
+    index = getattr(state, "_asset_index", None)
+    if index is None:
+        return None
+    return SkillRegistryProvider(index.skill_registry)

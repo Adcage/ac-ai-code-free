@@ -120,7 +120,10 @@ class RouteStepNode:
         if source == "initial":
             target: str = "plan"
         elif source == "plan":
-            target = "plan"
+            # Plan 完成后有结构化 ImplementationPlan，默认进入 implement；
+            # Plan blocked 时 plan_just_finished 不会为 True（status=failed 已终止循环），
+            # 所以这里不会在 Plan 失败时误路由到 implement。
+            target = "implement"
         elif source == "implement":
             target = (
                 "plan"

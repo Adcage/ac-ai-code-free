@@ -13,6 +13,11 @@ def _get_state_attr(state, key, default=None):
     return getattr(state, key, default)
 
 
+def _submit_phase_report(state) -> None:
+    if hasattr(state, "record_phase_report"):
+        state.record_phase_report()
+
+
 def _route_finished(state) -> bool:
     """统一的循环终止检查，在所有条件边中使用。"""
     if _get_state_attr(state, "status") == "waiting_for_user":
@@ -56,6 +61,7 @@ def route_after_plan_step(state: AgentLoopState) -> str:
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "plan_just_finished"):
+        _submit_phase_report(state)
         return "route_step"
     if _get_state_attr(state, "plan_iterations") >= _get_state_attr(state, "max_plan_iterations"):
         logger.warning(
@@ -63,6 +69,7 @@ def route_after_plan_step(state: AgentLoopState) -> str:
             _get_state_attr(state, "plan_iterations"),
             _get_state_attr(state, "max_plan_iterations"),
         )
+        _submit_phase_report(state)
         return "route_step"
     return "plan_step"
 
@@ -76,6 +83,7 @@ def route_after_implement_step(state: AgentLoopState) -> str:
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "implement_just_finished"):
+        _submit_phase_report(state)
         return "route_step"
     return "implement_step"
 
@@ -89,8 +97,10 @@ def route_after_validate_step(state: AgentLoopState) -> str:
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "validate_just_finished"):
+        _submit_phase_report(state)
         return "route_step"
     if _get_state_attr(state, "validate_iterations") >= _get_state_attr(state, "max_validate_iterations"):
+        _submit_phase_report(state)
         return "route_step"
     return "validate_step"
 

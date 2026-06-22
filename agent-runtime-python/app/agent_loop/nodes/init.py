@@ -1,6 +1,7 @@
 import logging
 
 from app.agent_loop.state import AgentLoopState
+from app.agent_loop.state_v2 import ArtifactTypeState
 from app.capabilities.common.asset_index import AssetIndex
 from app.modeling.roles import ModelRole
 from app.runtime.context import ExecutionContext
@@ -78,6 +79,13 @@ class InitNode:
 
         state.mode = "plan"
         state.status = "running"
+
+        # 初始化 ArtifactTypeState 作为 codeGenType 单一事实来源
+        code_gen_type_str = getattr(self._context.code_gen_type, "value", str(self._context.code_gen_type))
+        state.artifact_type_state = ArtifactTypeState(
+            requested=code_gen_type_str,
+            effective=code_gen_type_str,
+        )
 
         asset_manager = self._services.asset_manager
         if asset_manager is not None:
