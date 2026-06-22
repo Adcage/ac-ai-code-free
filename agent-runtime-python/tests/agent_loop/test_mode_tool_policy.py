@@ -104,7 +104,12 @@ class TestBoundToolsMatchHandlers:
 
 class TestPermissionDenialIsRecorded:
     @pytest.mark.asyncio
-    async def test_forged_write_file_rejected_and_state_failed(self):
+    async def test_forged_write_file_rejected_as_recoverable(self):
+        """伪造 write_file 调用在 Validate 模式下被 toolset.require() 拒绝。
+
+        TOOL_CALL_FAILED 属于可恢复错误：executor 把错误作为 tool result 返回给模型
+        让它自行修正（换工具），而不是终止整次 run。错误仍被记录到 executed_tool_calls。
+        """
         from app.agent_loop.state import AgentLoopState
         from app.agent_loop.nodes.step_base import _execute_single_step
         from app.agent_loop.tool_resolver import ModeToolResolver
@@ -158,7 +163,9 @@ class TestPermissionDenialIsRecorded:
             file_tools,
         )
 
-        assert result.status == "failed"
+        # 可恢复错误不终止 run
+        assert result.status != "failed"
+        # 越权调用仍被记录
         assert any(tc.name == "write_file" and tc.error for tc in result.executed_tool_calls)
 
 

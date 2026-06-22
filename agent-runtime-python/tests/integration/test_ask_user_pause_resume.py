@@ -75,10 +75,11 @@ class TestAskUserPauseFlow:
 
         json_str = state.serialize()
         data = json.loads(json_str)
-        assert data["status"] == "waiting_for_user"
-        assert data["selected_skill_id"] == "ui-ux-pro-max"
-        assert data["implementation_outline"] == {"text": "创建 SaaS 仪表盘"}
-        assert data["iteration"] == 3
+        wf = data["workflow"]
+        assert wf["plan"]["is_waiting_for_user"] is True
+        assert wf["plan"]["selected_skill_id"] == "ui-ux-pro-max"
+        assert wf["plan"]["implementation_outline"] == {"text": "创建 SaaS 仪表盘"}
+        assert wf["iteration"] == 3
 
 
 class TestResumeFlow:
@@ -172,9 +173,10 @@ class TestResumeFlow:
         }
         json_str = state.serialize()
         data = json.loads(json_str)
-        assert "apiKey" not in data["resolved_model"]
-        assert data["resolved_model"]["provider"] == "openai"
-        assert data["resolved_model"]["modelName"] == "gpt-4"
+        wf = data["workflow"]
+        assert "apiKey" not in wf["resolved_model"]
+        assert wf["resolved_model"]["provider"] == "openai"
+        assert wf["resolved_model"]["modelName"] == "gpt-4"
 
     def test_resume_resets_status_to_running(self):
         """恢复时应将 status 从 waiting_for_user 重置为 running"""

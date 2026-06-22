@@ -25,7 +25,7 @@ def test_write_file_content_is_not_replayed():
     assert compacted[0].arguments["relative_path"] == "src/App.vue"
 
 
-def test_read_file_result_keeps_head_and_tail():
+def test_read_file_result_is_preserved_in_full():
     result = "HEAD" + "x" * 20_000 + "TAIL"
     records = [
         ToolCallRecord(id="r1", name="read_file", arguments={}, result=result)
@@ -33,17 +33,15 @@ def test_read_file_result_keeps_head_and_tail():
 
     compacted = compact_tool_records(
         records,
-        max_total_chars=10_000,
-        max_result_chars=1_000,
+        max_total_chars=200_000,
+        max_result_chars=200_000,
     )
 
-    assert compacted[0].result.startswith("HEAD")
-    assert compacted[0].result.endswith("TAIL")
-    assert "已省略" in compacted[0].result
-    assert len(compacted[0].result) <= 1_000
+    assert compacted[0].result == result
+    assert len(compacted[0].result) == len(result)
 
 
-def test_total_budget_prefers_latest_tool_records():
+def test_all_records_are_preserved():
     records = [
         ToolCallRecord(
             id=str(index),
@@ -60,8 +58,9 @@ def test_total_budget_prefers_latest_tool_records():
         max_result_chars=2_000,
     )
 
+    assert len(compacted) == 5
+    assert compacted[0].id == "0"
     assert compacted[-1].id == "4"
-    assert sum(len(record.result or "") for record in compacted) <= 3_500
 
 
 def test_format_tool_observation_history_is_readonly_system_message():
@@ -73,10 +72,10 @@ def test_format_tool_observation_history_is_readonly_system_message():
             result="文件写入成功",
         ),
         ToolCallRecord(
-            id="s1",
-            name="switch_mode",
-            arguments={"mode": "implement"},
-            result="已切换",
+            id="r1",
+            name="read_file",
+            arguments={"relative_path": "src/main.py"},
+            result="print('hello')",
         ),
     ]
 
@@ -94,4 +93,4 @@ def test_format_tool_observation_history_is_readonly_system_message():
     assert "target=src/App.vue" in message.content
     assert "contentLength=27" in message.content
     assert "<template>secret</template>" not in message.content
-    assert "switch_mode" not in message.content
+    assert "action=file_read" in message.content

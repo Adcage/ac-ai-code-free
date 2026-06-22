@@ -6,11 +6,38 @@ export interface ToolEvent {
   text: string
 }
 
+export interface PlanningOption {
+  id?: string
+  value?: string
+  label: string
+  description?: string
+  recommended?: boolean
+}
+
+export interface PlanningQuestion {
+  id: string
+  prompt?: string
+  question?: string
+  inputType: 'single_select' | 'multi_select'
+  required: boolean
+  options?: PlanningOption[]
+  reason?: string
+  placeholder?: string
+}
+
+export interface PlanningQuestionSet {
+  questionSetId: string
+  stage?: string
+  protocolVersion?: number
+  questions: PlanningQuestion[]
+}
+
 export interface ChatMessage {
   role: 'user' | 'ai'
   content: string
   status?: string
   toolEvents?: ToolEvent[]
+  planning?: PlanningQuestionSet
 }
 
 export interface SSEChatOptions {
@@ -164,21 +191,26 @@ export function useSSEChat(options: SSEChatOptions) {
       }
       if (type === 'tool_request') {
         if (messageObj.name === 'ask_user') {
-          const args = parseAskUserArgs(messageObj.arguments)
-          if (!args) return
-          const inputType = args.inputType || 'single_select'
-          const planningJson = JSON.stringify({
-            questions: [
-              {
-                id: 'q1',
-                question: args.question,
-                inputType,
-                required: true,
-                options: (args.options || []).map((o: string) => ({ value: o, label: o })),
-              },
-            ],
-          })
-          messages.value[aiMsgIndex].content += `\n<planning type="clarification">${planningJson}</planning>\n`
+          const payload = parseAskUserStructuredPayload(messageObj.arguments)
+          if (!payload) return
+          const targetMessage = messages.value[aiMsgIndex]
+          if (!targetMessage.planning || targetMessage.planning.questionSetId !== payload.questionSetId) {
+            targetMessage.planning = payload
+            // 同步生成一段简短说明文本，保持旧 <planning> 标签的兼容
+            targetMessage.content += `\n<planning type="clarification">${JSON.stringify({
+              questions: payload.questions.map((q) => ({
+                id: q.id,
+                question: q.prompt,
+                inputType: q.inputType,
+                required: q.required,
+                options: (q.options || []).map((o) => ({
+                  value: o.id,
+                  label: o.label,
+                  recommended: o.recommended,
+                })),
+              })),
+            })}</planning>\n`
+          }
           return
         }
         const text = formatToolText(messageObj.name, messageObj.arguments, 'request')
@@ -223,7 +255,9 @@ export function useSSEChat(options: SSEChatOptions) {
     }
   }
 
-  const parseAskUserArgs = (argumentsData?: string | Record<string, unknown>) => {
+  const parseAskUserStructuredPayload = (
+    argumentsData?: string | Record<string, unknown>,
+  ): PlanningQuestionSet | null => {
     if (!argumentsData) return null
     try {
       let argsObj: Record<string, unknown>
@@ -232,27 +266,58 @@ export function useSSEChat(options: SSEChatOptions) {
       } else {
         argsObj = argumentsData
       }
-      return {
-        question: (argsObj.question as string) || '',
-        inputType: (argsObj.input_type as string) || (argsObj.inputType as string) || 'single_select',
-        options: Array.isArray(argsObj.options) ? (argsObj.options as string[]) : [],
-      }
-    } catch (e) {
-      if (typeof argumentsData === 'string') {
-        try {
-          const normalized = argumentsData.trim().replace(/'/g, '"')
-          const argsObj = JSON.parse(normalized)
-          return {
-            question: (argsObj.question as string) || '',
-            inputType: (argsObj.input_type as string) || (argsObj.inputType as string) || 'single_select',
-            options: Array.isArray(argsObj.options) ? (argsObj.options as string[]) : [],
-          }
-        } catch {
-          // fall through
+      const questionSetId =
+        (argsObj.questionSetId as string) ||
+        ((argsObj.questions as Array<{ id?: string }> | undefined)?.[0]?.id ?? 'qs_legacy')
+      const stage = (argsObj.stage as string) || ''
+      const protocolVersion = Number(argsObj.protocolVersion || 1)
+      const rawQuestions = Array.isArray(argsObj.questions) ? (argsObj.questions as Array<Record<string, unknown>>) : []
+      const questions: PlanningQuestion[] = rawQuestions.map((q) => {
+        const promptText = String(q.prompt || q.question || '')
+        // 兜底归一化 inputType：协议值是 single_select / multi_select。
+        // 后端已对非法值归一化并拒绝 text，但前端再做一次防御，
+        // 防止后端漏处理时直接把 single_choice / select 等变体显示成"无选项"。
+        const rawInputType = String(q.inputType || '').toLowerCase()
+        let inputType: PlanningQuestion['inputType']
+        if (rawInputType === 'multi_select' || rawInputType === 'multi' || rawInputType === 'multiple' || rawInputType.includes('multi')) {
+          inputType = 'multi_select'
+        } else {
+          inputType = 'single_select'
         }
-      }
-      console.warn('[ask_user] parseAskUserArgs failed', argumentsData, e)
+        return {
+          id: String(q.id || ''),
+          prompt: promptText,
+          question: promptText,
+          inputType,
+          required: q.required !== false,
+          reason: (q.reason as string) || '',
+          placeholder: (q.placeholder as string) || '',
+          options: Array.isArray(q.options)
+            ? (q.options as Array<Record<string, unknown>>).map((opt) => ({
+                id: String(opt.id || opt.value || opt.label || ''),
+                label: String(opt.label || opt.id || opt.value || ''),
+                description: (opt.description as string) || '',
+                recommended: Boolean(opt.recommended),
+              }))
+            : [],
+        }
+      })
+      return { questionSetId, stage, protocolVersion, questions }
+    } catch (e) {
+      console.warn('[ask_user] parseAskUserStructuredPayload failed', argumentsData, e)
       return null
+    }
+  }
+
+  const parseAskUserArgs = (argumentsData?: string | Record<string, unknown>) => {
+    const payload = parseAskUserStructuredPayload(argumentsData)
+    if (!payload) return null
+    const first = payload.questions[0]
+    if (!first) return null
+    return {
+      question: first.prompt,
+      inputType: first.inputType,
+      options: (first.options || []).map((o) => o.id),
     }
   }
 

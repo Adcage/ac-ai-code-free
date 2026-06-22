@@ -343,15 +343,19 @@ const doChatWithMessage = async (rawMessage: string) => {
 }
 
 function hasActivePlanning(): boolean {
-  const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
-  return messages.value.some((msg) => {
+  return messages.value.some((msg, idx) => {
     if (msg.role !== 'ai') return false
+    // 优先使用结构化 planning 字段
+    if (msg.planning && msg.planning.questions && msg.planning.questions.length > 0) {
+      const nextUserMsg = messages.value.slice(idx + 1).find((m) => m.role === 'user')
+      return !nextUserMsg
+    }
+    // 兼容旧 <planning> 标签
+    const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
     const match = msg.content.match(PLANNING_TAG_RE)
     if (!match) return false
-    // 检查是否有未回答的 clarification
     if (match[1] === 'clarification') {
-      const msgIndex = messages.value.indexOf(msg)
-      const nextUserMsg = messages.value.slice(msgIndex + 1).find((m) => m.role === 'user')
+      const nextUserMsg = messages.value.slice(idx + 1).find((m) => m.role === 'user')
       return !nextUserMsg
     }
     return false
@@ -364,19 +368,26 @@ function hasActivePlanning(): boolean {
 
 async function handlePlanningSubmit(answers: Record<string, string>) {
   const PLANNING_TAG_RE = /<planning\s+type="(\w+)"\s*>([\s\S]*?)<\/planning>/
-  const pdList: { questions: { id: string; question: string }[] }[] = []
-  for (let i = 0; i < messages.value.length; i++) {
+  // 优先从结构化 planning 字段查找最新 clarification
+  let latest: { questionSetId?: string; questions: { id: string; question: string }[] } | null = null
+  for (let i = messages.value.length - 1; i >= 0; i--) {
     const msg = messages.value[i]
     if (msg.role !== 'ai') continue
+    if (msg.planning && msg.planning.questions.length > 0) {
+      latest = { questionSetId: msg.planning.questionSetId, questions: msg.planning.questions }
+      break
+    }
     const match = msg.content.match(PLANNING_TAG_RE)
     if (match && match[1] === 'clarification') {
       try {
         const data = JSON.parse(match[2])
-        pdList.push(data)
-      } catch { /* skip */ }
+        latest = { questions: data.questions || [] }
+        break
+      } catch {
+        // skip
+      }
     }
   }
-  const latest = pdList[pdList.length - 1]
   if (!latest) return
   const answersList: string[] = []
   for (const q of latest.questions) {
