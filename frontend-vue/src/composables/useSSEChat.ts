@@ -66,6 +66,13 @@ export function useSSEChat(options: SSEChatOptions) {
     return String(id)
   }
 
+  const mapGenerationMode = (codeGenType?: string): string => {
+    if (codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file') {
+      return 'application'
+    }
+    return 'application'
+  }
+
   const startSSE = (userMsg: string, sessionId: string, codeGenType?: string) => {
     generating.value = true
     streamWarning.value = ''
@@ -76,9 +83,10 @@ export function useSSEChat(options: SSEChatOptions) {
     const isStructuredToolMode =
       codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
 
+    const generationMode = mapGenerationMode(codeGenType)
     const baseUrl = import.meta.env.VITE_API_BASE_URL
     const eventSource = new EventSource(
-      `${baseUrl}/app/chat/gen/code/stream?appId=${unref(appId)}&sessionId=${sessionId}&message=${encodeURIComponent(userMsg)}`,
+      `${baseUrl}/app/chat/gen/code/stream?appId=${unref(appId)}&sessionId=${sessionId}&message=${encodeURIComponent(userMsg)}&generationMode=${generationMode}`,
       { withCredentials: true },
     )
     currentEventSource = eventSource

@@ -471,14 +471,23 @@ const doEnhanceInput = async (promptText: string) => {
  * 更新预览
  */
 const updatePreview = async (refresh = false) => {
-  const codeGenType = app.value?.codeGenType || 'single_file'
-  const deployUrlPrefix = import.meta.env.VITE_APP_DEPLOY_URL_PREFIX
   previewWarning.value = ''
   selectedElement.value = null
 
-  const nextUrl = buildPreviewUrl(codeGenType, deployUrlPrefix, refresh)
+  const previewUrl = app.value?.previewUrl
+  if (!previewUrl) {
+    if (iframeUrl.value) {
+      previewStatus.value = 'ready'
+      previewWarning.value = '预览地址暂不可用，显示的是上一次的预览结果'
+    } else {
+      iframeUrl.value = ''
+      previewStatus.value = 'idle'
+    }
+    return
+  }
 
-  // 非刷新模式下，如果 URL 基础路径相同（不含时间戳），跳过重复检查
+  const nextUrl = refresh ? `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : previewUrl
+
   if (!refresh && iframeUrl.value) {
     const currentBase = iframeUrl.value.split('?')[0]
     const nextBase = nextUrl.split('?')[0]
@@ -487,8 +496,6 @@ const updatePreview = async (refresh = false) => {
     }
   }
 
-  // 无论当前会话是否有消息，都尝试检查服务器上的预览资源
-  // （之前的会话可能已经生成过，资源仍然存在）
   previewStatus.value = 'checking'
   const resourceAvailable = await checkPreviewResource(nextUrl)
   if (resourceAvailable) {
@@ -496,30 +503,11 @@ const updatePreview = async (refresh = false) => {
     iframeUrl.value = nextUrl
     return
   }
-  if (codeGenType === 'multi-file') {
-    const plainUrl = `${deployUrlPrefix}/multi-file/${appId}/index.html${refresh ? `?t=${Date.now()}` : ''}`
-    const plainAvailable = await checkPreviewResource(plainUrl)
-    if (plainAvailable) {
-      previewStatus.value = 'ready'
-      iframeUrl.value = plainUrl
-      return
-    }
-  }
-  const fallbackUrl = `${deployUrlPrefix}/${codeGenType === 'vue_project' ? 'vue_project' : codeGenType}/${appId}/index.html${refresh ? `?t=${Date.now()}` : ''}`
-  const fallbackAvailable = await checkPreviewResource(fallbackUrl)
-  if (fallbackAvailable) {
-    previewStatus.value = 'ready'
-    iframeUrl.value = fallbackUrl
-    return
-  }
 
-  // 资源检查全部失败
   if (iframeUrl.value) {
-    // 已有预览 → 保留旧预览，只更新状态提示
     previewStatus.value = 'ready'
     previewWarning.value = '预览资源检查失败，显示的是上一次的预览结果'
   } else {
-    // 从未有过预览 → idle
     iframeUrl.value = ''
     previewStatus.value = 'idle'
   }
@@ -540,16 +528,6 @@ const { generating, startSSE, stopSSE, streamWarning } = useSSEChat({
   },
 })
 
-const buildPreviewUrl = (codeGenType: string, deployUrlPrefix: string, refresh = false) => {
-  const cache = refresh ? `?t=${Date.now()}` : ''
-  if (codeGenType === 'vue_project') {
-    return `${deployUrlPrefix}/vue_project/${appId}/dist/index.html${cache}`
-  }
-  if (codeGenType === 'multi-file') {
-    return `${deployUrlPrefix}/multi-file/${appId}/dist/index.html${cache}`
-  }
-  return `${deployUrlPrefix}/${codeGenType}/${appId}/index.html${cache}`
-}
 
 const hasPreviewCandidate = () => {
   const latestAiMessage = [...messages.value].reverse().find((item) => item.role === 'ai')
