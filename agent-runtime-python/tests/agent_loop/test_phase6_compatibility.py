@@ -58,19 +58,19 @@ class TestLegacySwitchModeHistoryIgnored:
             assert "switch_mode" not in observations.content
 
 
-class TestNewRunPersistsV2:
-    def test_new_run_persists_only_v2(self):
+class TestNewRunPersistsV3:
+    def test_new_run_persists_only_v3(self):
         from app.agent_loop.state import AgentLoopState as ALS
 
         state = ALS(mode="plan", status="running")
         envelope = state._to_envelope()
-        assert envelope.schema_version == 2
+        assert envelope.schema_version == 3
 
         json_str = state.serialize()
         import json
 
         data = json.loads(json_str)
-        assert data["schema_version"] == 2
+        assert data["schema_version"] == 3
 
     def test_apply_route_decision_writes_mode(self):
         state = AgentLoopState(mode="plan", status="running")

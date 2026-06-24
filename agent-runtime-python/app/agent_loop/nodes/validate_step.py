@@ -2,16 +2,16 @@ import logging
 
 from langchain_core.tools import BaseTool
 
-from app.agent_loop.nodes.step_base import _execute_single_step
+from app.agent_loop.nodes.step_base import _execute_single_step, _make_loop_tools
 from app.agent_loop.state import AgentLoopState
+from app.agent_loop.transition import apply_workflow_transition
 from app.agent_loop.tool_policy import AgentMode
 from app.agent_loop.tool_resolver import ModeToolResolver
-from app.agent_loop.tools.decide_validation import DecideValidationTool
 from app.agent_loop.tools.run_checks import RunChecksTool
 from app.core.error_codes import AgentErrorCode
 from app.core.exceptions import AgentRuntimeError
 from app.prompts.composer import PromptComposer
-from app.prompts.profiles import PROMPT_PROFILES
+from app.prompts.profiles import PROMPT_PROFILES, resolve_profile_module_ids
 from app.runtime.context import ExecutionContext
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.services import RuntimeServices
@@ -30,6 +30,9 @@ class ValidateStepNode:
         self._services = services
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
+        state.implement_just_finished = False
+        state.validate_just_finished = False
+
         if state.validate_iterations >= state.max_validate_iterations:
             if state.validation_status == "pending":
                 state.validation_status = "failed"
@@ -61,10 +64,9 @@ class ValidateStepNode:
         run_checks.set_quality_checker(self._services.quality_checker)
         run_checks.set_code_gen_type(self._context.code_gen_type)
 
-        decide_validation = DecideValidationTool()
-        decide_validation.set_state(state)
+        loop_tools = _make_loop_tools(state, self._services.event_bus)
 
-        all_tools: list[BaseTool] = list(file_lc_tools) + [run_checks, decide_validation]
+        all_tools: list[BaseTool] = list(file_lc_tools) + [run_checks] + list(loop_tools)
         toolset = ModeToolResolver.resolve(AgentMode.VALIDATE, all_tools)
 
         system_prompt = self._compose_prompt(state, toolset)
@@ -76,7 +78,7 @@ class ValidateStepNode:
             state.mode,
         )
 
-        return await _execute_single_step(
+        result = await _execute_single_step(
             state,
             self._context,
             self._services,
@@ -84,6 +86,31 @@ class ValidateStepNode:
             toolset,
             file_tools,
         )
+
+        ValidateStepNode.apply_exit_transition(result)
+        return result
+
+    @staticmethod
+    def apply_exit_transition(state: AgentLoopState) -> None:
+        if not getattr(state, "validate_just_finished", False):
+            return
+        validation_status = getattr(state, "validation_status", "pending")
+        if validation_status == "passed":
+            apply_workflow_transition(
+                state,
+                source="validate",
+                target="finished",
+                reason_code="validate_passed",
+            )
+        else:
+            apply_workflow_transition(
+                state,
+                source="validate",
+                target="route",
+                reason_code="validate_failed",
+            )
+        if hasattr(state, "record_phase_report"):
+            state.record_phase_report()
 
     def _compose_prompt(self, state: AgentLoopState, toolset) -> str:
         registry = getattr(self._services, "prompt_module_registry", None)
@@ -99,6 +126,19 @@ class ValidateStepNode:
                 "Profile validate 不存在",
                 code=AgentErrorCode.STATE_ERROR,
             )
+
+        generation_mode = getattr(state, "generation_mode", None)
+        if generation_mode is None:
+            envelope = getattr(state, "_state_envelope", None)
+            if envelope is not None:
+                generation_mode = getattr(envelope.workflow, "generation_mode", None)
+
+        mode_registry = getattr(self._services, "generation_mode_registry", None)
+        profile_module_ids = resolve_profile_module_ids(
+            "validate",
+            generation_mode=generation_mode,
+            mode_registry=mode_registry,
+        )
 
         modules = registry.require_many(profile_module_ids)
         composer = PromptComposer(modules)

@@ -13,13 +13,45 @@ def _get_state_attr(state, key, default=None):
     return getattr(state, key, default)
 
 
-def _submit_phase_report(state) -> None:
-    if hasattr(state, "record_phase_report"):
-        state.record_phase_report()
+def _ensure_execution_contract_after_plan(state: AgentLoopState) -> None:
+    envelope = getattr(state, "_state_envelope", None)
+    if envelope is None:
+        return
+    execution = envelope.workflow.execution
+    if getattr(execution, "execution_contract", None) is not None:
+        return
+    plan_state = envelope.workflow.plan
+    impl_plan = getattr(plan_state, "implementation_plan", None)
+    if impl_plan is None:
+        return
+    generation_mode = getattr(envelope.workflow, "generation_mode", None) or "application"
+    artifact_format = _infer_artifact_format_from_code_gen_type(state)
+    try:
+        from app.agent_loop.execution_contract import from_implementation_plan
+        contract = from_implementation_plan(impl_plan, generation_mode, artifact_format)
+        execution.execution_contract = contract.model_dump()
+    except Exception as e:
+        logger.warning("_ensure_execution_contract_after_plan | failed: %s", e)
+
+
+def _infer_artifact_format_from_code_gen_type(state: AgentLoopState) -> str:
+    code_gen_type_str = ""
+    artifact_type_state = getattr(state, "artifact_type_state", None)
+    if artifact_type_state is not None:
+        code_gen_type_str = getattr(artifact_type_state, "effective", "")
+    if not code_gen_type_str:
+        code_gen_type_str = getattr(state, "recommended_code_gen_type", "")
+    if not code_gen_type_str:
+        code_gen_type_str = "vue_project"
+    mapping = {
+        "single_file": "web_single_file",
+        "multi-file": "web_multi_file",
+        "vue_project": "vue_project",
+    }
+    return mapping.get(code_gen_type_str, "vue_project")
 
 
 def _route_finished(state) -> bool:
-    """统一的循环终止检查，在所有条件边中使用。"""
     if _get_state_attr(state, "status") == "waiting_for_user":
         return True
     if _get_state_attr(state, "status") in ("completed", "failed"):
@@ -46,7 +78,6 @@ def _route_finished(state) -> bool:
 
 
 def route_after_route_step(state: AgentLoopState) -> str:
-    """route_step 完成后，根据 route_decision 或 status 路由。"""
     if _route_finished(state):
         return "finish"
     decision = _get_state_attr(state, "route_decision")
@@ -64,51 +95,47 @@ def route_after_route_step(state: AgentLoopState) -> str:
 
 
 def route_after_plan_step(state: AgentLoopState) -> str:
-    """plan_step 完成后的路由逻辑。
+    """plan_step 完成后路由。
 
-    Plan 不再直接进入 Implement：
-    - plan_just_finished=True → route_step
-    - 达到终止条件 → finish
-    - 否则 → plan_step
-
-    Plan 硬上限由 PlanStepNode 内部处理（设置 plan_stage="blocked" 和 status="failed"），
-    由 _route_finished() 捕获。不再使用 max_plan_iterations 作为路由条件。
+    状态变更已在 PlanStepNode.apply_exit_transition 中完成。
+    此函数仅读取状态决定下一节点。
     """
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "plan_just_finished"):
-        _submit_phase_report(state)
-        return "route_step"
+        return "implement_step"
     return "plan_step"
 
 
 def route_after_implement_step(state: AgentLoopState) -> str:
-    """implement_step 完成后的路由逻辑。
+    """implement_step 完成后路由。
 
-    finish 或结构化重新规划请求标记 implement_just_finished=True 时离开 Implement，
-    否则继续 implement_step。
+    状态变更已在 ImplementDispatcherNode.apply_exit_transition 中完成。
+    此函数仅读取状态决定下一节点。
     """
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "implement_just_finished"):
-        _submit_phase_report(state)
-        return "route_step"
+        if getattr(state, "implement_replan_requested", False):
+            return "route_step"
+        return "validate_step"
     return "implement_step"
 
 
 def route_after_validate_step(state: AgentLoopState) -> str:
-    """validate_step 完成后的路由逻辑。
+    """validate_step 完成后路由。
 
-    只有 decide_validation 标记 validate_just_finished=True 或达到上限时才离开，
-    否则继续 validate_step。
+    状态变更已在 ValidateStepNode.apply_exit_transition 中完成。
+    此函数仅读取状态决定下一节点。
     """
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "validate_just_finished"):
-        _submit_phase_report(state)
+        validation_status = _get_state_attr(state, "validation_status", "pending")
+        if validation_status == "passed":
+            return "finish"
         return "route_step"
     if _get_state_attr(state, "validate_iterations") >= _get_state_attr(state, "max_validate_iterations"):
-        _submit_phase_report(state)
         return "route_step"
     return "validate_step"
 
@@ -123,12 +150,12 @@ def build_agent_loop_graph(
 ) -> StateGraph:
     """构建 Agent Loop 图结构。
 
-    图结构：
-        init → route_step → [plan_step / implement_step / validate_step / finish]
+    固定流转图：
+        init → route_step → [plan_step / implement_step / finish]
 
-        plan_step → plan_step / route_step（计划完成→路由，否则继续规划）
-        implement_step → implement_step / route_step（完成或请求重新规划→路由，否则继续实现）
-        validate_step → validate_step / route_step（决策提交或超限→路由，否则继续校验）
+        plan_step → plan_step / implement_step / finish
+        implement_step → implement_step / validate_step / route_step / finish
+        validate_step → validate_step / route_step / finish
     """
     graph = StateGraph(AgentLoopState)
 
@@ -156,13 +183,18 @@ def build_agent_loop_graph(
     graph.add_conditional_edges(
         "plan_step",
         route_after_plan_step,
-        {"plan_step": "plan_step", "route_step": "route_step", "finish": "finish"},
+        {"plan_step": "plan_step", "implement_step": "implement_step", "finish": "finish"},
     )
 
     graph.add_conditional_edges(
         "implement_step",
         route_after_implement_step,
-        {"implement_step": "implement_step", "route_step": "route_step", "finish": "finish"},
+        {
+            "implement_step": "implement_step",
+            "validate_step": "validate_step",
+            "route_step": "route_step",
+            "finish": "finish",
+        },
     )
 
     graph.add_conditional_edges(

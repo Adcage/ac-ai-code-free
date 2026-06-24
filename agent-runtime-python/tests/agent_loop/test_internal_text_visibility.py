@@ -120,7 +120,7 @@ def test_plan_tools_are_all_classified():
                 "warning",
                 lambda *a, **kw: captured.append(a),
             )
-            result = mapper.map_event(seq_event)
+            mapper.map_event(seq_event)
             if any("unclassified" in str(c) for c in captured):
                 unclassified.append(tool_name)
 

@@ -12,7 +12,7 @@ class TestLegacyStateAdapter:
         }
         envelope = adapt_legacy_state(raw)
         assert isinstance(envelope, WorkflowStateEnvelope)
-        assert envelope.schema_version == 2
+        assert envelope.schema_version == 3
         assert envelope.workflow.current_mode == "plan"
         assert envelope.workflow.iteration == 2
 
@@ -159,7 +159,7 @@ class TestLegacyStateAdapter:
     def test_adapts_empty_state(self):
         raw = {}
         envelope = adapt_legacy_state(raw)
-        assert envelope.schema_version == 2
+        assert envelope.schema_version == 3
         assert envelope.workflow.iteration == 0
 
     def test_adapts_preserves_plan_state(self):

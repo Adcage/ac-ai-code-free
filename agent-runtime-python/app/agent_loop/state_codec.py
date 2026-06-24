@@ -32,31 +32,9 @@ def _strip_sensitive_from_dict(data: dict) -> dict:
     return result
 
 
-def _strip_file_contents_from_tool_calls(data: dict) -> dict:
-    if "executed_tool_calls" in data and isinstance(data["executed_tool_calls"], list):
-        cleaned_calls = []
-        for call in data["executed_tool_calls"]:
-            if not isinstance(call, dict):
-                cleaned_calls.append(call)
-                continue
-            call = dict(call)
-            args = call.get("arguments")
-            if isinstance(args, dict) and call.get("name") == "write_file":
-                args = dict(args)
-                if "content" in args:
-                    content = args.pop("content")
-                    args["content_length"] = len(content) if isinstance(content, str) else 0
-                    args["content_omitted"] = True
-                call["arguments"] = args
-            cleaned_calls.append(call)
-        data = {**data, "executed_tool_calls": cleaned_calls}
-    return data
-
-
 def sanitize_persisted_state(envelope: WorkflowStateEnvelope) -> WorkflowStateEnvelope:
     data = envelope.workflow.model_dump()
     data = _strip_sensitive_from_dict(data)
-    data = _strip_file_contents_from_tool_calls(data)
     sanitized_workflow = WorkflowState.model_validate(data)
     return WorkflowStateEnvelope(
         schema_version=envelope.schema_version,
@@ -64,9 +42,70 @@ def sanitize_persisted_state(envelope: WorkflowStateEnvelope) -> WorkflowStateEn
     )
 
 
+def _strip_legacy_codegen_type_keys(data: dict) -> dict:
+    """递归移除 v2 遗留的 code_gen_type / codeGenType 键。"""
+    result = {}
+    for key, value in data.items():
+        if "code_gen_type" in key.lower() or "CodeGenType" in key or "codegentype" in key.lower():
+            continue
+        elif isinstance(value, dict):
+            result[key] = _strip_legacy_codegen_type_keys(value)
+        elif isinstance(value, list):
+            result[key] = [
+                _strip_legacy_codegen_type_keys(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+        else:
+            result[key] = value
+    return result
+
+
 def encode_loop_state(envelope: WorkflowStateEnvelope) -> str:
+    if envelope.schema_version == 2:
+        envelope = _migrate_v2_to_v3(envelope)
     sanitized = sanitize_persisted_state(envelope)
-    return sanitized.model_dump_json(exclude_none=False)
+    data = json.loads(sanitized.model_dump_json(exclude_none=False))
+    data = _strip_legacy_codegen_type_keys(data)
+    return json.dumps(data, ensure_ascii=False)
+
+
+_CODE_GEN_TYPE_TO_ARTIFACT_FORMAT: dict[str, str] = {
+    "single_file": "web_single_file",
+    "multi-file": "web_multi_file",
+    "vue_project": "vue_project",
+}
+
+
+def _migrate_v2_to_v3(envelope: WorkflowStateEnvelope) -> WorkflowStateEnvelope:
+    """将 v2 envelope 迁移为 v3：设置 generation_mode，移除旧的 codeGenType 键。"""
+    workflow = envelope.workflow
+    if workflow.generation_mode is None:
+        artifact_type = workflow.artifact_type
+        if artifact_type is not None:
+            effective = artifact_type.effective
+            mapped = _CODE_GEN_TYPE_TO_ARTIFACT_FORMAT.get(effective)
+            if mapped is not None:
+                workflow.generation_mode = "application"
+            else:
+                raise AgentRuntimeError(
+                    f"v2→v3: 未知的 code_gen_type={effective}，无法迁移",
+                    code=AgentErrorCode.STATE_ERROR,
+                )
+        else:
+            routing = workflow.routing
+            rec = getattr(routing, "recommended_code_gen_type", None)
+            if rec is not None:
+                mapped = _CODE_GEN_TYPE_TO_ARTIFACT_FORMAT.get(rec)
+                if mapped is not None:
+                    workflow.generation_mode = "application"
+                else:
+                    raise AgentRuntimeError(
+                        f"v2→v3: 未知的 recommended_code_gen_type={rec}，无法迁移",
+                        code=AgentErrorCode.STATE_ERROR,
+                    )
+            else:
+                workflow.generation_mode = "application"
+    return WorkflowStateEnvelope(schema_version=3, workflow=workflow)
 
 
 def decode_loop_state(raw: str | dict | None) -> WorkflowStateEnvelope:
@@ -93,9 +132,20 @@ def decode_loop_state(raw: str | dict | None) -> WorkflowStateEnvelope:
 
     version = data.get("schema_version")
 
+    if version == 3:
+        try:
+            envelope = WorkflowStateEnvelope.model_validate(data)
+            return envelope
+        except Exception as e:
+            raise AgentRuntimeError(
+                f"v3 状态校验失败: {e}",
+                code=AgentErrorCode.STATE_ERROR,
+            )
+
     if version == 2:
         try:
-            return WorkflowStateEnvelope.model_validate(data)
+            envelope = WorkflowStateEnvelope.model_validate(data)
+            return _migrate_v2_to_v3(envelope)
         except Exception as e:
             raise AgentRuntimeError(
                 f"v2 状态校验失败: {e}",

@@ -252,7 +252,7 @@ class TestProposeDesign:
             component_language="Element Plus",
             interaction_model="响应式",
             responsive_strategy="移动优先",
-            accessibility_rules=["键盘可达"],
+            accessibility_rules="键盘可达",
             design_rationale=[
                 {
                     "decision": "使用极简风格",
@@ -301,6 +301,9 @@ class TestConfirmDesign:
             responsive_strategy=ConfirmedChoice(description="r", source="user", confirmed=False),
         )
         state._state_envelope.workflow.plan.plan_stage = "confirm_design"
+        state.clarification_questions = [
+            {"id": "qs_design", "stage": "design_confirm", "answered": True, "questions": []},
+        ]
 
         tool = ConfirmDesignTool()
         tool.set_state(state)

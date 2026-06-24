@@ -83,7 +83,6 @@ def _build_route_context(
     execution_has_pending_tasks = False
     execution_completion_passed = False
     if source == "implement":
-        phase_files = getattr(state, "implement_phase_files", []) or []
         execution_completion_passed = getattr(
             state, "implement_just_finished", False
         )

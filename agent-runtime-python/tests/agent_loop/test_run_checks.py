@@ -30,7 +30,7 @@ async def test_run_checks_uses_injected_code_gen_type(tmp_path: Path):
     await tool._arun()
 
     assert checker.manifest is not None
-    assert checker.manifest.code_gen_type == "vue_project"
+    assert checker.manifest.artifact_format == "vue_project"
     assert checker.manifest.entry == "src/App.vue"
 
 
@@ -86,7 +86,7 @@ async def test_run_checks_uses_artifact_type_effective(tmp_path: Path):
     await tool._arun()
 
     assert checker.manifest is not None
-    assert checker.manifest.code_gen_type == "vue_project"
+    assert checker.manifest.artifact_format == "vue_project"
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_build_and_validate_use_same_effective_type(tmp_path: Path):
 
     await tool_build._arun()
 
-    assert checker_build.manifest.code_gen_type == "vue_project"
+    assert checker_build.manifest.artifact_format == "vue_project"
 
     state.validation_check_results = None
     checker_validate = CapturingQualityChecker()
@@ -117,8 +117,8 @@ async def test_build_and_validate_use_same_effective_type(tmp_path: Path):
 
     await tool_validate._arun()
 
-    assert checker_validate.manifest.code_gen_type == "vue_project"
-    assert checker_build.manifest.code_gen_type == checker_validate.manifest.code_gen_type
+    assert checker_validate.manifest.artifact_format == "vue_project"
+    assert checker_build.manifest.artifact_format == checker_validate.manifest.artifact_format
 
 
 @pytest.mark.asyncio
@@ -137,5 +137,5 @@ async def test_recommendation_does_not_override_effective_type_in_run(tmp_path: 
 
     await tool._arun()
 
-    assert checker.manifest.code_gen_type == "multi-file"
+    assert checker.manifest.artifact_format == "web_multi_file"
     assert state.artifact_type_state.effective == "multi-file"

@@ -71,23 +71,24 @@ def _ensure_no_blocked_hard_limit(plan_state: PlanStateV2) -> None:
         )
 
 
+def _lines(text: str) -> list[str]:
+    """把字符串按换行拆成非空行列表，兼容已传 list 的情况。"""
+    if isinstance(text, list):
+        return [s.strip() for s in text if isinstance(s, str) and s.strip()]
+    return [s.strip() for s in text.split("\n") if s.strip()] if text else []
+
+
 class SubmitRequirementBriefInput(BaseModel):
     application_direction: str = Field(description="应用方向")
     target_users: str = Field(description="目标用户")
-    primary_scenarios: list[str] = Field(default_factory=list, description="主要使用场景")
-    functional_scope: list[str] = Field(default_factory=list, description="功能范围")
-    content_and_data: list[str] = Field(default_factory=list, description="内容与数据需求")
-    responsive_targets: list[str] = Field(default_factory=list, description="响应式目标")
-    accessibility_expectations: list[str] = Field(
-        default_factory=list, description="可访问性期望"
-    )
-    existing_project_constraints: list[str] = Field(
-        default_factory=list, description="已有项目约束"
-    )
-    technical_constraints: list[str] = Field(default_factory=list, description="技术约束")
-    unresolved_questions: list[str] = Field(
-        default_factory=list, description="尚未解决的需求问题"
-    )
+    primary_scenarios: str = Field(default="", description="主要使用场景（多项用换行分隔）")
+    functional_scope: str = Field(default="", description="功能范围（多项用换行分隔）")
+    content_and_data: str = Field(default="", description="内容与数据需求（多项用换行分隔）")
+    responsive_targets: str = Field(default="", description="响应式目标（多项用换行分隔）")
+    accessibility_expectations: str = Field(default="", description="可访问性期望（多项用换行分隔）")
+    existing_project_constraints: str = Field(default="", description="已有项目约束（多项用换行分隔）")
+    technical_constraints: str = Field(default="", description="技术约束（多项用换行分隔）")
+    unresolved_questions: str = Field(default="", description="尚未解决的需求问题（多项用换行分隔）")
 
 
 class SubmitRequirementBriefTool(BaseTool):
@@ -109,16 +110,16 @@ class SubmitRequirementBriefTool(BaseTool):
 
     async def _arun(
         self,
-        application_direction: str,
-        target_users: str,
-        primary_scenarios: list[str] | None = None,
-        functional_scope: list[str] | None = None,
-        content_and_data: list[str] | None = None,
-        responsive_targets: list[str] | None = None,
-        accessibility_expectations: list[str] | None = None,
-        existing_project_constraints: list[str] | None = None,
-        technical_constraints: list[str] | None = None,
-        unresolved_questions: list[str] | None = None,
+        application_direction: str = "",
+        target_users: str = "",
+        primary_scenarios: str = "",
+        functional_scope: str = "",
+        content_and_data: str = "",
+        responsive_targets: str = "",
+        accessibility_expectations: str = "",
+        existing_project_constraints: str = "",
+        technical_constraints: str = "",
+        unresolved_questions: str = "",
     ) -> str:
         if self._state is None:
             raise AgentRuntimeError(
@@ -155,41 +156,34 @@ class SubmitRequirementBriefTool(BaseTool):
                 confirmed=False,
             ),
             primary_scenarios=[
-                ConfirmedValue(value=v.strip(), source="user", confirmed=False)
-                for v in (primary_scenarios or [])
-                if v.strip()
+                ConfirmedValue(value=v, source="user", confirmed=False)
+                for v in _lines(primary_scenarios)
             ],
             functional_scope=[
-                ConfirmedValue(value=v.strip(), source="user", confirmed=False)
-                for v in (functional_scope or [])
-                if v.strip()
+                ConfirmedValue(value=v, source="user", confirmed=False)
+                for v in _lines(functional_scope)
             ],
             content_and_data=[
-                ConfirmedValue(value=v.strip(), source="user", confirmed=False)
-                for v in (content_and_data or [])
-                if v.strip()
+                ConfirmedValue(value=v, source="user", confirmed=False)
+                for v in _lines(content_and_data)
             ],
             responsive_targets=[
-                ConfirmedValue(value=v.strip(), source="user", confirmed=False)
-                for v in (responsive_targets or [])
-                if v.strip()
+                ConfirmedValue(value=v, source="user", confirmed=False)
+                for v in _lines(responsive_targets)
             ],
             accessibility_expectations=[
-                ConfirmedValue(value=v.strip(), source="user", confirmed=False)
-                for v in (accessibility_expectations or [])
-                if v.strip()
+                ConfirmedValue(value=v, source="user", confirmed=False)
+                for v in _lines(accessibility_expectations)
             ],
             existing_project_constraints=[
-                Constraint(description=v.strip(), source="project")
-                for v in (existing_project_constraints or [])
-                if v.strip()
+                Constraint(description=v, source="project")
+                for v in _lines(existing_project_constraints)
             ],
             technical_constraints=[
-                Constraint(description=v.strip(), source="project")
-                for v in (technical_constraints or [])
-                if v.strip()
+                Constraint(description=v, source="project")
+                for v in _lines(technical_constraints)
             ],
-            unresolved_questions=list(unresolved_questions or []),
+            unresolved_questions=_lines(unresolved_questions),
         )
         plan_state.requirement_brief = brief
         if plan_state.plan_stage == "discover_direction":
@@ -395,8 +389,8 @@ class ProposeDesignInput(BaseModel):
     component_language: str = Field(description="组件语言/库描述")
     interaction_model: str = Field(description="关键交互模型描述")
     responsive_strategy: str = Field(description="响应式策略描述")
-    accessibility_rules: list[str] = Field(default_factory=list, description="可访问性规则")
-    content_strategy: list[str] = Field(default_factory=list, description="内容策略")
+    accessibility_rules: str = Field(default="", description="可访问性规则（多项用换行分隔）")
+    content_strategy: str = Field(default="", description="内容策略（多项用换行分隔）")
     design_rationale: list[dict] = Field(
         default_factory=list,
         description="决策理由：[{decision, reason, source_refs}]",
@@ -433,8 +427,8 @@ class ProposeDesignTool(BaseTool):
         component_language: str = "",
         interaction_model: str = "",
         responsive_strategy: str = "",
-        accessibility_rules: list[str] | None = None,
-        content_strategy: list[str] | None = None,
+        accessibility_rules: str = "",
+        content_strategy: str = "",
         design_rationale: list[dict] | None = None,
         alternative_options: list[dict] | None = None,
     ) -> str:
@@ -499,8 +493,8 @@ class ProposeDesignTool(BaseTool):
             component_language=_build_choice(component_language, "component_language"),
             interaction_model=_build_choice(interaction_model, "interaction_model"),
             responsive_strategy=_build_choice(responsive_strategy, "responsive_strategy"),
-            accessibility_rules=list(accessibility_rules or []),
-            content_strategy=list(content_strategy or []),
+            accessibility_rules=[s.strip() for s in accessibility_rules.split("\n") if s.strip()] if accessibility_rules else [],
+            content_strategy=[s.strip() for s in content_strategy.split("\n") if s.strip()] if content_strategy else [],
             design_rationale=[
                 _build_rationale(r) for r in (design_rationale or [])
             ],
@@ -512,6 +506,22 @@ class ProposeDesignTool(BaseTool):
         plan_state.design_spec_revision = spec.design_version
         plan_state.advance_stage("confirm_design")
         envelope.next_revision()
+
+        if hasattr(self._state, "conversation_messages"):
+            self._state.conversation_messages.append({
+                "role": "system",
+                "source": "plan",
+                "content": (
+                    "提交的设计方案摘要（供 ask_user 时直接引用）：\n"
+                    f"- 视觉方向：{visual_direction}\n"
+                    f"- 配色系统：{color_system}\n"
+                    f"- 字体排版：{typography}\n"
+                    f"- 组件语言：{component_language}\n"
+                    f"- 交互模型：{interaction_model}\n"
+                    f"- 响应式策略：{responsive_strategy}"
+                ),
+            })
+
         return (
             "设计建议已提交，等待用户确认。请在回复中完整展示所有维度与备选，"
             "然后调用 ask_user 让用户在 '没有需要调整' 和 '需要调整' 之间选择。"
@@ -605,6 +615,16 @@ class ConfirmDesignTool(BaseTool):
                 code=AgentErrorCode.STATE_ERROR,
             )
 
+        # 如果已经进入 write_implementation_plan 或 completed，说明设计已确认
+        if plan_state.plan_stage not in ("confirm_design",):
+            return (
+                "设计已经确认过了。当前 PlanStage 为 "
+                + plan_state.plan_stage
+                + "，请根据当前阶段提交对应内容，不要再调用确认工具。"
+            )
+
+        _ensure_design_asked_user(self._state)
+
         spec = plan_state.design_specification
         spec.confirmed = True
         spec.confirmation_message_id = message_id.strip()
@@ -613,6 +633,24 @@ class ConfirmDesignTool(BaseTool):
         plan_state.advance_stage("write_implementation_plan")
         envelope.next_revision()
         return "设计已确认，可进入 write_implementation_plan 阶段并立即生成实施计划。"
+
+
+def _ensure_design_asked_user(state: object) -> None:
+    """检查在 design_confirm 阶段是否已通过 ask_user 询问用户意见。"""
+    questions = getattr(state, "clarification_questions", None) or []
+    has_design_question = any(
+        isinstance(q, dict) and q.get("stage") == "design_confirm"
+        for q in questions
+    )
+    if has_design_question:
+        return
+    from app.core.error_codes import AgentErrorCode
+    raise AgentRuntimeError(
+        "设计确认前必须先通过 ask_user 向用户展示设计方案并获取反馈。"
+        "请先调用 ask_user(stage='design_confirm', questions=[...]) 让用户选择，"
+        "用户回复确认后再调用 confirm_design。",
+        code=AgentErrorCode.STATE_ERROR,
+    )
 
 
 def _now_iso() -> str:

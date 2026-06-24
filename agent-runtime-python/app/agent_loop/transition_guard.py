@@ -45,11 +45,14 @@ class RouteContext(BaseModel):
 class RouteDecision(BaseModel):
     target: RouteTarget
     reason_code: RouteReasonCode
-    rationale: str
+    rationale: str = ""
     evidence_refs: list[str] = Field(default_factory=list)
     implement_run_kind: str | None = None
     active_task_ids: list[str] = Field(default_factory=list)
     active_issue_ids: list[str] = Field(default_factory=list)
+    generation_mode: str | None = None
+    candidate_generation_modes: list[str] = Field(default_factory=list)
+    direct_implementation_brief: dict | None = None
 
 
 class GuardRejection(BaseModel):

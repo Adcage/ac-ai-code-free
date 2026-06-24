@@ -163,6 +163,7 @@ def adapt_legacy_state(raw: dict[str, Any]) -> WorkflowStateEnvelope:
         routing=routing,
         conversation=conversation,
         artifact_type=artifact_type,
+        generation_mode="application",
         progress=ProgressStateV2(),
         phase_reports=[],
         resolved_model=resolved_model,
@@ -176,6 +177,6 @@ def adapt_legacy_state(raw: dict[str, Any]) -> WorkflowStateEnvelope:
             len(migration_warnings),
         )
 
-    envelope = WorkflowStateEnvelope(workflow=workflow)
+    envelope = WorkflowStateEnvelope(schema_version=3, workflow=workflow)
 
     return envelope

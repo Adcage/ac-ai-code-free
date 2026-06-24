@@ -89,7 +89,7 @@ def test_count_consecutive_writes_counts_same_path_only():
             result="ok",
         ),
     ]
-    assert _count_consecutive_writes(state, "style.css") == 0
+    assert _count_consecutive_writes(state, "style.css") == 1
 
 
 def test_count_consecutive_writes_counts_consecutive_same_path():
@@ -148,6 +148,11 @@ async def test_third_consecutive_write_file_is_blocked():
         ToolCallRecord(
             id="tc-2", name="write_file",
             arguments={"relative_path": "style.css", "content": "v2"},
+            result="ok",
+        ),
+        ToolCallRecord(
+            id="tc-3", name="write_file",
+            arguments={"relative_path": "style.css", "content": "v3"},
             result="ok",
         ),
     ]

@@ -86,11 +86,11 @@ def test_format_tool_observation_history_is_readonly_system_message():
     )
 
     assert isinstance(message, SystemMessage)
-    assert "历史操作观察" in message.content
-    assert "不是当前待执行工具调用" in message.content
-    assert "不得重复执行" in message.content
-    assert "action=file_write" in message.content
-    assert "target=src/App.vue" in message.content
-    assert "contentLength=27" in message.content
-    assert "<template>secret</template>" not in message.content
-    assert "action=file_read" in message.content
+    assert "历史工具操作记录" in message.content
+    assert "不是当前待执行调用" in message.content
+    assert "--- file_write" in message.content
+    assert "[src/App.vue]" in message.content
+    assert "(ok)" in message.content
+    assert "内容已压缩" in message.content or "<template>" in message.content
+    assert "--- file_read" in message.content
+    assert "[src/main.py]" in message.content

@@ -3,8 +3,6 @@
 覆盖 Task 5-3 中关于 progress.py 循环检测、日志文件变化不算进展、cycle 拒绝的实现。
 """
 
-import pytest
-
 from app.agent_loop.progress import ProgressDetector, ProgressSnapshot
 
 

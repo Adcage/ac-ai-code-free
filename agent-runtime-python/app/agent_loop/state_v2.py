@@ -283,6 +283,7 @@ class ExecutionStateV2(BaseModel):
     call_budget_hard_limit: int = 0
     call_budget_model_call_count: int = 0
     completion_candidate: dict | None = None
+    execution_contract: dict | None = None
 
 
 class ValidationStateV2(BaseModel):
@@ -354,6 +355,7 @@ class WorkflowState(BaseModel):
     routing: RoutingStateV2 = Field(default_factory=RoutingStateV2)
     conversation: ConversationStateV2 = Field(default_factory=ConversationStateV2)
     artifact_type: ArtifactTypeState | None = None
+    generation_mode: Literal["application", "unresolved"] | None = None
     progress: ProgressStateV2 = Field(default_factory=ProgressStateV2)
 
     phase_reports: list[PhaseCompletionReport] = Field(default_factory=list)
@@ -396,7 +398,7 @@ class WorkflowState(BaseModel):
 
 
 class WorkflowStateEnvelope(BaseModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[2, 3] = 3
     workflow: WorkflowState = Field(default_factory=WorkflowState)
 
     def next_revision(self) -> int:

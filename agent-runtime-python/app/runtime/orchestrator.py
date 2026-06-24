@@ -10,7 +10,7 @@ from app.modeling.policy import ModelPolicy
 from app.modeling.resolver import ModelResolver
 from app.artifacts.writer import ArtifactWriter
 from app.quality.structure_checker import StructureChecker
-from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext
+from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext, _CODE_GEN_TYPE_TO_GENERATION_MODE
 from app.runtime.event_bus import EventBus
 from app.runtime.event_mapper import ProtoEventMapper
 from app.runtime.events import RuntimeEvent, RuntimeEventType
@@ -106,6 +106,25 @@ class RuntimeOrchestrator:
         # test
         registry.register(TestModeInfoModule())  # is_test=True 时启用
 
+        # 生成模式 Prompt 模块
+        from app.prompts.generation_modes.application import (
+            ApplicationPlanModule,
+            ApplicationValidateModule,
+        )
+        from app.prompts.generation_modes.common import GenerationModeClarificationModule
+
+        registry.register(ApplicationPlanModule())
+        registry.register(ApplicationValidateModule())
+        registry.register(GenerationModeClarificationModule())
+
+        # 注册 application 生成模式定义
+        from app.generation_modes.application import register_application
+        from app.generation_modes.registry import GenerationModeRegistry
+
+        gen_mode_registry = GenerationModeRegistry()
+        register_application(gen_mode_registry)
+        gen_mode_registry.validate_prompt_modules_exist(registry)
+
         return RuntimeServices(
             platform_client=self._platform_client,
             tool_client=None,
@@ -120,6 +139,7 @@ class RuntimeOrchestrator:
             asset_manager=self._asset_manager,
             quality_checker=self._quality_checker,
             artifact_writer=self._artifact_writer,
+            generation_mode_registry=gen_mode_registry,
         )
 
     async def _build_context(
@@ -130,6 +150,9 @@ class RuntimeOrchestrator:
         is_resume: bool = False,
     ) -> ExecutionContext:
         code_gen_type = _map_code_gen_type(request.code_gen_type)
+        generation_mode = getattr(request, "generation_mode", None)
+        if not generation_mode:
+            generation_mode = _CODE_GEN_TYPE_TO_GENERATION_MODE.get(code_gen_type.value if hasattr(code_gen_type, "value") else str(code_gen_type), "application")
         original_content = getattr(request, "original_content", "")
         model_config_id = getattr(request, "model_config_id", 0)
         config_version = getattr(request, "config_version", 0)
@@ -177,6 +200,7 @@ class RuntimeOrchestrator:
             },
             is_test=getattr(request, "is_test", False),
             is_resume=is_resume,
+            generation_mode=generation_mode,
         )
 
     async def stream_generate(self, request):
@@ -191,7 +215,8 @@ class RuntimeOrchestrator:
         from app.agent_loop.state import AgentLoopState
         from app.agent_loop.graph import build_agent_loop_graph
         from app.agent_loop.nodes.init import InitNode
-        from app.agent_loop.nodes.plan_step import PlanStepNode, ImplementStepNode
+        from app.agent_loop.nodes.plan_step import PlanStepNode
+        from app.agent_loop.nodes.implement_dispatcher import ImplementDispatcherNode
         from app.agent_loop.nodes.route_step import RouteStepNode
         from app.agent_loop.nodes.validate_step import ValidateStepNode
         from app.agent_loop.nodes.finish import FinishNode
@@ -224,7 +249,7 @@ class RuntimeOrchestrator:
         init_node = InitNode(context, services)
         route_step = RouteStepNode(context, services)
         plan_step = PlanStepNode(context, services)
-        implement_step = ImplementStepNode(context, services)
+        implement_step = ImplementDispatcherNode(context, services)
         validate_step = ValidateStepNode(context, services)
         finish_node = FinishNode(context, services)
 

@@ -31,7 +31,10 @@ def _make_state_with_plan_state(
         plan_just_finished=plan_just_finished,
     )
     envelope = WorkflowStateEnvelope(
-        workflow=WorkflowState(plan=plan_state)
+        workflow=WorkflowState(
+            current_mode=mode if mode != "finish" else "finished",
+            plan=plan_state,
+        )
     )
     state._state_envelope = envelope
     return state
@@ -94,7 +97,7 @@ class TestPlanSoftLimitDoesNotCompleteOrRoute:
             plan_just_finished=True,
         )
         result = route_after_plan_step(state)
-        assert result == "route_step"
+        assert result == "implement_step"
 
 
 class TestPlanHardLimitBlocksWithoutImplement:
@@ -192,16 +195,16 @@ class TestPlanResumePreservesModelCallCount:
 
 
 class TestPlanCompletionRoutesOnce:
-    """Input legitimate complete plan; expect enters Route only once."""
+    """Input legitimate complete plan; expect enters Implement directly (Phase 4 fixed transition)."""
 
-    def test_completed_plan_routes_to_route_step(self):
+    def test_completed_plan_routes_to_implement_step(self):
         state = _make_state_with_plan_state(
             model_call_count=10,
             plan_stage="completed",
             plan_just_finished=True,
         )
         result = route_after_plan_step(state)
-        assert result == "route_step"
+        assert result == "implement_step"
 
     def test_not_finished_plan_stays_in_plan(self):
         state = _make_state_with_plan_state(
@@ -221,7 +224,7 @@ class TestPlanCompletionRoutesOnce:
         result = route_after_plan_step(state)
         assert result == "plan_step"
 
-    def test_only_just_finished_triggers_route(self):
+    def test_only_just_finished_triggers_implement(self):
         state1 = _make_state_with_plan_state(
             model_call_count=10,
             plan_stage="completed",
@@ -234,4 +237,4 @@ class TestPlanCompletionRoutesOnce:
             plan_stage="completed",
             plan_just_finished=True,
         )
-        assert route_after_plan_step(state2) == "route_step"
+        assert route_after_plan_step(state2) == "implement_step"

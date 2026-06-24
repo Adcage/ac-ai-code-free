@@ -3,8 +3,6 @@
 覆盖 Task 4-2 中关于 Implement 上下文接收完整 Plan 产物但不接收 Plan System Prompt 的要求。
 """
 
-import asyncio
-
 import pytest
 
 from app.agent_loop.state import AgentLoopState

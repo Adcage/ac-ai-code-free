@@ -129,6 +129,7 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
     """
     from app.agent_loop.tools.ask_user import AskUserTool
     from app.agent_loop.tools.complete_implementation import CompleteImplementationTool
+    from app.agent_loop.tools.confirm_generation_mode import ConfirmGenerationModeTool
     from app.agent_loop.tools.plan_tools import (
         ChooseSkillTool,
         ConfirmDesignTool,
@@ -169,6 +170,9 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
     plan_guard = PlanStageGuardTool()
     plan_guard.set_state(state)
 
+    confirm_gen_mode = ConfirmGenerationModeTool()
+    confirm_gen_mode.set_state(state)
+
     # 兼容旧 select_skill 入口：delegate 给 ChooseSkillTool
     select_skill = SelectSkillTool()
     select_skill.set_state(state)
@@ -187,6 +191,7 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
         confirm_design,
         write_impl_plan,
         plan_guard,
+        confirm_gen_mode,
         select_skill,
         write_plan,
         ask,
@@ -197,22 +202,16 @@ def _make_loop_tools(state: AgentLoopState, event_bus) -> list[BaseTool]:
 
 
 def _count_consecutive_writes(state: AgentLoopState, path: str) -> int:
-    """统计同一文件连续成功写入的次数（不含失败的，也不含不同文件的间隔）。
-
-    用于拦截模型反复重写同一文件陷入循环。返回历史中目标路径的连续成功写入次数。
-    """
+    """统计同一文件累计成功写入次数（不限连续），用于拦截模型反复重写同一文件陷入循环。"""
     if not path:
         return 0
     count = 0
-    for record in reversed(state.executed_tool_calls):
+    for record in state.executed_tool_calls:
         if record.name != "write_file":
-            break
+            continue
         rec_path = (record.arguments or {}).get("relative_path", "")
-        if rec_path != path:
-            break
-        if record.error:
-            break
-        count += 1
+        if rec_path == path and not record.error:
+            count += 1
     return count
 
 
@@ -310,9 +309,9 @@ async def _execute_single_step(
                 _count_consecutive_writes(state, target_path) if target_path else 0
             )
 
-            if is_write_file and consecutive_before >= 2:
+            if is_write_file and consecutive_before >= 3:
                 error_msg = (
-                    f"系统拦截：{target_path} 已连续成功写入 {consecutive_before} 次，"
+                    f"系统拦截：{target_path} 已累计成功写入 {consecutive_before} 次，"
                     f"禁止继续重写同一文件以避免循环。"
                     f"请改用其他动作之一：\n"
                     f"1. 写入项目规则要求的其他待生成文件\n"
@@ -387,8 +386,8 @@ async def _execute_single_step(
                     consecutive_after = _count_consecutive_writes(state, path)
                     if consecutive_after == 2:
                         warning = (
-                            f"系统提示：{path} 已连续成功写入 2 次。"
-                            f"下一次再写同一文件会被系统拦截。"
+                            f"系统提示：{path} 已累计成功写入 {consecutive_after} 次。"
+                            f"再写一次将被系统拦截。"
                             f"建议：除非这次重写带来明确的功能扩展、"
                             f"bug 修复或显著优化（不是微调），"
                             f"否则请改用其他动作：写入其他待生成文件或提交完成结果。"

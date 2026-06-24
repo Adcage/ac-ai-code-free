@@ -20,7 +20,8 @@ from app.agent_loop.graph import build_agent_loop_graph
 from app.agent_loop.state import AgentLoopState
 from app.agent_loop.state_v2 import PlanStateV2
 from app.agent_loop.nodes.init import InitNode
-from app.agent_loop.nodes.plan_step import PlanStepNode, ImplementStepNode
+from app.agent_loop.nodes.plan_step import PlanStepNode
+from app.agent_loop.nodes.implement_dispatcher import ImplementDispatcherNode
 from app.agent_loop.nodes.route_step import RouteStepNode
 from app.agent_loop.nodes.validate_step import ValidateStepNode
 from app.agent_loop.nodes.finish import FinishNode
@@ -170,6 +171,14 @@ def _build_prompt_module_registry() -> PromptModuleRegistry:
     registry.register(SkillContextModule())
     registry.register(TaskContextModule())
     registry.register(TestModeInfoModule())
+    from app.prompts.generation_modes.application import (
+        ApplicationPlanModule,
+        ApplicationValidateModule,
+    )
+    from app.prompts.generation_modes.common import GenerationModeClarificationModule
+    registry.register(ApplicationPlanModule())
+    registry.register(ApplicationValidateModule())
+    registry.register(GenerationModeClarificationModule())
     return registry
 
 
@@ -235,12 +244,22 @@ def _make_services(
 
     fake_am = FakeAssetManager(asset_index)
 
+    from app.generation_modes.registry import GenerationModeRegistry
+    from app.generation_modes.application import register_application
+
+    gen_mode_registry = GenerationModeRegistry()
+    register_application(gen_mode_registry)
+    gen_mode_registry.validate_prompt_modules_exist(
+        _build_prompt_module_registry()
+    )
+
     return RuntimeServices(
         chat_model_factory=fake_factory,
         model_resolver=FakeModelResolver(),
         prompt_module_registry=_build_prompt_module_registry(),
         event_bus=event_bus,
         asset_manager=fake_am,
+        generation_mode_registry=gen_mode_registry,
     )
 
 
@@ -412,19 +431,6 @@ def _new_project_plan_script() -> list[dict]:
                 }
             ],
         },
-        # Step 7: route_step (after_plan) → decide_route to implement
-        {
-            "tool_calls": [
-                {
-                    "name": "decide_route",
-                    "arguments": {
-                        "mode": "implement",
-                        "reason": "实施计划已完成，进入实现阶段",
-                    },
-                    "id": "route-2",
-                }
-            ],
-        },
     ]
 
 
@@ -574,19 +580,6 @@ def _new_project_plan_script_without_ask_user() -> list[dict]:
                 }
             ],
         },
-        # Step 7: route_step (after_plan) → decide_route to implement
-        {
-            "tool_calls": [
-                {
-                    "name": "decide_route",
-                    "arguments": {
-                        "mode": "implement",
-                        "reason": "实施计划已完成，进入实现阶段",
-                    },
-                    "id": "route-2",
-                }
-            ],
-        },
     ]
 
 
@@ -606,7 +599,7 @@ class TestNewProjectPlanProgression:
             init_node = InitNode(context, services)
             route_step = RouteStepNode(context, services)
             plan_step = PlanStepNode(context, services)
-            implement_step = ImplementStepNode(context, services)
+            implement_step = ImplementDispatcherNode(context, services)
             validate_step = ValidateStepNode(context, services)
             finish_node = FinishNode(context, services)
 
@@ -638,13 +631,12 @@ class TestNewProjectPlanProgression:
             # Route count before Plan completes = 0 (Route only fires before Plan starts and after)
             # The first route_step fires before Plan; it's the initial route
             # Plan doesn't trigger Route mid-flow; plan_just_finished triggers one Route after
-            route_events_before_plan_complete = 0
             tool_call_names = [
                 tc.name for tc in final.executed_tool_calls
             ]
             route_count = tool_call_names.count("decide_route")
-            assert route_count <= 2, (
-                f"decide_route called {route_count} times, expected ≤ 2 (initial + after plan)"
+            assert route_count <= 1, (
+                f"decide_route called {route_count} times, expected ≤ 1 (initial route only)"
             )
 
             # Mode should have been switched to implement
@@ -667,7 +659,7 @@ class TestProjectInspectionRecordedOnce:
             init_node = InitNode(context, services)
             route_step = RouteStepNode(context, services)
             plan_step = PlanStepNode(context, services)
-            implement_step = ImplementStepNode(context, services)
+            implement_step = ImplementDispatcherNode(context, services)
             validate_step = ValidateStepNode(context, services)
             finish_node = FinishNode(context, services)
 
@@ -720,7 +712,7 @@ class TestInternalPlanTextNotUserVisible:
             init_node = InitNode(context, services)
             route_step = RouteStepNode(context, services)
             plan_step = PlanStepNode(context, services)
-            implement_step = ImplementStepNode(context, services)
+            implement_step = ImplementDispatcherNode(context, services)
             validate_step = ValidateStepNode(context, services)
             finish_node = FinishNode(context, services)
 
@@ -729,7 +721,7 @@ class TestInternalPlanTextNotUserVisible:
             )
 
             state = AgentLoopState(is_test=True)
-            result = await graph.ainvoke(state)
+            await graph.ainvoke(state)
 
             # TEXT_DELTA events should not be emitted when text precedes tool calls
             # In _stream_invoke, when text_content and tool_calls are both present,
@@ -762,7 +754,7 @@ class TestPlanCompletionHandsOffToRouteOnce:
             init_node = InitNode(context, services)
             route_step = RouteStepNode(context, services)
             plan_step = PlanStepNode(context, services)
-            implement_step = ImplementStepNode(context, services)
+            implement_step = ImplementDispatcherNode(context, services)
             validate_step = ValidateStepNode(context, services)
             finish_node = FinishNode(context, services)
 
@@ -774,20 +766,21 @@ class TestPlanCompletionHandsOffToRouteOnce:
             result = await graph.ainvoke(state)
             final = AgentLoopState.from_graph_result(result)
 
-            # After Plan completes, Route should fire exactly once
-            # (the route_after_plan step that routes to implement)
+            # After Plan completes, the fixed transition goes directly to implement
+            # without an intermediate route_step (route_iterations stays at 1)
             route_iterations = final.route_iterations
-            assert route_iterations == 2, (
-                f"Expected route_iterations=2 (initial + after_plan), got {route_iterations}"
+            assert route_iterations == 1, (
+                f"Expected route_iterations=1 (initial route only), got {route_iterations}"
             )
 
-            # Route decision should be to implement
-            assert final.route_decision is not None
-            assert final.route_decision["mode"] == "implement"
-
-            # plan_just_finished should have been cleared by apply_route_decision
+            # plan_just_finished should have been cleared by apply_exit_transition
             assert not final.plan_just_finished, (
-                "plan_just_finished should be cleared after Route processes it"
+                "plan_just_finished should be cleared after Plan→Implement transition"
+            )
+
+            # Mode should be implement (set by apply_workflow_transition in PlanStepNode)
+            assert final.mode == "implement", (
+                f"Expected mode='implement', got '{final.mode}'"
             )
 
 
@@ -840,7 +833,7 @@ class TestIterationCapCannotReportFalseSuccess:
             init_node = InitNode(context, services)
             route_step = RouteStepNode(context, services)
             plan_step = PlanStepNode(context, services)
-            implement_step = ImplementStepNode(context, services)
+            implement_step = ImplementDispatcherNode(context, services)
             validate_step = ValidateStepNode(context, services)
             finish_node = FinishNode(context, services)
 
@@ -887,7 +880,7 @@ class TestNoUnclassifiedEventWarning:
             init_node = InitNode(context, services)
             route_step = RouteStepNode(context, services)
             plan_step = PlanStepNode(context, services)
-            implement_step = ImplementStepNode(context, services)
+            implement_step = ImplementDispatcherNode(context, services)
             validate_step = ValidateStepNode(context, services)
             finish_node = FinishNode(context, services)
 
@@ -896,14 +889,14 @@ class TestNoUnclassifiedEventWarning:
             )
 
             state = AgentLoopState(is_test=True)
-            result = await graph.ainvoke(state)
+            await graph.ainvoke(state)
 
             # Map all events through ProtoEventMapper and capture warnings
             mapper = ProtoEventMapper()
             unclassified_warnings = []
 
             # Capture warnings from logging
-            with pytest.MonkeyPatch.context() as mp:
+            with pytest.MonkeyPatch.context():
                 import app.runtime.event_mapper as em_module
 
                 original_warning = em_module.logger.warning

@@ -59,8 +59,7 @@ class TestTwoAttemptProtocol:
             TransitionGuard,
         )
 
-        ctx = RouteContext(source_mode="user", state_revision=0)
-        # Use a real enum value but wrong reason_code to test fallback
+        RouteContext(source_mode="user", state_revision=0)
         from app.agent_loop.transition_guard import RouteDecision
         from pydantic import ValidationError
 

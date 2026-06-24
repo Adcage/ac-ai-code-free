@@ -148,6 +148,19 @@ class AskUserTool(BaseTool):
         if envelope is not None:
             plan_state = envelope.workflow.plan
 
+        # 检查是否已对同一 stage 提问过：避免重复提问（无论是否已回答）
+        if stage:
+            for q in getattr(self._state, "clarification_questions", []):
+                if isinstance(q, dict) and q.get("stage") == stage:
+                    logger.info(
+                        "ask_user | stage=%s already asked, rejecting duplicate",
+                        stage,
+                    )
+                    return (
+                        f"关于 {stage} 的问题已经提问过，请等待用户回答"
+                        "或根据已有对话内容继续推进。"
+                    )
+
         # 记录到 state.clarification_questions
         record: dict[str, Any] = {
             "id": question_set_id,

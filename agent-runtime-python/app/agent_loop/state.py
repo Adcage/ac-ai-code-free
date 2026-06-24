@@ -232,6 +232,8 @@ class AgentLoopState:
         return WorkflowStateEnvelope(workflow=workflow)
 
     def _map_mode_for_v2(self) -> str:
+        if self.mode == "finish":
+            return "finished"
         if self.status == "completed":
             return "finished"
         if self.status == "failed":

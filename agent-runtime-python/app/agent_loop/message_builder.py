@@ -15,6 +15,14 @@ from app.runtime.context import ChatHistoryEntry, ExecutionContext
 logger = logging.getLogger("app.agent_loop.message_builder")
 
 
+def _should_include_message(message: dict, current_mode: str) -> bool:
+    """按 source 标签过滤：无 source 或 source=common 的所有模式可见；带 source 的仅在对应模式可见。"""
+    source = message.get("source", "")
+    if not source or source == "common":
+        return True
+    return source == current_mode
+
+
 def _message_from_role(role: str, content: str) -> BaseMessage:
     normalized = role.strip().lower()
     if normalized in {"assistant", "ai"}:
@@ -64,7 +72,7 @@ def build_llm_messages(
     messages.extend(
         _message_from_role(message.get("role", "user"), message.get("content", ""))
         for message in state.conversation_messages
-        if message.get("content")
+        if message.get("content") and _should_include_message(message, state.mode)
     )
 
     if current is not None and context.is_resume:

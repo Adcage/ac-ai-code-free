@@ -11,10 +11,7 @@ Phase 0 阶段这些测试预期失败，因为这些文件和符号当前仍然
 后续 Phase 3-4 删除后，这些测试应通过。
 """
 
-import importlib
 from pathlib import Path
-
-import pytest
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _APP_DIR = _PROJECT_ROOT / "app"
@@ -43,7 +40,7 @@ class TestComposePromptNodeIsRemoved:
 
     def test_compose_prompt_not_in_modeling_policy(self):
         """ModelPolicy 中不应有 compose_prompt 映射。"""
-        from app.modeling.policy import ModelPolicy, DEFAULT_NODE_MODEL_ROLES
+        from app.modeling.policy import DEFAULT_NODE_MODEL_ROLES
 
         assert "compose_prompt" not in DEFAULT_NODE_MODEL_ROLES, (
             "DEFAULT_NODE_MODEL_ROLES 中不应包含 compose_prompt 映射"

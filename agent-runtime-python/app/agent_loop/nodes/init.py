@@ -80,12 +80,20 @@ class InitNode:
         state.mode = "plan"
         state.status = "running"
 
-        # 初始化 ArtifactTypeState 作为 codeGenType 单一事实来源
         code_gen_type_str = getattr(self._context.code_gen_type, "value", str(self._context.code_gen_type))
         state.artifact_type_state = ArtifactTypeState(
             requested=code_gen_type_str,
             effective=code_gen_type_str,
         )
+
+        generation_mode = getattr(self._context, "generation_mode", None)
+        if generation_mode is None:
+            from app.runtime.context import _CODE_GEN_TYPE_TO_GENERATION_MODE
+            generation_mode = _CODE_GEN_TYPE_TO_GENERATION_MODE.get(code_gen_type_str, "application")
+
+        envelope = getattr(state, "_state_envelope", None)
+        if envelope is not None:
+            envelope.workflow.generation_mode = generation_mode
 
         asset_manager = self._services.asset_manager
         if asset_manager is not None:

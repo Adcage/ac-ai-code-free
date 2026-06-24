@@ -54,9 +54,35 @@ class PlanWorkflowModule(PromptModule):
         stage = getattr(plan, "plan_stage", "discover_direction")
         return f"当前 PlanStage：{stage}\n"
 
+    def _format_progress(self, state: Any) -> str:
+        envelope = getattr(state, "_state_envelope", None)
+        if envelope is None:
+            return ""
+        plan = getattr(envelope.workflow, "plan", None)
+        if plan is None:
+            return ""
+        items = []
+        if plan.requirement_brief is not None:
+            items.append("需求摘要")
+        if plan.project_inspection is not None:
+            items.append("项目检查")
+        if plan.selected_skill_id:
+            items.append("技能选择")
+        if plan.design_specification is not None:
+            if plan.design_specification.confirmed:
+                items.append("设计方案已确认")
+            else:
+                items.append("设计方案已提交待确认")
+        if plan.implementation_plan is not None:
+            items.append("实施计划已写完")
+        if not items:
+            return ""
+        return "已完成的步骤：" + " → ".join(items) + "\n"
+
     def render(self, context: Any, state: Any) -> str:
         clarification_history = self._format_clarification_history(state)
         stage_line = self._format_stage(state)
+        progress_line = self._format_progress(state)
         return (
             "你处于规划模式（Plan Mode）。你的职责是充分理解用户需求，"
             "完成多轮用户驱动设计澄清，并基于用户确认的结构化 DesignSpecification"
@@ -66,6 +92,7 @@ class PlanWorkflowModule(PromptModule):
             "不能直接进入实现、不能修改任何项目文件。**\n"
             f"{clarification_history}"
             f"{stage_line}"
+            f"{progress_line}"
             "\n"
             "## 工作流（必须严格按当前 PlanStage 推进）\n"
             "\n"
@@ -94,9 +121,10 @@ class PlanWorkflowModule(PromptModule):
             "每个关键维度（视觉方向、配色、字体、组件语言、交互、响应式）必须给出至少 2~3 个互斥候选。"
             "提交后自动进入设计确认阶段。\n"
             "\n"
-            "**design_confirm 阶段**：完整展示设计建议与所有备选；调用结构化提问工具让用户在"
-            "「没有需要调整」「需要调整」之间二选一。"
-            "用户明确表示没有调整后，设计自动确认并推进到实施计划阶段。\n"
+            "**design_confirm 阶段**：收到设计方案后，必须先通过结构化提问向用户完整展示所有"
+            "设计备选，让用户在「没有需要调整」或「需要调整」中进行选择。"
+            "用户明确表示确认后，再使用设计确认工具（直接使用设计确认工具会被系统拒绝，"
+            "因为必须先通过结构化提问获取用户反馈）。\n"
             "\n"
             "**实施计划生成阶段**：设计确认后自动进入此阶段；"
             "不要再次询问「是否需要生成实施计划」。使用**实施计划写入工具**提交结构化 ImplementationPlan。"
@@ -119,7 +147,18 @@ class PlanWorkflowModule(PromptModule):
             "- Plan 阶段模型调用硬上限 60 次；达到 30 次时由编排层触发自检；"
             "达到 60 次且未满足完成门禁时进入 blocked 或 waiting_for_user。\n"
             "- 不得连续抛出 3 次以上单选；否则将触发状态机告警。\n"
-            "- 当前模式的可用能力见上方工具列表，具体工具名称和参数由系统动态提供。"
+            "- 当前模式的可用能力见上方工具列表，具体工具名称和参数由系统动态提供。\n"
+            "\n"
+            "## 当前阶段应使用的工具\n"
+            "\n"
+            "根据 `当前 PlanStage` 选择对应的推进方式，**不要反复读取目录**——目录内容不会自行变化。\n"
+            "- **discover_direction** → 提交需求摘要（方向 + 目标用户必填）\n"
+            "- **discover_scope** → 补充提交需求摘要；完成后提交项目检查记录\n"
+            "- **inspect_existing_project** → 提交项目检查记录（已检查则填 evidence_files，新项目填 not_applicable）\n"
+            "- **技能选择阶段** → 提交技能选择\n"
+            "- **propose 设计** → 提交 6 个维度的设计方案\n"
+            "- **confirm阶段** → 先用结构化提问展示方案、等用户回答，再提交确认\n"
+            "- **实施计划生成** → 提交实施计划\n"
         )
 
 

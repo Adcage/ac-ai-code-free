@@ -69,11 +69,11 @@ def test_resume_answer_is_after_previous_tool_history():
     assert sum(message.content == prompt for message in messages) == 1
     assert isinstance(messages[-1], HumanMessage)
     assert messages[-1].content == prompt
-    observation_messages = [m for m in messages if isinstance(m, SystemMessage) and "历史操作观察" in m.content]
+    observation_messages = [m for m in messages if isinstance(m, SystemMessage) and "历史工具操作记录" in m.content]
     assert len(observation_messages) >= 1
 
 
-def test_write_file_history_compresses_content_in_tool_call():
+def test_write_file_history_includes_content_in_tool_call():
     state = AgentLoopState()
     state.executed_tool_calls = [
         ToolCallRecord(
@@ -81,7 +81,7 @@ def test_write_file_history_compresses_content_in_tool_call():
             name="write_file",
             arguments={
                 "relative_path": "style.css",
-                "content": "body { color: #111; }" * 200,
+                "content": "body { color: #111; }",
             },
             result="写入成功: style.css",
         )
@@ -91,14 +91,14 @@ def test_write_file_history_compresses_content_in_tool_call():
 
     observation_messages = [
         message for message in messages
-        if isinstance(message, SystemMessage) and "历史操作观察" in message.content
+        if isinstance(message, SystemMessage) and "历史工具操作记录" in message.content
     ]
     assert len(observation_messages) == 1
     observation = observation_messages[0].content
     assert "file_write" in observation
     assert "style.css" in observation
-    assert "action=file_write" in observation
-    assert "body { color: #111; }" not in observation
+    assert "--- file_write" in observation
+    assert "body { color: #111; }" in observation
 
 
 def test_conversation_roles_are_preserved():

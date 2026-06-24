@@ -28,6 +28,7 @@ PLAN_TOOLS = frozenset(
         "confirm_design",
         "write_implementation_plan",
         "plan_stage_guard",
+        "confirm_generation_mode",
     }
 )
 

@@ -17,26 +17,27 @@ from app.core.exceptions import AgentRuntimeError
 
 
 class TestDecodeLoopState:
-    def test_decode_empty_creates_v2_state(self):
+    def test_decode_empty_creates_default_state(self):
         envelope = decode_loop_state(None)
-        assert envelope.schema_version == 2
+        assert envelope.schema_version == 3
         assert envelope.workflow.current_mode == "route"
 
-    def test_decode_empty_string_creates_v2_state(self):
+    def test_decode_empty_string_creates_default_state(self):
         envelope = decode_loop_state("")
-        assert envelope.schema_version == 2
+        assert envelope.schema_version == 3
 
     def test_decode_unknown_version_blocks(self):
         with pytest.raises(AgentRuntimeError):
             decode_loop_state(json.dumps({"schema_version": 999}))
 
-    def test_decode_v2_state(self):
+    def test_decode_v2_state_migrates_to_v3(self):
         envelope = WorkflowStateEnvelope(
+            schema_version=2,
             workflow=WorkflowState(current_mode="implement", iteration=5)
         )
         raw = envelope.model_dump_json()
         restored = decode_loop_state(raw)
-        assert restored.schema_version == 2
+        assert restored.schema_version == 3
         assert restored.workflow.current_mode == "implement"
         assert restored.workflow.iteration == 5
 
@@ -50,7 +51,7 @@ class TestDecodeLoopState:
             "plan_iterations": 2,
         }
         envelope = decode_loop_state(json.dumps(legacy))
-        assert envelope.schema_version == 2
+        assert envelope.schema_version == 3
         assert envelope.workflow.current_mode == "implement"
 
     def test_decode_invalid_json_blocks(self):
@@ -84,7 +85,7 @@ class TestEncodeLoopState:
         assert plan["selected_skill_id"] == "ui-ux-pro-max"
         assert plan["implementation_outline"].get("skill_source_path") == "skills/ui-ux-pro-max/SKILL.md"
 
-    def test_encode_strips_write_file_content_from_tool_calls(self):
+    def test_encode_preserves_write_file_content(self):
         envelope = WorkflowStateEnvelope(
             workflow=WorkflowState(
                 executed_tool_calls=[
@@ -103,8 +104,8 @@ class TestEncodeLoopState:
         encoded = encode_loop_state(envelope)
         data = json.loads(encoded)
         args = data["workflow"]["executed_tool_calls"][0]["arguments"]
-        assert "content" not in args
-        assert args.get("content_length") == 5000
+        assert "content" in args
+        assert len(args["content"]) == 5000
 
     def test_round_trip_v2_state(self):
         envelope = WorkflowStateEnvelope(
@@ -138,7 +139,7 @@ class TestEncodeLoopState:
         encoded = encode_loop_state(envelope)
         restored = decode_loop_state(encoded)
 
-        assert restored.schema_version == 2
+        assert restored.schema_version == 3
         assert restored.workflow.current_mode == "implement"
         assert restored.workflow.iteration == 10
         assert restored.workflow.plan.selected_skill_id == "ui-ux-pro-max"

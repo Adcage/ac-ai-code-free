@@ -4,17 +4,14 @@ from typing import Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent_loop.transition import apply_workflow_transition, _get_current_mode
 from app.agent_loop.transition_guard import (
     RouteDecision,
 )
-from app.core.error_codes import AgentErrorCode
-from app.core.exceptions import AgentRuntimeError
 
 logger = logging.getLogger("app.agent_loop.tools.decide_route")
 
-RouteSourceLegacy = Literal["initial", "plan", "implement", "validate"]
 RouteTargetLegacy = Literal["plan", "implement", "validate", "finish"]
-RouteCodeGenType = Literal["", "single_file", "multi-file", "vue_project"]
 
 _TARGET_TO_LEGACY: dict[str, str] = {
     "plan": "plan",
@@ -32,48 +29,31 @@ _SOURCE_LEGACY_TO_V2: dict[str, str] = {
     "validate": "validate",
 }
 
-_ALLOWED_TRANSITIONS: dict[RouteSourceLegacy, frozenset[RouteTargetLegacy]] = {
-    "initial": frozenset({"plan", "implement"}),
-    "plan": frozenset({"plan", "implement"}),
-    "implement": frozenset({"plan", "validate", "finish"}),
-    "validate": frozenset({"plan", "implement", "finish"}),
-}
+
+def _resolve_route_source(state) -> str:
+    if getattr(state, "plan_just_finished", False):
+        return "plan"
+    if getattr(state, "implement_just_finished", False):
+        return "implement"
+    if getattr(state, "validate_just_finished", False):
+        return "validate"
+    return "initial"
 
 
 def apply_route_decision(
     state,
     *,
-    source: RouteSourceLegacy,
+    source: str,
     mode: RouteTargetLegacy,
-    code_gen_type: RouteCodeGenType,
+    code_gen_type: str,
     reason: str,
     route_decision: RouteDecision | None = None,
     reason_code: str | None = None,
 ) -> None:
-    """唯一提交运行时 mode 变化的函数。
+    target = mode if mode != "finish" else "finished"
 
-    只有此函数可以写入 state.mode、state.route_decision、state.route_decided
-    和 state.mode_switches。DecideRouteTool 和 Route 安全回退都必须调用此函数。
-
-    校验失败时不得部分写入任何字段。
-    """
-    allowed = _ALLOWED_TRANSITIONS.get(source)
-    if allowed is None:
-        raise AgentRuntimeError(
-            f"未知的路由来源: {source}",
-            code=AgentErrorCode.TOOL_ARGS_ERROR,
-        )
-    if mode not in allowed:
-        raise AgentRuntimeError(
-            f"路由来源 {source} 不允许目标 {mode}，允许目标: {sorted(allowed)}",
-            code=AgentErrorCode.TOOL_ARGS_ERROR,
-        )
-
-    old_mode = getattr(state, "mode", None)
-    if mode == "implement" and old_mode != "implement":
-        state.implement_phase_files = []
     if route_decision is not None:
-        state.route_decision = {
+        route_decision_dict = {
             "mode": mode,
             "code_gen_type": code_gen_type,
             "reason": reason,
@@ -84,36 +64,44 @@ def apply_route_decision(
             "active_issue_ids": route_decision.active_issue_ids,
         }
     elif reason_code is not None:
-        state.route_decision = {
+        route_decision_dict = {
             "mode": mode,
             "code_gen_type": code_gen_type,
             "reason": reason,
-            "target": mode if mode != "finish" else "finished",
+            "target": target,
             "reason_code": reason_code,
             "rationale": reason,
             "evidence_refs": [],
             "active_issue_ids": [],
         }
     else:
-        state.route_decision = {
+        route_decision_dict = {
             "mode": mode,
             "code_gen_type": code_gen_type,
             "reason": reason,
         }
-    state.mode = mode
+
+    if mode == "implement" and getattr(state, "mode", None) != "implement":
+        state.implement_phase_files = []
+
+    transition_source = _get_current_mode(state)
+    logger.debug(
+        "apply_route_decision | source=%s transition_source=%s target=%s reason=%s",
+        source, transition_source, target, reason,
+    )
+
+    apply_workflow_transition(
+        state,
+        source=transition_source,
+        target=target,
+        reason_code="route_decision",
+        route_decision=route_decision_dict,
+    )
+
     if code_gen_type:
         state.recommended_code_gen_type = code_gen_type
-    if old_mode != mode:
-        state.mode_switches += 1
-    state.plan_just_finished = False
-    state.implement_just_finished = False
-    state.validate_just_finished = False
-    state.implement_replan_requested = False
-    state.implement_replan_reason = ""
-    state.route_decided = True
 
 
-# Legacy mode → RouteReasonCode 默认映射（当模型未提供 reason_code 时使用）
 _LEGACY_MODE_TO_REASON_CODE: dict[tuple[str, str], str] = {
     ("initial", "plan"): "new_app",
     ("initial", "implement"): "low_risk_modify",
@@ -129,7 +117,6 @@ _LEGACY_MODE_TO_REASON_CODE: dict[tuple[str, str], str] = {
 
 
 def apply_v2_route_decision(state, decision: RouteDecision, code_gen_type: str = "") -> None:
-    """Apply a v2 RouteDecision to state, converting target to legacy mode."""
     source = _resolve_route_source(state)
     legacy_target = _TARGET_TO_LEGACY.get(decision.target, "plan")
     apply_route_decision(
@@ -151,25 +138,38 @@ def apply_v2_route_decision(state, decision: RouteDecision, code_gen_type: str =
         if envelope is not None:
             envelope.workflow.execution.execution_run_kind = decision.implement_run_kind
 
+    if decision.generation_mode:
+        envelope = getattr(state, "_state_envelope", None)
+        if envelope is not None:
+            current = getattr(envelope.workflow, "generation_mode", None)
+            if current is None or current == "unresolved":
+                envelope.workflow.generation_mode = decision.generation_mode
 
-def _resolve_route_source(state) -> RouteSourceLegacy:
-    """根据状态标记判断路由来源。"""
-    if getattr(state, "plan_just_finished", False):
-        return "plan"
-    if getattr(state, "implement_just_finished", False):
-        return "implement"
-    if getattr(state, "validate_just_finished", False):
-        return "validate"
-    return "initial"
+    if decision.direct_implementation_brief:
+        envelope = getattr(state, "_state_envelope", None)
+        if envelope is not None:
+            from app.agent_loop.execution_contract import DirectImplementationBrief, from_direct_brief
+
+            brief_data = decision.direct_implementation_brief
+            brief = DirectImplementationBrief(
+                generation_mode=brief_data.get("generation_mode", "application"),
+                goal=brief_data["goal"],
+                allowed_files=brief_data.get("allowed_files", []),
+                acceptance_criteria=brief_data.get("acceptance_criteria", []),
+                verification_requirements=brief_data.get("verification_requirements", []),
+            )
+            artifact_format = brief_data.get("expected_artifact_format", "web_single_file")
+            contract = from_direct_brief(brief, expected_artifact_format=artifact_format)
+            envelope.workflow.execution.execution_contract = contract.model_dump()
 
 
 class DecideRouteInput(BaseModel):
     mode: Literal["plan", "implement", "validate", "finish"] = Field(
         description="路由目标模式：plan(需规划)、implement(直接实现)、validate(需校验)、finish(直接完成)"
     )
-    code_gen_type: RouteCodeGenType = Field(
+    generation_mode: Literal["", "application"] = Field(
         default="",
-        description="推荐的应用类型，仅在首次路由且 code_gen_type 未确定时填写：single_file / multi-file / vue_project",
+        description="生成模式，前端已指定时沿用；未指定且可判断时填写；无法判断时留空由 Plan 澄清",
     )
     reason: str = Field(
         default="",
@@ -194,7 +194,7 @@ class DecideRouteTool(BaseTool):
     async def _arun(
         self,
         mode: str = "plan",
-        code_gen_type: RouteCodeGenType = "",
+        generation_mode: str = "",
         reason: str = "",
     ) -> str:
         if self._state is not None:
@@ -204,9 +204,15 @@ class DecideRouteTool(BaseTool):
                 self._state,
                 source=source,
                 mode=mode,
-                code_gen_type=code_gen_type,
+                code_gen_type="",
                 reason=reason,
                 reason_code=reason_code,
             )
-        type_info = f" 应用类型：{code_gen_type}" if code_gen_type else ""
+            if generation_mode:
+                envelope = getattr(self._state, "_state_envelope", None)
+                if envelope is not None:
+                    current = getattr(envelope.workflow, "generation_mode", None)
+                    if current is None or current == "unresolved":
+                        envelope.workflow.generation_mode = generation_mode
+        type_info = f" 生成模式：{generation_mode}" if generation_mode else ""
         return f"路由决策已记录：进入 {mode} 模式。{type_info}"

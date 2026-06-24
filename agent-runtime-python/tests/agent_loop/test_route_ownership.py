@@ -27,12 +27,12 @@ class TestOnlyRouteDecisionCanChangeMode:
             f"PlanStepNode 不应直接写 state.mode，发现: {mode_assignments}"
         )
 
-    def test_implement_step_node_does_not_directly_write_mode(self):
-        """ImplementStepNode 不应直接写 state.mode。"""
-        source = inspect.getsource(_get_class(ImplementStepNode_cls()))
+    def test_implement_dispatcher_node_does_not_directly_write_mode(self):
+        """ImplementDispatcherNode 不应直接写 state.mode。"""
+        source = inspect.getsource(_get_class(ImplementDispatcherNode_cls()))
         mode_assignments = _find_state_mode_assignments(source)
         assert len(mode_assignments) == 0, (
-            f"ImplementStepNode 不应直接写 state.mode，发现: {mode_assignments}"
+            f"ImplementDispatcherNode 不应直接写 state.mode，发现: {mode_assignments}"
         )
 
     def test_validate_step_node_does_not_directly_write_mode(self):
@@ -111,9 +111,9 @@ def PlanStepNode_cls():
     return PlanStepNode
 
 
-def ImplementStepNode_cls():
-    from app.agent_loop.nodes.plan_step import ImplementStepNode
-    return ImplementStepNode
+def ImplementDispatcherNode_cls():
+    from app.agent_loop.nodes.implement_dispatcher import ImplementDispatcherNode
+    return ImplementDispatcherNode
 
 
 def ValidateStepNode_cls():
