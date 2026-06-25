@@ -15,6 +15,10 @@ _VISIBLE_TOOLS = frozenset({
     "read_file",
     "read_dir",
     "run_checks",
+    "view",
+    "create",
+    "str_replace",
+    "insert",
 })
 
 _STATUS_TOOLS: dict[str, str] = {
@@ -35,6 +39,10 @@ _STATUS_TOOLS: dict[str, str] = {
     "confirm_generation_mode": "正在确认生成模式...",
     "complete_implementation": "正在提交实现完成...",
     "submit_validation_report": "正在提交校验报告...",
+    "view": "正在查看文件...",
+    "create": "正在创建文件...",
+    "str_replace": "正在修改文件...",
+    "insert": "正在修改文件...",
 }
 
 _HIDDEN_TOOLS = frozenset({"finish", "ask_user"})
@@ -87,6 +95,24 @@ def _sanitize_tool_arguments(tool_name: str, arguments_str: str) -> str:
             args["relativeDirPath"] = _sanitize_path(args.pop("relative_path"))
     elif tool_name == "ask_user":
         pass
+    elif tool_name == "view":
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+        args.pop("view_range", None)
+    elif tool_name == "create":
+        args.pop("content", None)
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+    elif tool_name == "str_replace":
+        args.pop("new_str", None)
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+        args["oldStrLength"] = len(args.get("old_str", ""))
+        args.pop("old_str", None)
+    elif tool_name == "insert":
+        args.pop("insert_text", None)
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
     else:
         for key in list(args.keys()):
             val = str(args[key])
@@ -98,7 +124,7 @@ def _sanitize_tool_arguments(tool_name: str, arguments_str: str) -> str:
 def _sanitize_tool_result(tool_name: str, result_str: str) -> str:
     if not result_str:
         return result_str
-    if tool_name in ("write_file", "read_dir"):
+    if tool_name in ("write_file", "read_dir", "create", "str_replace", "insert", "view"):
         return _sanitize_path_in_message(result_str)
     if tool_name == "read_file":
         return _sanitize_path_in_message(result_str)
