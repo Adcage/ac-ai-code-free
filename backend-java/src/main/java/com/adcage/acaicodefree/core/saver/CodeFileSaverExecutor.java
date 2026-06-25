@@ -3,7 +3,7 @@ package com.adcage.acaicodefree.core.saver;
 import com.adcage.acaicodefree.legacy.ai.model.MultiFileCodeResult;
 import com.adcage.acaicodefree.legacy.ai.model.SingleCodeResult;
 import com.adcage.acaicodefree.common.ErrorCode;
-import com.adcage.acaicodefree.core.parser.CodeParserExcutor;
+import com.adcage.acaicodefree.core.parser.CodeParserExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +47,7 @@ public class CodeFileSaverExecutor {
                         // 当所有代码都接收完毕后，解析并保存文件
                         String fullCode = codeBuilder.toString();
                         // 解析代码
-                        Object parseResult = CodeParserExcutor.excutePaser(fullCode, codeGenTypeEnum);
+                        Object parseResult = CodeParserExecutor.executeParse(fullCode, codeGenTypeEnum);
                         // 保存代码
                         File saveDir = executeSaver(parseResult, codeGenTypeEnum,appId);
                         log.info("保存成功,路径:{}", saveDir.getAbsolutePath());

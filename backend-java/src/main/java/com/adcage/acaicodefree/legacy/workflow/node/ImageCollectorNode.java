@@ -19,6 +19,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
+@Deprecated
 public class ImageCollectorNode {
 
     private final ImageCollectionService imageCollectionService;

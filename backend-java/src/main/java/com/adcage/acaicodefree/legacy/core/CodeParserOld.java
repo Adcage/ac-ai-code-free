@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
  * @author adcage
  * @description CodeParserOld
  */
+@Deprecated
 public class CodeParserOld {
 
     /**

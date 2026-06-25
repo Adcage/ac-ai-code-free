@@ -5,7 +5,7 @@ import com.adcage.acaicodefree.legacy.ai.model.MultiFileCodeResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MultiFileParser implements CodePaser<MultiFileCodeResult>{
+public class MultiFileParser implements CodeParser<MultiFileCodeResult>{
 
     /**
      * SINGLE_FILE 代码块匹配模式 (```html ... ```)

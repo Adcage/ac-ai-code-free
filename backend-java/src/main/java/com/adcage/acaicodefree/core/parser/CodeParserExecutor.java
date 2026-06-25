@@ -4,7 +4,7 @@ import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 
-public class CodeParserExcutor {
+public class CodeParserExecutor {
 
     /**
      * 根据类型执行解析
@@ -12,7 +12,7 @@ public class CodeParserExcutor {
      * @param codeGenTypeEnum
      * @return
      */
-    public static Object excutePaser(String content, CodeGenTypeEnum codeGenTypeEnum) {
+    public static Object executeParse(String content, CodeGenTypeEnum codeGenTypeEnum) {
         return switch (codeGenTypeEnum) {
             case SINGLE_FILE -> new SingleFileParser().parseCode(content);
             case MULTI_FILE -> new MultiFileParser().parseCode(content);

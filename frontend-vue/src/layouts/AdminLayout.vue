@@ -103,10 +103,15 @@ const menuItems = [
   { key: '/admin/appManage', label: '应用管理' },
 ]
 
-const selectedKeys = computed(() => [route.path])
+const selectedKeys = computed(() => {
+  const path = route.path
+  if (path.startsWith('/admin/test-chat')) return ['/admin/test-chat']
+  return [path]
+})
 
 const currentPageTitle = computed(() => {
-  const item = menuItems.find((m) => m.key === route.path)
+  const menuKey = selectedKeys.value[0]
+  const item = menuItems.find((m) => m.key === menuKey)
   return item?.label || (route.meta?.name as string) || '管理后台'
 })
 

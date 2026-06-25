@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 @Slf4j
+@Deprecated
 public class CodeGeneratorNode {
 
     private final AiCodeGeneratorFacade aiCodeGeneratorFacade;

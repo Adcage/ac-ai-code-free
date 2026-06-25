@@ -23,6 +23,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
+@Deprecated
 public class WorkflowContext implements Serializable {
 
     public static final String STATE_KEY = "workflowContext";

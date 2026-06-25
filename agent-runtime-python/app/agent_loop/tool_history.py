@@ -24,15 +24,27 @@ _TOOL_OBSERVATION_LABELS: dict[str, str | None] = {
 }
 _RETIRED_TOOLS = frozenset({"switch_mode", "compose_prompt"})
 
-_MAX_CONTENT_CHARS = 4000
+_DEFAULT_CONTENT_CHARS = 4000
 
 
-def _compact_arguments(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def _truncate_text(text: str, limit: int) -> str:
+    if limit <= 0 or len(text) <= limit:
+        return text
+    return text[:limit] + f"\n... [截断，原长度={len(text)}]"
+
+
+def _compact_arguments(
+    name: str,
+    arguments: dict[str, Any],
+    *,
+    max_result_chars: int,
+) -> dict[str, Any]:
     compacted = dict(arguments)
     if name == "write_file" and isinstance(compacted.get("content"), str):
-        content = compacted.pop("content")
+        content = compacted["content"]
+        compacted["content"] = _truncate_text(content, max_result_chars)
         compacted["content_length"] = len(content)
-        compacted["content_omitted"] = True
+        compacted["content_truncated"] = len(content) > max_result_chars > 0
     return compacted
 
 
@@ -42,16 +54,36 @@ def compact_tool_records(
     max_total_chars: int,
     max_result_chars: int,
 ) -> list[ToolCallRecord]:
-    return [
+    compacted_records = [
         ToolCallRecord(
             id=record.id,
             name=record.name,
-            arguments=_compact_arguments(record.name, record.arguments),
-            result=record.result,
+            arguments=_compact_arguments(
+                record.name,
+                record.arguments,
+                max_result_chars=max_result_chars,
+            ),
+            result=(
+                _truncate_text(str(record.result), max_result_chars)
+                if isinstance(record.result, str)
+                else record.result
+            ),
             error=record.error,
         )
         for record in records
     ]
+    if max_total_chars <= 0:
+        return compacted_records
+
+    total = 0
+    kept: list[ToolCallRecord] = []
+    for record in reversed(compacted_records):
+        record_size = len(str(record.arguments)) + len(str(record.result or "")) + len(str(record.error or ""))
+        if kept and total + record_size > max_total_chars:
+            break
+        kept.append(record)
+        total += record_size
+    return list(reversed(kept))
 
 
 def _get_target(record: ToolCallRecord) -> str:
@@ -64,6 +96,7 @@ def _format_record(
     record: ToolCallRecord,
     *,
     skip_content: bool = False,
+    content_limit: int = _DEFAULT_CONTENT_CHARS,
 ) -> str:
     if record.name in _RETIRED_TOOLS:
         return ""
@@ -81,30 +114,27 @@ def _format_record(
     header += f" ({status})"
     lines.append(header)
 
-    def _truncate(text: str, limit: int) -> str:
-        return text if len(text) <= limit else text[:limit] + "\n... [截断]"
-
     if record.name == "read_file" and record.result and not record.error:
         if skip_content:
             lines.append("[内容省略，后续有更新读取]")
         else:
-            lines.append(_truncate(str(record.result), _MAX_CONTENT_CHARS))
+            lines.append(_truncate_text(str(record.result), content_limit))
 
     elif record.name == "write_file" and not record.error:
         raw = record.arguments.get("content")
-        if raw is not None and not record.arguments.get("content_omitted"):
+        if raw is not None:
             if skip_content:
                 lines.append("[内容省略，后续有更新写入]")
             else:
-                lines.append(_truncate(str(raw), _MAX_CONTENT_CHARS))
+                lines.append(_truncate_text(str(raw), content_limit))
         else:
             lines.append(f"[内容已压缩，长度={record.arguments.get('content_length', 0)} 字符]")
 
     elif record.name == "read_dir" and record.result and not record.error:
-        lines.append(f"结果: {_truncate(str(record.result), 500)}")
+        lines.append(f"结果: {_truncate_text(str(record.result), min(content_limit, 4_000))}")
 
     elif record.result and not record.error and record.name not in {"read_file", "write_file", "read_dir"}:
-        lines.append(f"结果: {_truncate(str(record.result), 200)}")
+        lines.append(f"结果: {_truncate_text(str(record.result), min(content_limit, 2_000))}")
 
     return "\n".join(lines)
 
@@ -117,6 +147,7 @@ def format_tool_observation_history(
 ) -> SystemMessage | None:
     if not records:
         return None
+    content_limit = max_result_chars if max_result_chars > 0 else _DEFAULT_CONTENT_CHARS
 
     # Find the latest write/read per file path (from newest to oldest)
     latest_write: dict[str, int] = {}
@@ -149,7 +180,7 @@ def format_tool_observation_history(
         elif record.name == "read_file" and target and target in latest_read:
             skip = idx != latest_read[target]
 
-        block = _format_record(record, skip_content=skip)
+        block = _format_record(record, skip_content=skip, content_limit=content_limit)
         if block:
             raw_blocks.append((len(block), block))
 
@@ -161,13 +192,12 @@ def format_tool_observation_history(
     if max_total_chars > 0 and total > max_total_chars:
         kept: list[str] = []
         running = 0
-        for size, text in raw_blocks:
-            if running + size <= max_total_chars:
-                kept.append(text)
-                running += size
-            else:
+        for size, text in reversed(raw_blocks):
+            if kept and running + size > max_total_chars:
                 break
-        raw_blocks_formatted = kept
+            kept.append(text)
+            running += size
+        raw_blocks_formatted = list(reversed(kept))
     else:
         raw_blocks_formatted = [t for _, t in raw_blocks]
 

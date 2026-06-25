@@ -1,6 +1,6 @@
 package com.adcage.acaicodefree.core.parser;
 
-public interface CodePaser<T> {
+public interface CodeParser<T> {
     /**
      *
      * @param codeContent

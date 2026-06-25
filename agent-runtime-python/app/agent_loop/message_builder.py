@@ -36,12 +36,32 @@ def _message_from_role(role: str, content: str) -> BaseMessage:
 
 def _history_before_current(context: ExecutionContext) -> list[ChatHistoryEntry]:
     history = list(context.chat_history)
-    if not history or not context.prompt:
+    if not history:
         return history
     latest = history[-1]
-    if latest.role.strip().lower() in {"user", "human"} and latest.content == context.prompt:
-        history.pop()
+    if latest.role.strip().lower() in {"user", "human"}:
+        if context.is_resume:
+            history.pop()
+            return history
+        if context.prompt and latest.content == context.prompt:
+            history.pop()
+            return history
     return history
+
+
+def _normalize_current_prompt(context: ExecutionContext) -> str:
+    if not context.is_resume:
+        return context.prompt
+    from app.agent_loop.resume_answers import render_resume_answer_text
+
+    return render_resume_answer_text(context.prompt)
+
+
+def _current_message(context: ExecutionContext) -> HumanMessage | None:
+    prompt = _normalize_current_prompt(context)
+    if not prompt:
+        return None
+    return HumanMessage(content=prompt)
 
 
 def _tool_messages(state: AgentLoopState) -> list[BaseMessage]:
@@ -64,7 +84,7 @@ def build_llm_messages(
         for entry in _history_before_current(context)
     )
 
-    current = HumanMessage(content=context.prompt) if context.prompt else None
+    current = _current_message(context)
     if current is not None and not context.is_resume:
         messages.append(current)
 

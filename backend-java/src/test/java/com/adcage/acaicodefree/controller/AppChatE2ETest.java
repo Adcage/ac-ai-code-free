@@ -234,11 +234,10 @@ class AppChatE2ETest {
         Assertions.assertNotNull(sessionId2);
         Assertions.assertNotEquals(sessionId, sessionId2);
 
-        MvcResult streamResult = mockMvc.perform(get("/app/chat/gen/code/stream")
+        MvcResult streamResult = mockMvc.perform(post("/app/chat/gen/code/stream")
                         .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser)
-                        .param("appId", String.valueOf(testApp.getId()))
-                        .param("sessionId", String.valueOf(sessionId))
-                        .param("message", "请生成一个按钮"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":" + testApp.getId() + ",\"sessionId\":" + sessionId + ",\"message\":\"请生成一个按钮\"}"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
 
@@ -323,11 +322,10 @@ class AppChatE2ETest {
         Long sessionId = JSONUtil.parseObj(createSessionResult.getResponse().getContentAsString()).getLong("data");
         Assertions.assertNotNull(sessionId);
 
-        MvcResult streamResult = mockMvc.perform(get("/app/chat/gen/code/stream")
+        MvcResult streamResult = mockMvc.perform(post("/app/chat/gen/code/stream")
                         .sessionAttr(UserConstant.USER_LOGIN_STATE, loginUser)
-                        .param("appId", String.valueOf(testApp.getId()))
-                        .param("sessionId", String.valueOf(sessionId))
-                        .param("message", "请生成一个 Vue 首页"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appId\":" + testApp.getId() + ",\"sessionId\":" + sessionId + ",\"message\":\"请生成一个 Vue 首页\"}"))
                 .andExpect(request().asyncStarted())
                 .andReturn();
 

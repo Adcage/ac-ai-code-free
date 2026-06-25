@@ -1,5 +1,9 @@
 package com.adcage.acaicodefree.service;
 
+import com.adcage.acaicodefree.model.entity.App;
+
+import java.util.Map;
+
 public interface ScreenshotService {
 
     /**
@@ -19,4 +23,20 @@ public interface ScreenshotService {
      * @param agentRunId 当前 AgentRun id（用于防重复和追踪）
      */
     void triggerCoverGenerationIfNeeded(Long appId, Long agentRunId);
+
+    /**
+     * 获取封面截图任务状态
+     *
+     * @param appId 应用 id
+     * @return 任务状态 Map
+     */
+    Map<String, Object> getCoverTaskState(Long appId);
+
+    /**
+     * 计算应用的可预览 URL
+     *
+     * @param app 应用
+     * @return 预览 URL
+     */
+    String computePreviewUrl(App app);
 }

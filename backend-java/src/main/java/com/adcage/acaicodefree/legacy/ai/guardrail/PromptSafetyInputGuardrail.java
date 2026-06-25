@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 @Component
+@Deprecated
 public class PromptSafetyInputGuardrail {
 
     private static final int MAX_LENGTH = 2000;

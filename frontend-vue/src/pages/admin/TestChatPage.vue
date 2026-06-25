@@ -14,30 +14,25 @@
           </a-button>
         </div>
         <div class="my-apps-section">
-          <h3>我的应用</h3>
           <div v-if="loadingApps && myApps.length === 0" class="apps-loading"><LoadingOutlined /> 加载中...</div>
           <div v-else-if="myApps.length === 0" class="apps-empty">
             <a-empty description="暂无应用，点击上方按钮新建测试应用" />
           </div>
-          <div v-if="myApps.length > 0" class="apps-grid">
-            <div
-              v-for="app in myApps"
-              :key="app.id"
-              class="app-card"
-              @click="selectApp(app)"
-            >
-              <div class="app-card-header">
-                <span class="app-card-name">{{ app.appName || '未命名应用' }}</span>
-                <a-tag v-if="app.isTestApp" color="orange" size="small">测试</a-tag>
-              </div>
-              <div class="app-card-meta">
-                <a-tag v-if="app.codeGenType" size="small">{{ formatCodeGenType(app.codeGenType) }}</a-tag>
-                <span class="app-card-time">{{ formatTime(app.createTime) }}</span>
-              </div>
+          <template v-else>
+            <div class="apps-grid">
+              <AppCard
+                v-for="app in myApps"
+                :key="app.id"
+                :app="app"
+                :show-user="false"
+                :actions="['chat', 'delete']"
+                @delete="handleDeleteApp"
+                @card-click="selectApp"
+              />
             </div>
-          </div>
-          <div v-if="loadingMoreApps" class="apps-loading-more"><LoadingOutlined /> 加载中...</div>
-          <div v-if="hasMoreApps && !loadingMoreApps" class="apps-scroll-sentinel"></div>
+            <div v-if="loadingMoreApps" class="apps-loading-more"><LoadingOutlined /> 加载中...</div>
+            <div v-if="hasMoreApps && !loadingMoreApps" class="apps-scroll-sentinel"></div>
+          </template>
         </div>
       </div>
     </div>
@@ -115,8 +110,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
   LeftOutlined,
@@ -127,6 +122,7 @@ import {
 import {
   addApp,
   createChatSession,
+  deleteApp,
   deployApp,
   getAppVoById,
   listChatHistoryByPage,
@@ -137,6 +133,7 @@ import {
   enhancePrompt,
 } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
+import AppCard from '@/components/AppCard.vue'
 import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
 import type { ChatMessage } from '@/components/ChatMessageList.vue'
@@ -145,10 +142,11 @@ import PreviewPanel from '@/components/PreviewPanel.vue'
 import { useSSEChat } from '@/composables/useSSEChat'
 
 const router = useRouter()
+const route = useRoute()
 const loginUserStore = useLoginUserStore()
 
-// 应用选择状态
-const selectedAppId = ref('')
+// 应用选择状态：由路由参数驱动
+const selectedAppId = ref(route.params.appId ? String(route.params.appId) : '')
 const currentApp = ref<API.AppVO>()
 const myApps = ref<API.AppVO[]>([])
 const loadingApps = ref(false)
@@ -202,6 +200,47 @@ const normalizeId = (id?: string | number | null) => {
   return String(id)
 }
 
+const initAppChat = async (appId: string) => {
+  selectedAppId.value = appId
+  const res = await getAppVoById({ id: appId as any })
+  if (res.data?.code === 0) {
+    currentApp.value = res.data.data
+  }
+  await loadSessions()
+  if (sessions.value.length > 0 && sessions.value[0].id) {
+    currentSessionId.value = normalizeId(sessions.value[0].id)
+    await loadRemoteHistory(currentSessionId.value)
+    await updatePreview()
+  } else {
+    const newSessionId = await createSession()
+    if (newSessionId) {
+      currentSessionId.value = newSessionId
+    }
+  }
+}
+
+const resetChatState = () => {
+  selectedAppId.value = ''
+  currentApp.value = undefined
+  messages.value = []
+  sessions.value = []
+  currentSessionId.value = undefined
+  iframeUrl.value = ''
+  previewStatus.value = 'idle'
+}
+
+watch(
+  () => route.params.appId,
+  (newAppId) => {
+    if (newAppId) {
+      initAppChat(String(newAppId))
+    } else {
+      resetChatState()
+    }
+  },
+  { immediate: true },
+)
+
 // ======== 应用选择逻辑 ========
 
 const loadMyApps = async (append = false) => {
@@ -211,7 +250,13 @@ const loadMyApps = async (append = false) => {
     loadingApps.value = true
   }
   try {
-    const res = await listMyAppVoByPage({ pageNum: appPageNum.value, pageSize: APP_PAGE_SIZE, isTestApp: true })
+    const res = await listMyAppVoByPage({
+      pageNum: appPageNum.value,
+      pageSize: APP_PAGE_SIZE,
+      isTestApp: true,
+      sortField: 'createTime',
+      sortOrder: 'descend',
+    })
     if (res.data?.code === 0) {
       const records = res.data.data?.records || []
       if (append) {
@@ -273,35 +318,28 @@ const handleCreateTestApp = async () => {
   }
 }
 
-const selectApp = async (app: API.AppVO) => {
-  selectedAppId.value = String(app.id)
-  // 加载应用详情
-  const res = await getAppVoById({ id: app.id as any })
-  if (res.data?.code === 0) {
-    currentApp.value = res.data.data
-  }
-  // 初始化会话
-  await loadSessions()
-  if (sessions.value.length > 0 && sessions.value[0].id) {
-    currentSessionId.value = normalizeId(sessions.value[0].id)
-    await loadRemoteHistory(currentSessionId.value)
-    await updatePreview()
-  } else {
-    const newSessionId = await createSession()
-    if (newSessionId) {
-      currentSessionId.value = newSessionId
-    }
-  }
+const selectApp = (app: API.AppVO) => {
+  router.push(`/admin/test-chat/${app.id}`)
+  return true
 }
 
 const handleSwitchApp = () => {
-  selectedAppId.value = ''
-  currentApp.value = undefined
-  messages.value = []
-  sessions.value = []
-  currentSessionId.value = undefined
-  iframeUrl.value = ''
-  previewStatus.value = 'idle'
+  router.push('/admin/test-chat')
+}
+
+const handleDeleteApp = async (id?: number) => {
+  if (!id) return
+  const res = await deleteApp({ id })
+  if (res.data?.code === 0) {
+    message.success('删除成功')
+    if (selectedAppId.value === String(id)) {
+      router.push('/admin/test-chat')
+    }
+    appPageNum.value = 1
+    await loadMyApps()
+  } else {
+    message.error('删除失败，' + (res.data?.message || '请稍后重试'))
+  }
 }
 
 // ======== 会话管理 ========
@@ -650,13 +688,6 @@ const formatCodeGenType = (codeGenType?: string) => {
   return codeGenType || '未知模式'
 }
 
-const formatTime = (time?: string) => {
-  if (!time) return ''
-  const date = new Date(time)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString()
-}
-
 // ======== 生命周期 ========
 
 onMounted(() => {
@@ -682,12 +713,12 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   justify-content: center;
-  padding: 40px;
+  padding: 32px 24px;
   overflow-y: auto;
 }
 
 .selector-content {
-  max-width: 720px;
+  max-width: 1200px;
   width: 100%;
 }
 
@@ -709,14 +740,7 @@ onUnmounted(() => {
 }
 
 .selector-actions {
-  margin-bottom: 40px;
-}
-
-.my-apps-section h3 {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--color-text);
-  margin: 0 0 16px 0;
+  margin-bottom: 24px;
 }
 
 .apps-loading,
@@ -728,50 +752,8 @@ onUnmounted(() => {
 
 .apps-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
-}
-
-.app-card {
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--color-surface);
-}
-
-.app-card:hover {
-  border-color: var(--color-primary, #1677ff);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.app-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.app-card-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.app-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.app-card-time {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
 }
 
 .apps-load-more,

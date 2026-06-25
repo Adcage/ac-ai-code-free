@@ -11,6 +11,83 @@ from app.services.prompt_enhancer import PromptEnhancerService
 
 logger = logging.getLogger("app.grpc_server.code_generation_servicer")
 
+_EN_INJECTION_PATTERNS = [
+    "ignore previous instructions",
+    "ignore all previous",
+    "ignore the above",
+    "disregard previous",
+    "disregard all",
+    "bypass",
+    "jailbreak",
+    "system prompt",
+    "you are now",
+    "act as",
+    "pretend you are",
+    "roleplay as",
+    "new instruction",
+    "override instruction",
+    "forget everything",
+    "forget your instructions",
+    "ignore your rules",
+    "do anything now",
+    "DAN mode",
+]
+
+_CN_INJECTION_PATTERNS = [
+    "忽略之前的指令",
+    "忽略所有指令",
+    "忽略上述",
+    "无视之前的",
+    "绕过限制",
+    "越狱",
+    "系统提示词",
+    "你现在是一个",
+    "假装你是",
+    "扮演",
+    "新指令",
+    "覆盖指令",
+    "忘记一切",
+    "忘记你的指令",
+    "忽略你的规则",
+    "不受限制",
+]
+
+_ENCODING_TRICKS = [
+    "\u200b",
+    "\u200c",
+    "\u200d",
+    "\ufeff",
+    "\u00ad",
+    "\\x",
+    "\\u00",
+    "\\nignore",
+    "\\n.system",
+]
+
+
+def _detect_prompt_injection(prompt: str) -> str:
+    normalized = prompt.lower()
+    stripped = "".join(c for c in normalized if c.isalnum() or c.isspace())
+
+    for pattern in _EN_INJECTION_PATTERNS:
+        if pattern in normalized or pattern in stripped:
+            return f"提示词包含不允许的内容"
+
+    for pattern in _CN_INJECTION_PATTERNS:
+        if pattern in prompt or pattern in stripped:
+            return f"提示词包含不允许的内容"
+
+    for trick in _ENCODING_TRICKS:
+        if trick in prompt:
+            return f"提示词包含不允许的字符"
+
+    role_patterns = ["<|im_start|>", "<|system|>", "[system]", "### system", "=== system"]
+    for rp in role_patterns:
+        if rp in normalized:
+            return f"提示词包含不允许的内容"
+
+    return ""
+
 
 class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServicer):
     async def StreamGenerate(self, request, context):
@@ -64,14 +141,12 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
                 valid=False,
                 reason=f"[{AgentErrorCode.PROMPT_LENGTH_EXCEEDED}] 提示词长度不能超过2000字",
             )
-        injection_keywords = ["ignore previous instructions", "bypass", "jailbreak"]
-        lower = prompt.lower()
-        for kw in injection_keywords:
-            if kw in lower:
-                return code_generation_pb2.ValidatePromptResponse(
-                    valid=False,
-                    reason=f"[{AgentErrorCode.PROMPT_INJECTION_DETECTED}] 提示词包含不允许的内容",
-                )
+        injection_result = _detect_prompt_injection(prompt)
+        if injection_result:
+            return code_generation_pb2.ValidatePromptResponse(
+                valid=False,
+                reason=f"[{AgentErrorCode.PROMPT_INJECTION_DETECTED}] {injection_result}",
+            )
         return code_generation_pb2.ValidatePromptResponse(valid=True)
 
     async def EnhancePrompt(self, request, context):

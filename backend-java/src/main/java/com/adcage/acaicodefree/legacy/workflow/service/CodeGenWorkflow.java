@@ -15,6 +15,7 @@ import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
 @Slf4j
+@Deprecated
 public class CodeGenWorkflow {
 
     public static final String NODE_IMAGE_COLLECT = "image_collect";

@@ -14,6 +14,7 @@ import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelRole;
 import com.adcage.acaicodefree.model.vo.modelconfig.ModelConfigVO;
+import com.adcage.acaicodefree.config.ApiKeyEncryptionConfig;
 import com.adcage.acaicodefree.service.ModelConfigEventPublisher;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -30,6 +31,9 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
 
     @Resource
     private ModelConfigEventPublisher modelConfigEventPublisher;
+
+    @Resource
+    private ApiKeyEncryptionConfig apiKeyEncryptionConfig;
 
     @Value("${langchain4j.open-ai.chat-model.base-url:}")
     private String defaultBaseUrl;
@@ -197,7 +201,7 @@ public class ModelConfigServiceImpl extends ServiceImpl<ModelConfigMapper, Model
                     .provider(modelConfig.getProvider())
                     .modelName(modelConfig.getModelName())
                     .baseUrl(modelConfig.getBaseUrl())
-                    .apiKey(modelConfig.getApiKeyCipher())
+                    .apiKey(apiKeyEncryptionConfig.decrypt(modelConfig.getApiKeyCipher()))
                     .source(source)
                     .billingMode(billingMode)
                     .build());

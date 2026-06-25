@@ -127,11 +127,11 @@ def test_e2e():
 
     # 5.4 Trigger code generation via SSE stream (this goes through gRPC to Python)
     try:
-        print(f"  5.4 StreamGenerate (E2E): Calling /app/chat/gen/code/stream?appId={app_id}&message=...")
+        print("  5.4 StreamGenerate (E2E): POST /app/chat/gen/code/stream")
         start = time.time()
-        resp = session.get(
+        resp = session.post(
             f"{BASE_URL}/app/chat/gen/code/stream",
-            params={"appId": app_id, "message": "Create a simple counter app with Vue 3"},
+            json={"appId": app_id, "message": "Create a simple counter app with Vue 3"},
             stream=True,
             headers={"Accept": "text/event-stream"},
         )

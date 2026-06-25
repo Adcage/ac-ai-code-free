@@ -10,7 +10,6 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.common.ErrorCode;
-import com.adcage.acaicodefree.config.properties.ScreenshotProperties;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
@@ -51,7 +50,6 @@ import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.service.AppService;
 import jakarta.annotation.Resource;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -70,9 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -84,15 +79,6 @@ import java.util.stream.Collectors;
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     private static final Logger log = LoggerFactory.getLogger(AppServiceImpl.class);
-
-    private final ExecutorService screenshotTaskExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable);
-        thread.setName("screenshot-task");
-        thread.setDaemon(true);
-        return thread;
-    });
-
-    private final Map<Long, Map<String, Object>> coverTaskStateMap = new ConcurrentHashMap<>();
 
     @Resource
     private UserService userService;
@@ -111,9 +97,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private ScreenshotService screenshotService;
-
-    @Resource
-    private ScreenshotProperties screenshotProperties;
 
     @Resource
     private CodeGenerationRuntimeRouter codeGenerationRuntimeRouter;
@@ -250,7 +233,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             UserVO userVO = userService.getUserVO(user);
             appVO.setUser(userVO);
         }
-        appendCoverTaskState(appVO, app.getId());
+        Map<String, Object> coverState = screenshotService.getCoverTaskState(app.getId());
+        if (coverState != null && !coverState.isEmpty()) {
+            appVO.setCoverTaskStatus((String) coverState.getOrDefault("status", ""));
+            appVO.setCoverRetryCount((Integer) coverState.getOrDefault("retryCount", 0));
+            appVO.setCoverErrorMessage((String) coverState.getOrDefault("errorMessage", ""));
+        }
         enrichFromManifest(appVO, app);
         return appVO;
     }
@@ -275,19 +263,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, User loginUser) {
+    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
-        log.info("用户信息:{}",message);
+        String persistedUserMessage = StrUtil.blankToDefault(displayMessage, message);
+        log.info("用户信息:{}", persistedUserMessage);
         // 2. 查询应用信息并校验权限
         App app = getAndCheckApp(appId, loginUser);
         // 3. 校验会话归属
         getAndCheckChatSession(sessionId, appId, loginUser);
-        // 锁定会话行，确保恢复、运行中检查与新建 AgentRun 在并发请求下严格串行
-        chatSessionMapper.selectByIdForUpdate(sessionId);
+
         // 4. 获取应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
@@ -320,6 +307,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             if (agentRunService.hasRunningRun(appId, sessionId, loginUser.getId())) {
                 log.warn("发现上一个 agent_run 未正常结束，自动标记为失败，sessionId={}", sessionId);
                 agentRunService.failRunningRun(appId, sessionId, loginUser.getId(), "连接中断，用户重新提交");
+                // 旧运行中断后，尝试为已有产物截图
+                try {
+                    screenshotService.triggerCoverGenerationIfNeeded(appId, null);
+                } catch (Exception ex) {
+                    log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, ex);
+                }
             }
             ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
             modelConfigId = modelConfig == null ? null : modelConfig.getId();
@@ -335,7 +328,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
 
         // 6. 运行准备完成后再保存用户消息；同步失败时事务会回滚 AgentRun 认领/创建
-        saveHistoryMessage(sessionId, appId, loginUser.getId(), message, "user", "success",
+        saveHistoryMessage(sessionId, appId, loginUser.getId(), persistedUserMessage, "user", "success",
                 app.getCodeGenType(), 0, null);
         updateSessionSummary(sessionId);
 
@@ -427,6 +420,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     }
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
                     updateSessionSummary(sessionId);
+                    // Agent 运行结束后触发封面截图
+                    try {
+                        screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
+                    } catch (Exception e) {
+                        log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, e);
+                    }
                 })
                 .doOnError(error -> {
                     int latencyMs = (int) (System.currentTimeMillis() - startTime);
@@ -440,6 +439,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             : readableAssistantMessageBuilder.toString();
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, JSONUtil.toJsonStr(extraInfo));
                     updateSessionSummary(sessionId);
+                    // Agent 运行异常结束后也触发封面截图
+                    try {
+                        screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
+                    } catch (Exception e) {
+                        log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, e);
+                    }
                 });
     }
 
@@ -451,12 +456,13 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq("appId", appId)
                 .eq("userId", loginUser.getId()));
         String sessionTitle = "新会话 " + (sessionCount + 1);
+        String resolvedModelName = resolveModelName(loginUser.getId());
         ChatSession chatSession = ChatSession.builder()
                 .appId(appId)
                 .userId(loginUser.getId())
                 .title(sessionTitle)
                 .messageCount(0)
-                .modelName(app.getCodeGenType())
+                .modelName(resolvedModelName)
                 .lastMessageTime(LocalDateTime.now())
                 .build();
         int insertResult = chatSessionMapper.insert(chatSession);
@@ -526,20 +532,15 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq("appId", appId)
                 .eq("userId", loginUser.getId())
                 .orderBy("seqNo", true);
-        List<ChatHistory> allHistoryList = chatHistoryMapper.selectListByQuery(queryWrapper);
-        int fromIndex = (pageNum - 1) * pageSize;
-        if (fromIndex >= allHistoryList.size()) {
-            return new Page<>(pageNum, pageSize, allHistoryList.size());
-        }
-        int toIndex = Math.min(fromIndex + pageSize, allHistoryList.size());
-        List<ChatHistory> pageHistoryList = allHistoryList.subList(fromIndex, toIndex);
-        List<ChatHistoryVO> records = pageHistoryList.stream().map(history -> {
+        Page<ChatHistory> chatHistoryPage = chatHistoryMapper.paginate(
+                Page.of(pageNum, pageSize), queryWrapper);
+        List<ChatHistoryVO> records = chatHistoryPage.getRecords().stream().map(history -> {
             ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
             BeanUtil.copyProperties(history, chatHistoryVO);
             chatHistoryVO.setToolEvents(extractToolEvents(history));
             return chatHistoryVO;
         }).collect(Collectors.toList());
-        Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, allHistoryList.size());
+        Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, chatHistoryPage.getTotalRow());
         resultPage.setRecords(records);
         return resultPage;
     }
@@ -585,9 +586,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         // 4. 检查是否已有 deployKey
         String deployKey = app.getDeployKey();
-        // 没有则生成 6 位 deployKey（大小写字母 + 数字）
         if (StrUtil.isBlank(deployKey)) {
-            deployKey = RandomUtil.randomString(6);
+            deployKey = generateUniqueDeployKey();
         }
         // 5. 获取代码生成类型，构建源目录路径
         String codeGenType = app.getCodeGenType();
@@ -631,7 +631,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
-        triggerCoverGenerationAsync(appId, deployKey, app.getCover());
+        screenshotService.triggerCoverGenerationIfNeeded(appId, null);
         // 9. 返回可访问的 URL
         return buildDeployUrl(deployKey);
     }
@@ -643,87 +643,24 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return page(Page.of(pageNum, pageSize), queryWrapper);
     }
 
-    @PreDestroy
-    public void destroyScreenshotExecutor() {
-        screenshotTaskExecutor.shutdown();
-    }
-
-    private void triggerCoverGenerationAsync(Long appId, String deployKey, String existingCover) {
-        if (StrUtil.isNotBlank(existingCover)) {
-            updateCoverTaskState(appId, "SKIPPED", 0, null);
-            log.info("应用已有封面，跳过自动截图, appId={}", appId);
-            return;
-        }
-        updateCoverTaskState(appId, "PENDING", 0, null);
-        screenshotTaskExecutor.submit(() -> {
-            int maxRetries = screenshotProperties.getMaxRetries() == null ? 3 : Math.max(screenshotProperties.getMaxRetries(), 1);
-            long retryDelayMillis = screenshotProperties.getRetryDelayMillis() == null ? 3000L : Math.max(screenshotProperties.getRetryDelayMillis(), 0L);
-            String deployUrl = buildDeployUrl(deployKey);
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                updateCoverTaskState(appId, "RUNNING", attempt, null);
-                try {
-                    String coverUrl = screenshotService.generateAndUploadCover(appId, deployUrl);
-                    if (StrUtil.isBlank(coverUrl)) {
-                        updateCoverTaskState(appId, "FAILED", attempt, "封面地址为空");
-                        continue;
-                    }
-                    App updateApp = new App();
-                    updateApp.setId(appId);
-                    updateApp.setCover(coverUrl);
-                    boolean updated = this.updateById(updateApp);
-                    if (!updated) {
-                        updateCoverTaskState(appId, "FAILED", attempt, "封面地址回写失败");
-                        log.warn("封面地址回写失败, appId={}, coverUrl={}", appId, coverUrl);
-                        continue;
-                    }
-                    updateCoverTaskState(appId, "SUCCESS", attempt, null);
-                    return;
-                } catch (Exception e) {
-                    updateCoverTaskState(appId, "FAILED", attempt, e.getMessage());
-                    log.error("异步生成封面失败, appId={}, attempt={}", appId, attempt, e);
-                    if (attempt < maxRetries && retryDelayMillis > 0) {
-                        try {
-                            Thread.sleep(retryDelayMillis);
-                        } catch (InterruptedException interruptedException) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    private void appendCoverTaskState(AppVO appVO, Long appId) {
-        if (appId == null) {
-            return;
-        }
-        Map<String, Object> state = coverTaskStateMap.get(appId);
-        if (state == null || state.isEmpty()) {
-            return;
-        }
-        appVO.setCoverTaskStatus((String) state.getOrDefault("status", ""));
-        appVO.setCoverRetryCount((Integer) state.getOrDefault("retryCount", 0));
-        appVO.setCoverErrorMessage((String) state.getOrDefault("errorMessage", ""));
-    }
-
     private void enrichFromManifest(AppVO appVO, App app) {
         if (app.getId() == null || app.getCodeGenType() == null) {
             return;
         }
         try {
             Path workspaceRoot = resolveAppWorkspaceRoot(app);
-            if (workspaceRoot == null) {
-                return;
-            }
-            ArtifactManifestVO manifest = artifactManifestReader.readManifest(workspaceRoot);
-            if (manifest != null) {
-                appVO.setArtifactFormat(manifest.getArtifactFormat());
-                appVO.setPreviewUrl(computePreviewUrl(app, manifest));
+            if (workspaceRoot != null) {
+                ArtifactManifestVO manifest = artifactManifestReader.readManifest(workspaceRoot);
+                if (manifest != null) {
+                    appVO.setArtifactFormat(manifest.getArtifactFormat());
+                } else {
+                    appVO.setArtifactFormat(mapCodeGenTypeToArtifactFormat(app.getCodeGenType()));
+                }
             }
         } catch (Exception e) {
-            log.debug("读取 Manifest 失败，跳过 manifest 补充, appId={}", app.getId(), e);
+            log.debug("Manifest读取失败，跳过, appId={}", app.getId(), e);
         }
+        appVO.setPreviewUrl(screenshotService.computePreviewUrl(app));
     }
 
     private Path resolveAppWorkspaceRoot(App app) {
@@ -738,30 +675,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             return null;
         }
         return appDir;
-    }
-
-    private String computePreviewUrl(App app, ArtifactManifestVO manifest) {
-        String deployKey = app.getDeployKey();
-        if (StrUtil.isNotBlank(deployKey)) {
-            return buildDeployUrl(deployKey);
-        }
-        String artifactFormat = manifest.getArtifactFormat();
-        if (artifactFormat == null) {
-            return null;
-        }
-        return switch (artifactFormat) {
-            case "vue_project", "web_multi_file", "web_single_file" -> null;
-            default -> null;
-        };
-    }
-
-    private void updateCoverTaskState(Long appId, String status, Integer retryCount, String errorMessage) {
-        Map<String, Object> state = new HashMap<>();
-        state.put("status", status);
-        state.put("retryCount", retryCount == null ? 0 : retryCount);
-        state.put("errorMessage", StrUtil.blankToDefault(errorMessage, ""));
-        state.put("updatedTime", LocalDateTime.now());
-        coverTaskStateMap.put(appId, state);
     }
 
     private CodeGenTypeEnum resolveCodeGenType(String requestCodeGenType, String initPrompt) {
@@ -806,6 +719,15 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return String.format("%s%s/static/%s/index.html", hostWithPort, normalizedContextPath, deployKey);
     }
 
+    private String mapCodeGenTypeToArtifactFormat(String codeGenType) {
+        return switch (codeGenType) {
+            case "multi-file" -> "web_multi_file";
+            case "single_file" -> "web_single_file";
+            case "vue_project" -> "vue_project";
+            default -> null;
+        };
+    }
+
     private App getAndCheckApp(Long appId, User loginUser) {
         ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
         App app = this.getById(appId);
@@ -848,8 +770,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     private Integer getNextSeqNo(Long sessionId) {
-        long count = chatHistoryMapper.selectCountByQuery(QueryWrapper.create().eq("sessionId", sessionId));
-        return (int) (count + 1);
+        QueryWrapper maxQuery = QueryWrapper.create()
+                .eq("sessionId", sessionId)
+                .select("MAX(seqNo) as seqNo");
+        ChatHistory maxRecord = chatHistoryMapper.selectOneByQuery(maxQuery);
+        if (maxRecord == null || maxRecord.getSeqNo() == null) {
+            return 1;
+        }
+        return maxRecord.getSeqNo() + 1;
     }
 
     private void updateSessionSummary(Long sessionId) {
@@ -943,6 +871,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         if ("request".equals(type) || "executed".equals(type)) {
             return type;
+        }
+        return "";
+    }
+
+    private String generateUniqueDeployKey() {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String key = RandomUtil.randomString(12);
+            long exists = count(QueryWrapper.create().eq("deployKey", key));
+            if (exists == 0) {
+                return key;
+            }
+            log.warn("deployKey 碰撞，重试, attempt={}", attempt + 1);
+        }
+        throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成部署标识失败，请重试");
+    }
+
+    private String resolveModelName(Long userId) {
+        try {
+            ModelConfig config = modelConfigService.getDefaultEnabledModelConfig(userId);
+            if (config != null && StrUtil.isNotBlank(config.getModelName())) {
+                return config.getModelName();
+            }
+        } catch (Exception e) {
+            log.debug("获取默认模型名称失败, userId={}", userId, e);
         }
         return "";
     }

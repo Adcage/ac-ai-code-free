@@ -15,6 +15,7 @@ import lombok.*;
 @Builder
 @ToString
 @Description("多文件前端网页代码结果")
+@Deprecated
 public class MultiFileCodeResult {
 
     /**

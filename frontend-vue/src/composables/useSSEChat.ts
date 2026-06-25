@@ -1,6 +1,7 @@
-import { ref, isRef, unref, type Ref } from 'vue'
+import { ref, unref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { extractBusinessChunk, splitConcatenatedJsonObjects } from './sseParser'
+import { buildChatStreamRequestBody } from '@/utils/chatStreamRequest'
 
 export interface ToolEvent {
   type: 'request' | 'executed' | 'status'
@@ -51,130 +52,223 @@ export interface SSEChatOptions {
 
 /**
  * SSE 流式对话 composable
- * 封装 EventSource 连接管理、消息流解析、工具调用事件处理
+ * 封装基于 fetch 的 POST SSE 连接管理、消息流解析、工具调用事件处理
  */
 export function useSSEChat(options: SSEChatOptions) {
   const { appId, messages, onPreviewUpdate, onSessionsUpdate, onAppUpdate } = options
 
   const generating = ref(false)
   const streamWarning = ref('')
-  let currentEventSource: EventSource | null = null
+  let currentAbortController: AbortController | null = null
   let previewUpdateTimer: ReturnType<typeof setTimeout> | null = null
 
-  const normalizeId = (id?: string | number | null) => {
-    if (id === undefined || id === null) return ''
-    return String(id)
-  }
-
-  const mapGenerationMode = (codeGenType?: string): string => {
-    if (codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file') {
-      return 'application'
+  const finalizeGeneration = (aiMsgIndex: number, streamCompleted: boolean, delayPreviewRefresh = false) => {
+    currentAbortController = null
+    if (streamCompleted) {
+      streamWarning.value = ''
     }
-    return 'application'
+    if (!generating.value) {
+      return
+    }
+    generating.value = false
+    onSessionsUpdate?.()
+    const finish = () => {
+      if (messages.value[aiMsgIndex]) {
+        messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
+      }
+      onPreviewUpdate()
+    }
+    if (delayPreviewRefresh) {
+      setTimeout(finish, 500)
+      return
+    }
+    finish()
   }
 
-  const startSSE = (userMsg: string, sessionId: string, codeGenType?: string) => {
+  const parseSseEvent = (frame: string): { event: string; data: string } => {
+    let eventName = 'message'
+    const dataLines: string[] = []
+    for (const line of frame.split('\n')) {
+      if (!line || line.startsWith(':')) continue
+      if (line.startsWith('event:')) {
+        eventName = line.slice('event:'.length).trim() || 'message'
+        continue
+      }
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice('data:'.length).trimStart())
+      }
+    }
+    return {
+      event: eventName,
+      data: dataLines.join('\n'),
+    }
+  }
+
+  const readSseStream = async (
+    response: Response,
+    onFrame: (eventName: string, data: string) => boolean | void,
+  ) => {
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('SSE 响应流为空')
+    }
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        if (buffer.trim()) {
+          const parsed = parseSseEvent(buffer.trim())
+          if (onFrame(parsed.event, parsed.data)) {
+            return
+          }
+        }
+        return
+      }
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+      let separatorIndex = buffer.indexOf('\n\n')
+      while (separatorIndex >= 0) {
+        const frame = buffer.slice(0, separatorIndex).trim()
+        buffer = buffer.slice(separatorIndex + 2)
+        if (frame) {
+          const parsed = parseSseEvent(frame)
+          if (onFrame(parsed.event, parsed.data)) {
+            await reader.cancel()
+            return
+          }
+        }
+        separatorIndex = buffer.indexOf('\n\n')
+      }
+    }
+  }
+
+  const startSSE = (
+    userMsg: string,
+    sessionId: string,
+    codeGenType?: string,
+    displayMessage?: string,
+  ) => {
     generating.value = true
     streamWarning.value = ''
     let streamCompleted = false
+    let hasBusinessError = false
     const aiMsgIndex = messages.value.length
     messages.value.push({ role: 'ai', content: '', status: 'running' })
 
     const isStructuredToolMode =
       codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
 
-    const generationMode = mapGenerationMode(codeGenType)
     const baseUrl = import.meta.env.VITE_API_BASE_URL
-    const eventSource = new EventSource(
-      `${baseUrl}/app/chat/gen/code/stream?appId=${unref(appId)}&sessionId=${sessionId}&message=${encodeURIComponent(userMsg)}&generationMode=${generationMode}`,
-      { withCredentials: true },
-    )
-    currentEventSource = eventSource
+    const controller = new AbortController()
+    currentAbortController = controller
 
-    eventSource.addEventListener('meta', (event: MessageEvent) => {
+    void (async () => {
       try {
-        const data = JSON.parse(event.data)
-        // meta 事件暂不做特殊处理
-        void data
-      } catch (e) {
-        console.error('SSE Meta Parse Error', e)
-      }
-    })
+        const response = await fetch(`${baseUrl}/app/chat/gen/code/stream`, {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(
+            buildChatStreamRequestBody({
+              appId: unref(appId),
+              sessionId,
+              message: userMsg,
+              displayMessage,
+            }),
+          ),
+        })
 
-    const stopGenerating = (delayPreviewRefresh = false) => {
-      eventSource.close()
-      currentEventSource = null
-      if (streamCompleted) {
-        streamWarning.value = ''
-      }
-      if (generating.value) {
-        generating.value = false
-        onSessionsUpdate?.()
-        if (delayPreviewRefresh) {
-          setTimeout(() => {
-            messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
-            onPreviewUpdate()
-          }, 500)
-        } else {
-          messages.value[aiMsgIndex].status = streamCompleted ? 'success' : 'failed'
-          onPreviewUpdate()
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(errorText || `HTTP ${response.status}`)
         }
-      }
-    }
+        const contentType = response.headers.get('content-type') || ''
+        if (!contentType.includes('text/event-stream')) {
+          const abnormalBody = await response.text()
+          throw new Error(abnormalBody || 'SSE 响应类型错误')
+        }
 
-    eventSource.addEventListener('business-error', (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data)
-        const errorMsg = data.message || '操作失败'
-        messages.value[aiMsgIndex].content += `\n\n[错误] ${errorMsg}`
+        await readSseStream(response, (eventName, data) => {
+          if (eventName === 'meta') {
+            try {
+              const meta = JSON.parse(data)
+              void meta
+            } catch (e) {
+              console.error('SSE Meta Parse Error', e)
+            }
+            return false
+          }
+
+          if (eventName === 'business-error') {
+            hasBusinessError = true
+            try {
+              const payload = JSON.parse(data)
+              const errorMsg = payload.message || '操作失败'
+              messages.value[aiMsgIndex].content += `\n\n[错误] ${errorMsg}`
+              messages.value[aiMsgIndex].status = 'failed'
+              message.error(errorMsg)
+            } catch {
+              message.error('操作失败')
+            }
+            return true
+          }
+
+          if (eventName === 'done') {
+            streamCompleted = true
+            return true
+          }
+
+          const rawData = data
+          if (rawData === '[DONE]') {
+            streamCompleted = true
+            return true
+          }
+
+          const fragments = extractBusinessChunk(rawData)
+          for (const fragment of fragments) {
+            if (fragment === '[DONE]') {
+              streamCompleted = true
+              return true
+            }
+            if (!fragment) continue
+            appendStreamChunk(aiMsgIndex, fragment, isStructuredToolMode)
+          }
+          return false
+        })
+
+        if (streamCompleted) {
+          finalizeGeneration(aiMsgIndex, true, true)
+          return
+        }
+        if (!hasBusinessError && !controller.signal.aborted) {
+          streamWarning.value = '连接中断，本次 AI 输出可能未完整保存。可重新加载当前会话查看已落库内容。'
+          messages.value[aiMsgIndex].status = 'failed'
+          message.warning('连接中断，已停止本次生成')
+        }
+        finalizeGeneration(aiMsgIndex, false)
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return
+        }
+        const errorText = error instanceof Error ? error.message : String(error)
         messages.value[aiMsgIndex].status = 'failed'
-        message.error(errorMsg)
-      } catch {
+        if (errorText) {
+          messages.value[aiMsgIndex].content += `\n\n[错误] ${errorText}`
+        }
         message.error('操作失败')
+        finalizeGeneration(aiMsgIndex, false)
       }
-      stopGenerating()
-    })
-
-    eventSource.addEventListener('done', () => {
-      streamCompleted = true
-      stopGenerating(true)
-    })
-
-    eventSource.onmessage = (event) => {
-      const rawData = event.data
-      if (rawData === '[DONE]') {
-        streamCompleted = true
-        stopGenerating(true)
-        return
-      }
-
-      // 提取业务 chunk；兼容 {d: ...} 包装、裸业务 JSON、多段 SSE 合并
-      const fragments = extractBusinessChunk(rawData)
-      for (const fragment of fragments) {
-        if (fragment === '[DONE]') {
-          streamCompleted = true
-          stopGenerating(true)
-          continue
-        }
-        if (!fragment) continue
-        appendStreamChunk(aiMsgIndex, fragment, isStructuredToolMode)
-      }
-    }
-
-    eventSource.onerror = () => {
-      if (!streamCompleted) {
-        streamWarning.value = '连接中断，本次 AI 输出可能未完整保存。可重新加载当前会话查看已落库内容。'
-        messages.value[aiMsgIndex].status = 'failed'
-        message.warning('连接中断，已停止本次生成')
-      }
-      stopGenerating()
-    }
+    })()
   }
 
   const stopSSE = () => {
-    if (currentEventSource) {
-      currentEventSource.close()
-      currentEventSource = null
+    if (currentAbortController) {
+      currentAbortController.abort()
+      currentAbortController = null
     }
     generating.value = false
   }

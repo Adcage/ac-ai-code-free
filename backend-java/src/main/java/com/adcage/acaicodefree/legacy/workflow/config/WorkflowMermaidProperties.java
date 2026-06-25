@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 @Data
 @Component
 @ConfigurationProperties(prefix = "workflow.mermaid")
+@Deprecated
 public class WorkflowMermaidProperties {
 
     private String command = "mmdc";

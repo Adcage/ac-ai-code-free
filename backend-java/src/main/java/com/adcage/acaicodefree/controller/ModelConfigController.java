@@ -16,6 +16,7 @@ import com.adcage.acaicodefree.model.dto.modelconfig.ModelConfigQueryRequest;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.modelconfig.ModelConfigVO;
+import com.adcage.acaicodefree.config.ApiKeyEncryptionConfig;
 import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -41,6 +42,9 @@ public class ModelConfigController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private ApiKeyEncryptionConfig apiKeyEncryptionConfig;
+
     @Value("${agent.runtime.internal-secret:}")
     private String internalSecret;
 
@@ -51,6 +55,7 @@ public class ModelConfigController {
         ModelConfig modelConfig = new ModelConfig();
         BeanUtil.copyProperties(modelConfigAddRequest, modelConfig);
         modelConfig.setUserId(loginUser.getId());
+        modelConfig.setApiKeyCipher(apiKeyEncryptionConfig.encrypt(modelConfig.getApiKeyCipher()));
         modelConfigService.validModelConfig(modelConfig, true);
         boolean result = modelConfigService.save(modelConfig);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "创建模型配置失败");
@@ -87,6 +92,9 @@ public class ModelConfigController {
         }
         ModelConfig modelConfig = new ModelConfig();
         BeanUtil.copyProperties(modelConfigEditRequest, modelConfig);
+        if (StrUtil.isNotBlank(modelConfig.getApiKeyCipher())) {
+            modelConfig.setApiKeyCipher(apiKeyEncryptionConfig.encrypt(modelConfig.getApiKeyCipher()));
+        }
         modelConfigService.validModelConfig(modelConfig, false);
         boolean result = modelConfigService.updateById(modelConfig);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "编辑模型配置失败");
@@ -181,7 +189,7 @@ public class ModelConfigController {
         runtimeVO.setProvider(modelConfig.getProvider());
         runtimeVO.setModelName(modelConfig.getModelName());
         runtimeVO.setBaseUrl(modelConfig.getBaseUrl());
-        runtimeVO.setApiKey(modelConfig.getApiKeyCipher());
+        runtimeVO.setApiKey(apiKeyEncryptionConfig.decrypt(modelConfig.getApiKeyCipher()));
         return ResultUtils.success(runtimeVO);
     }
 

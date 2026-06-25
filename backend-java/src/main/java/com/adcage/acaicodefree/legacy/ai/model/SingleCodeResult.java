@@ -15,6 +15,7 @@ import lombok.*;
 @Builder
 @ToString
 @Description("单文件HTML代码生成结果")
+@Deprecated
 public class SingleCodeResult {
 
     /**

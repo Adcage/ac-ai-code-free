@@ -12,12 +12,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
+@Deprecated
 public class UndrawIllustrationTool {
 
     private static final Pattern IMG_PATTERN = Pattern.compile("<img[^>]*src=\\\"([^\\\"]+)\\\"[^>]*alt=\\\"([^\\\"]*)\\\"[^>]*>", Pattern.CASE_INSENSITIVE);
 
     @FunctionalInterface
-    public interface HtmlFetcher {
+    @Deprecated
+public interface HtmlFetcher {
         String fetch(String keyword, int limit) throws Exception;
     }
 

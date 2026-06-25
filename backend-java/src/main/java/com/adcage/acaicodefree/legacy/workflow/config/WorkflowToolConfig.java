@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 @Configuration
+@Deprecated
 public class WorkflowToolConfig {
 
     @Bean

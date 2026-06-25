@@ -35,7 +35,8 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <!--LangChain4j依赖包：用于构建基于LangChain的AI应用程序-->
+        <!--LangChain4j 依赖 — 仅用于 legacy 代码编译，AI 核心能力已迁移至 Python Agent Runtime-->
+        <!--TODO: 移除 legacy 代码时一并删除这些依赖-->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>

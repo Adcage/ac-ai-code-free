@@ -13,10 +13,12 @@ import java.util.Collections;
 import java.util.List;
 
 @Slf4j
+@Deprecated
 public class ImageSearchTool {
 
     @FunctionalInterface
-    public interface HttpRequester {
+    @Deprecated
+public interface HttpRequester {
         String get(String keyword) throws Exception;
     }
 
