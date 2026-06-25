@@ -27,6 +27,16 @@ public class ScreenshotProperties {
      */
     private String browser = "chrome";
 
+    /**
+     * 封面兜底扫描间隔（分钟），默认 5
+     */
+    private Integer coverScanIntervalMinutes = 5;
+
+    /**
+     * 封面兜底扫描回溯时间（小时），默认 24
+     */
+    private Integer coverScanLookbackHours = 24;
+
     public String getTempDir() {
         return tempDir;
     }
@@ -97,6 +107,22 @@ public class ScreenshotProperties {
 
     public void setBrowser(String browser) {
         this.browser = browser;
+    }
+
+    public Integer getCoverScanIntervalMinutes() {
+        return coverScanIntervalMinutes;
+    }
+
+    public void setCoverScanIntervalMinutes(Integer coverScanIntervalMinutes) {
+        this.coverScanIntervalMinutes = coverScanIntervalMinutes;
+    }
+
+    public Integer getCoverScanLookbackHours() {
+        return coverScanLookbackHours;
+    }
+
+    public void setCoverScanLookbackHours(Integer coverScanLookbackHours) {
+        this.coverScanLookbackHours = coverScanLookbackHours;
     }
 
     /**

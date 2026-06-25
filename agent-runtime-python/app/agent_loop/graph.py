@@ -103,6 +103,13 @@ def route_after_plan_step(state: AgentLoopState) -> str:
     if _route_finished(state):
         return "finish"
     if _get_state_attr(state, "plan_just_finished"):
+        # 模式切换已接近上限时直接收口（避免进入 implement 立即触发 _route_finished 失败）
+        switches = _get_state_attr(state, "mode_switches", 0)
+        max_switches = _get_state_attr(state, "max_mode_switches", 6)
+        if switches >= max_switches - 1:
+            state.status = "completed"
+            state.final_summary = state.final_summary or "实施方案已生成"
+            return "finish"
         return "implement_step"
     return "plan_step"
 

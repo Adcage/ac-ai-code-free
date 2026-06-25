@@ -34,17 +34,25 @@ from app.tools.langchain_tools import create_file_tools
 logger = logging.getLogger("app.agent_loop.nodes.route_step")
 
 
-def _resolve_source_v2(state: AgentLoopState) -> RouteSource:
+def _resolve_source_v2(state: AgentLoopState, is_resume: bool = False) -> RouteSource:
     legacy = _resolve_route_source(state)
     if legacy == "initial":
+        # 恢复场景下如果 plan 已经推进到设计阶段之后，来源应为 "plan"
+        if is_resume:
+            envelope = getattr(state, "_state_envelope", None)
+            if envelope is not None:
+                plan_stage = getattr(envelope.workflow.plan, "plan_stage", "")
+                DESIGN_STAGES = {"propose_design", "confirm_design", "write_implementation_plan", "completed"}
+                if plan_stage in DESIGN_STAGES:
+                    return "plan"
         return "user"
     return legacy
 
 
 def _build_route_context(
-    state: AgentLoopState, progress_detector: ProgressDetector
+    state: AgentLoopState, progress_detector: ProgressDetector, is_resume: bool = False
 ) -> RouteContext:
-    source = _resolve_source_v2(state)
+    source = _resolve_source_v2(state, is_resume=is_resume)
     envelope = getattr(state, "_state_envelope", None)
     plan_state = getattr(envelope.workflow, "plan", None) if envelope else None
 
@@ -127,6 +135,9 @@ class RouteStepNode:
         self._progress_detector = ProgressDetector()
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
+        # 恢复场景：每个 Node 内只在首次 build_llm_messages 注入 resume 文本
+        state._resume_consumed_in_this_node = False
+
         await self._services.event_bus.emit(
             RuntimeEvent(RuntimeEventType.STATUS, {"message": "Route step"})
         )
@@ -144,7 +155,7 @@ class RouteStepNode:
         all_tools: list[BaseTool] = list(file_lc_tools) + [decide_route]
         toolset = ModeToolResolver.resolve(AgentMode.ROUTE, all_tools)
 
-        context = _build_route_context(state, self._progress_detector)
+        context = _build_route_context(state, self._progress_detector, is_resume=self._context.is_resume)
 
         self._record_progress(state, context)
 

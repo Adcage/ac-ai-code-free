@@ -6,9 +6,9 @@ import com.adcage.acaicodefree.config.properties.ScreenshotProperties;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.exception.BusinessException;
+import com.adcage.acaicodefree.mapper.AppMapper;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
-import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.ScreenshotService;
 import com.adcage.acaicodefree.storage.FileStorageStrategy;
 import com.adcage.acaicodefree.utils.WebScreenshotUtils;
@@ -44,7 +44,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
     private ScreenshotProperties screenshotProperties;
 
     @Resource
-    private AppService appService;
+    private AppMapper appMapper;
 
     @Resource
     private WorkspaceProperties workspaceProperties;
@@ -116,7 +116,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
             }
         }
 
-        App app = appService.getById(appId);
+        App app = appMapper.selectOneById(appId);
         if (app == null) {
             return;
         }
@@ -142,7 +142,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
                     App updateApp = new App();
                     updateApp.setId(appId);
                     updateApp.setCover(coverUrl);
-                    boolean updated = appService.updateById(updateApp);
+                    boolean updated = appMapper.update(updateApp) > 0;
                     if (!updated) {
                         updateCoverTaskState(appId, "FAILED", attempt, "封面地址回写失败", agentRunId);
                         log.warn("封面地址回写失败, appId={}, coverUrl={}", appId, coverUrl);

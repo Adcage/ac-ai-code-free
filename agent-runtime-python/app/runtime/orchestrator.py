@@ -236,7 +236,8 @@ class RuntimeOrchestrator:
             logger.info("resuming agent loop from paused state | agentRunId=%s", agent_run_id)
             state = AgentLoopState.deserialize(loop_state_json)
             state.max_iterations = settings.agent_loop_max_iterations
-            state.max_mode_switches = settings.agent_loop_max_mode_switches
+            # 恢复场景额外 3 次模式切换额度（路由纠偏 + 阶段跳转累计）
+            state.max_mode_switches = settings.agent_loop_max_mode_switches + 3
             state.max_plan_iterations = 15
             state.status = "running"
 
@@ -336,8 +337,7 @@ class RuntimeOrchestrator:
         workflow_task = asyncio.create_task(_execute())
 
         async for seq_event in self._drain_events(event_bus):
-            proto_event = self._event_mapper.map_event(seq_event)
-            if proto_event is not None:
+            for proto_event in self._event_mapper.map_event(seq_event):
                 yield proto_event
 
         await workflow_task

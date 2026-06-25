@@ -15,6 +15,9 @@ from app.agent_loop.tools.plan_tools import (
     SubmitRequirementBriefTool,
     WriteImplementationPlanTool,
 )
+from app.agent_loop.nodes.plan_step import auto_confirm_design_from_resume
+from app.agent_loop.resume_answers import PLANNING_RESUME_PREFIX, PLANNING_RESUME_SUFFIX
+from app.runtime.context import ChatHistoryEntry, CodeGenType, ExecutionContext, RunMode
 from app.core.exceptions import AgentRuntimeError
 from app.capabilities.skills.selector import (
     SkillNotFoundError,
@@ -66,7 +69,9 @@ class TestSubmitRequirementBrief:
         assert plan.requirement_brief.application_direction.value == "运营仪表盘"
         assert plan.plan_stage == "discover_scope"
         assert plan.model_call_count == 1
-        assert "已记录需求摘要" in result
+        assert "需求摘要已记录" in result
+        assert "运营仪表盘" in result
+        assert "运营人员" in result
 
     @pytest.mark.asyncio
     async def test_submit_brief_rejects_missing_direction(self):
@@ -302,7 +307,7 @@ class TestConfirmDesign:
         )
         state._state_envelope.workflow.plan.plan_stage = "confirm_design"
         state.clarification_questions = [
-            {"id": "qs_design", "stage": "design_confirm", "answered": True, "questions": []},
+            {"id": "qs_design", "stage": "confirm_design", "answered": True, "questions": []},
         ]
 
         tool = ConfirmDesignTool()
@@ -312,6 +317,49 @@ class TestConfirmDesign:
         plan = state._state_envelope.workflow.plan
         assert plan.design_specification.confirmed is True
         assert plan.design_specification.confirmation_message_id == "user-msg-1"
+        assert plan.plan_stage == "write_implementation_plan"
+
+    @pytest.mark.asyncio
+    async def test_resume_confirmation_advances_before_next_model_call(self):
+        state = AgentLoopState()
+        _init_envelope(state)
+        from app.agent_loop.state_v2 import ConfirmedChoice, DesignSpecification
+
+        state._state_envelope.workflow.plan.design_specification = DesignSpecification(
+            visual_direction=ConfirmedChoice(description="v", source="user", confirmed=False),
+            color_system=ConfirmedChoice(description="c", source="user", confirmed=False),
+            typography=ConfirmedChoice(description="t", source="user", confirmed=False),
+            component_language=ConfirmedChoice(description="cl", source="user", confirmed=False),
+            interaction_model=ConfirmedChoice(description="i", source="user", confirmed=False),
+            responsive_strategy=ConfirmedChoice(description="r", source="user", confirmed=False),
+        )
+        state._state_envelope.workflow.plan.plan_stage = "confirm_design"
+        state.clarification_questions = [
+            {"id": "qs_design", "stage": "confirm_design", "answered": True, "questions": []},
+        ]
+        context = ExecutionContext(
+            agent_run_id=1,
+            app_id=1,
+            session_id=1,
+            user_id=1,
+            prompt=(
+                f"{PLANNING_RESUME_PREFIX}"
+                '{"questionSetId":"qs_design","answers":{"design_confirmation":"没有需要调整"}}'
+                f"{PLANNING_RESUME_SUFFIX}"
+            ),
+            code_gen_type=CodeGenType.MULTI_FILE,
+            workspace_path="C:/tmp/workspace",
+            run_mode=RunMode.GENERATE,
+            chat_history=(ChatHistoryEntry(id=99, role="user", content="没有需要调整"),),
+            is_resume=True,
+        )
+
+        applied = await auto_confirm_design_from_resume(state, context)
+
+        plan = state._state_envelope.workflow.plan
+        assert applied is True
+        assert plan.design_specification.confirmed is True
+        assert plan.design_specification.confirmation_message_id == "chat-history:99"
         assert plan.plan_stage == "write_implementation_plan"
 
 
@@ -584,4 +632,3 @@ class TestPhase3ContractNames:
         )
         # required 字段缺省时被工具规范化为 True，不可被跳过
         assert state2.clarification_questions[0]["questions"][0]["required"] is True
-

@@ -96,5 +96,8 @@ def build_llm_messages(
     )
 
     if current is not None and context.is_resume:
-        messages.append(current)
+        # 恢复场景：每个 Node 内只在第一次 build_llm_messages 时注入 resume 文本
+        if not getattr(state, '_resume_consumed_in_this_node', False):
+            messages.append(current)
+            state._resume_consumed_in_this_node = True
     return messages

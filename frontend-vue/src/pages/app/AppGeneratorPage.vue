@@ -105,6 +105,7 @@ import ChatMessageList from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
 import { useSSEChat } from '@/composables/useSSEChat'
+import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
 
 const route = useRoute()
 const router = useRouter()
@@ -230,18 +231,26 @@ async function handlePlanningSubmit(answers: Record<string, string>) {
     }
   }
   if (!latest) return
-  const answersList: string[] = []
+  const displayAnswers: { question: string; answer: string }[] = []
+  const resumeAnswers: Record<string, string> = {}
   for (const q of latest.questions) {
     const a = answers[q.id]
-    if (a && a !== '（未回答）') answersList.push(`${q.question}：答：${a}`)
+    if (a && a !== '（未回答）') {
+      displayAnswers.push({ question: q.question, answer: a })
+      resumeAnswers[q.id] = a
+    }
   }
-  const prompt = answersList.length > 0 ? `需求补充：${answersList.join('；')}\n\n请继续生成。` : '跳过补充需求，请继续生成。'
+  const displayPrompt = buildPlanningResumeDisplay(displayAnswers)
+  const prompt = buildPlanningResumePrompt({
+    questionSetId: latest.questionSetId,
+    answers: resumeAnswers,
+  })
   const sessionId = currentSessionId.value
   if (!sessionId) return
-  messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
+  messages.value.push({ role: 'user', content: displayPrompt, status: 'success', toolEvents: [] })
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(prompt, sessionId, app.value?.codeGenType)
+  startSSE(prompt, sessionId, app.value?.codeGenType, displayPrompt)
 }
 
 async function handlePlanConfirm(index: number) {
