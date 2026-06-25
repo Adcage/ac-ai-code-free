@@ -13,15 +13,18 @@ import java.util.List;
 import java.util.UUID;
 
 @Slf4j
+@Deprecated
 public class LogoGeneratorTool {
 
     @FunctionalInterface
-    public interface LogoClient {
+    @Deprecated
+public interface LogoClient {
         String generateImageUrl(String prompt) throws Exception;
     }
 
     @FunctionalInterface
-    public interface FileDownloader {
+    @Deprecated
+public interface FileDownloader {
         void download(String url, Path targetFile) throws Exception;
     }
 

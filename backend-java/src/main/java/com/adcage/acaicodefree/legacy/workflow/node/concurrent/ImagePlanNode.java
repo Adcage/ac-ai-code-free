@@ -8,6 +8,7 @@ import org.bsc.langgraph4j.state.AgentState;
 import java.util.Map;
 
 @Slf4j
+@Deprecated
 public class ImagePlanNode {
 
     private final ImageCollectionPlanService imageCollectionPlanService;

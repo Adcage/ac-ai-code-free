@@ -117,6 +117,9 @@ class AgentLoopState:
     # Phase 4: 执行状态
     execution_state: Any | None = None
 
+    # 恢复场景：当前 Node 内 resume 文本是否已消费（避免在同一 Node 的多次调用中重复注入）
+    _resume_consumed_in_this_node: bool = False
+
     def record_state_change(self) -> None:
         self._state_changed = True
 

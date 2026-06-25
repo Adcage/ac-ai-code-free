@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 @Data
 @Component
 @ConfigurationProperties(prefix = "app.codegen.workflow")
+@Deprecated
 public class WorkflowProperties {
 
     private boolean enabled = false;

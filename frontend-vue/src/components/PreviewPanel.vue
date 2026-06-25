@@ -187,7 +187,7 @@ const loadVersions = async () => {
   if (!props.appId) return
   versionLoading.value = true
   try {
-    const res = await listVersions({ appId: Number(props.appId) })
+    const res = await listVersions({ appId: props.appId as any })
     if (res.data?.code === 0) {
       versionList.value = res.data?.data || []
     }

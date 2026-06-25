@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 @Component
+@Deprecated
 public class FileDirReadTool extends BaseTool {
 
     private static final int MAX_DEPTH = 6;

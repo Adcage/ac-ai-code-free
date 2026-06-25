@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Configuration
+@Deprecated
 public class WorkflowThreadPoolConfig {
 
     @Bean(destroyMethod = "shutdown")

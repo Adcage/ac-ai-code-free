@@ -18,6 +18,15 @@ export default {
       },
     },
     {
+      path: 'test-chat/:appId',
+      name: 'admin_test_chat_app',
+      component: () => import('@/pages/admin/TestChatPage.vue'),
+      meta: {
+        name: 'AI 测试对话',
+        hideInMenu: true,
+      },
+    },
+    {
       path: 'userManage',
       name: 'admin_user',
       component: () => import('@/pages/admin/UserManagePage.vue'),

@@ -8,6 +8,7 @@ import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.AgentRun;
+import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
@@ -120,7 +121,7 @@ class AppServiceImplTest {
 
         workspaceProperties.setAgentWorkspaceDir("/data/agent-workspaces");
 
-        appService.chatToGenCode(appId, sessionId, message, loginUser);
+        appService.chatToGenCode(appId, sessionId, message, message, loginUser);
 
         verify(modelConfigService).getDefaultEnabledModelConfig(userId);
 
@@ -167,7 +168,7 @@ class AppServiceImplTest {
 
         workspaceProperties.setAgentWorkspaceDir("/tmp/workspaces");
 
-        appService.chatToGenCode(appId, sessionId, message, loginUser);
+        appService.chatToGenCode(appId, sessionId, message, message, loginUser);
 
         verify(agentRunService).createAgentRun(appId, sessionId, userId, "python-agent",
                 null, null, null);
@@ -214,7 +215,7 @@ class AppServiceImplTest {
         when(chatHistoryMapper.insert(any())).thenReturn(1);
         when(agentRunService.claimLatestPausedRun(appId, sessionId, userId)).thenReturn(paused);
 
-        appService.chatToGenCode(appId, sessionId, "企业后台登录页面", loginUser);
+        appService.chatToGenCode(appId, sessionId, "企业后台登录页面", "企业后台登录页面", loginUser);
 
         verify(agentRunService, never()).createAgentRun(
                 anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any());
@@ -247,12 +248,50 @@ class AppServiceImplTest {
 
         BusinessException error = assertThrows(
                 BusinessException.class,
-                () -> appService.chatToGenCode(appId, sessionId, "重复提交", loginUser));
+                () -> appService.chatToGenCode(appId, sessionId, "重复提交", "重复提交", loginUser));
 
         assertTrue(error.getMessage().contains("当前会话正在生成"));
         verify(agentRunService, never()).createAgentRun(
                 anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any());
         verify(mockRuntime, never()).stream(any());
         verify(chatHistoryMapper, never()).insert(any());
+    }
+
+    @Test
+    void chatToGenCode_shouldPersistDisplayMessageButSendRawMessageToRuntime() {
+        Long appId = 1L;
+        Long sessionId = 10L;
+        Long userId = 100L;
+        String runtimeMessage = "[[PLANNING_RESUME]]{\"questionSetId\":\"qs1\",\"answers\":{\"q1\":\"no_adjust\"}}[[/PLANNING_RESUME]]";
+        String displayMessage = "需求补充：\n[q1]: no_adjust\n\n请继续生成。";
+        User loginUser = User.builder().id(userId).build();
+
+        App app = new App();
+        app.setId(appId);
+        app.setUserId(userId);
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
+
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(sessionId);
+        chatSession.setAppId(appId);
+        chatSession.setUserId(userId);
+
+        doReturn(app).when(appService).getById(appId);
+        when(chatSessionMapper.selectOneByQuery(any())).thenReturn(chatSession);
+        when(chatHistoryMapper.selectCountByQuery(any())).thenReturn(0L, 1L);
+        when(chatHistoryMapper.insert(any())).thenReturn(1);
+        when(modelConfigService.getDefaultEnabledModelConfig(userId)).thenReturn(null);
+        when(agentRunService.createAgentRun(eq(appId), eq(sessionId), eq(userId), eq("python-agent"),
+                isNull(), isNull(), isNull())).thenReturn(77L);
+
+        appService.chatToGenCode(appId, sessionId, runtimeMessage, displayMessage, loginUser);
+
+        ArgumentCaptor<ChatHistory> historyCaptor = ArgumentCaptor.forClass(ChatHistory.class);
+        verify(chatHistoryMapper, atLeastOnce()).insert(historyCaptor.capture());
+        assertEquals(displayMessage, historyCaptor.getAllValues().get(0).getMessage());
+
+        ArgumentCaptor<CodeGenerationRequest> requestCaptor = ArgumentCaptor.forClass(CodeGenerationRequest.class);
+        verify(mockRuntime).stream(requestCaptor.capture());
+        assertEquals(runtimeMessage, requestCaptor.getValue().getMessage());
     }
 }

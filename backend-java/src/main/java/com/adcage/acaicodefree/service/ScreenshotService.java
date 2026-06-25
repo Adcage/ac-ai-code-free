@@ -1,5 +1,9 @@
 package com.adcage.acaicodefree.service;
 
+import com.adcage.acaicodefree.model.entity.App;
+
+import java.util.Map;
+
 public interface ScreenshotService {
 
     /**
@@ -10,4 +14,29 @@ public interface ScreenshotService {
      * @return 封面图 URL
      */
     String generateAndUploadCover(Long appId, String appUrl);
+
+    /**
+     * 在 Agent 运行结束后触发封面截图（如果需要）。
+     * 基于 AgentRun 粒度追踪：同一 AgentRun 内防重复，不同 AgentRun 允许更新封面。
+     *
+     * @param appId      应用 id
+     * @param agentRunId 当前 AgentRun id（用于防重复和追踪）
+     */
+    void triggerCoverGenerationIfNeeded(Long appId, Long agentRunId);
+
+    /**
+     * 获取封面截图任务状态
+     *
+     * @param appId 应用 id
+     * @return 任务状态 Map
+     */
+    Map<String, Object> getCoverTaskState(Long appId);
+
+    /**
+     * 计算应用的可预览 URL
+     *
+     * @param app 应用
+     * @return 预览 URL
+     */
+    String computePreviewUrl(App app);
 }

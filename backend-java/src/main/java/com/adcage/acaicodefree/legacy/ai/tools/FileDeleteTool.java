@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.Set;
 
 @Component
+@Deprecated
 public class FileDeleteTool extends BaseTool {
 
     private static final Set<String> PROTECTED_ROOT_FILES = Set.of(

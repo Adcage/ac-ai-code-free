@@ -27,6 +27,22 @@ from app.tools.langchain_tools import create_file_tools
 
 logger = logging.getLogger("app.agent_loop.nodes.plan_step")
 
+_DESIGN_CONFIRM_VALUES = {
+    "no_changes",
+    "no_change",
+    "confirm",
+    "confirmed",
+    "ok",
+    "approve",
+    "approved",
+    "没有需要调整",
+    "无需调整",
+    "不需要调整",
+    "可以",
+    "确认",
+    "按这个方案",
+}
+
 
 def _compose_system_prompt(
     state: AgentLoopState,
@@ -92,7 +108,11 @@ class PlanStepNode:
         self._services = services
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
+        # 恢复场景：每个 Node 内只在首次 build_llm_messages 注入 resume 文本
+        state._resume_consumed_in_this_node = False
+
         plan_state = _ensure_plan_envelope(state)
+        await auto_confirm_design_from_resume(state, self._context)
         plan_state.increment_model_call()
 
         if plan_state.reached_hard_limit():
@@ -198,3 +218,57 @@ def build_skill_registry_provider(state: AgentLoopState) -> SkillRegistryProvide
     if index is None:
         return None
     return SkillRegistryProvider(index.skill_registry)
+
+
+async def auto_confirm_design_from_resume(
+    state: AgentLoopState,
+    context: ExecutionContext,
+) -> bool:
+    """恢复请求明确确认设计时，在模型调用前推进到实施计划阶段。"""
+    if not context.is_resume:
+        return False
+    envelope = getattr(state, "_state_envelope", None)
+    if envelope is None:
+        return False
+    plan_state = envelope.workflow.plan
+    if plan_state.plan_stage != "confirm_design":
+        return False
+
+    from app.agent_loop.resume_answers import parse_resume_answer_payload
+
+    payload = parse_resume_answer_payload(context.prompt)
+    if not payload:
+        return False
+    answers = payload.get("answers")
+    if not isinstance(answers, dict) or not _contains_design_confirmation(answers):
+        return False
+
+    from app.agent_loop.tools.plan_tools import ConfirmDesignTool
+
+    tool = ConfirmDesignTool()
+    tool.set_state(state)
+    await tool._arun(message_id=_resume_confirmation_message_id(context, payload))
+    return True
+
+
+def _contains_design_confirmation(answers: dict) -> bool:
+    for value in answers.values():
+        if isinstance(value, list):
+            values = value
+        else:
+            values = [value]
+        for item in values:
+            normalized = str(item).strip().lower()
+            if normalized in _DESIGN_CONFIRM_VALUES:
+                return True
+    return False
+
+
+def _resume_confirmation_message_id(context: ExecutionContext, payload: dict) -> str:
+    for entry in reversed(context.chat_history):
+        if entry.role.strip().lower() in {"user", "human"}:
+            return f"chat-history:{entry.id}"
+    question_set_id = payload.get("questionSetId") or payload.get("question_set_id")
+    if question_set_id:
+        return f"resume:{question_set_id}"
+    return f"resume:{context.agent_run_id}"

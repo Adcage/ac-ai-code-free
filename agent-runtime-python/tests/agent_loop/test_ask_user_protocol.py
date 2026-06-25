@@ -271,10 +271,10 @@ class TestAskUserEventMapping:
                 event=RuntimeEvent(RuntimeEventType.CLARIFICATION_REQUIRED, payload),
             )
         )
-        assert first is not None
-        assert first.tool_request.name == "ask_user"
-        assert first.tool_request.id == qsid
-        assert second is None
+        assert len(first) == 1
+        assert first[0].tool_request.name == "ask_user"
+        assert first[0].tool_request.id == qsid
+        assert len(second) == 0
 
 
 class TestAskUserInputTypeNormalization:

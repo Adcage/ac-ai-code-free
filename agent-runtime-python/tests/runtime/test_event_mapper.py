@@ -27,10 +27,10 @@ class TestProtoEventMapper:
             RuntimeEventType.TEXT_DELTA, {"text": "hello", "fallback": False}
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert result.event_type == common_pb2.AI_RESPONSE
-        assert result.ai_response.text == "hello"
-        assert result.ai_response.fallback is False
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.AI_RESPONSE
+        assert result[0].ai_response.text == "hello"
+        assert result[0].ai_response.fallback is False
 
     def test_tool_call_maps_to_tool_request(self):
         seq_event = _make_sequenced(
@@ -42,10 +42,10 @@ class TestProtoEventMapper:
             },
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert result.event_type == common_pb2.TOOL_REQUEST
-        assert result.tool_request.id == "call_1"
-        assert result.tool_request.name == "write_file"
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.TOOL_REQUEST
+        assert result[0].tool_request.id == "call_1"
+        assert result[0].tool_request.name == "write_file"
 
     def test_tool_result_maps_to_tool_executed(self):
         seq_event = _make_sequenced(
@@ -58,9 +58,9 @@ class TestProtoEventMapper:
             },
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert result.event_type == common_pb2.TOOL_EXECUTED
-        assert result.tool_executed.result == "ok"
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.TOOL_EXECUTED
+        assert result[0].tool_executed.result == "ok"
 
     @pytest.mark.parametrize(
         ("event_type", "expected_message"),
@@ -82,19 +82,19 @@ class TestProtoEventMapper:
 
         result = self.mapper.map_event(seq_event)
 
-        assert result is not None
-        assert result.event_type == common_pb2.STATUS
-        assert result.status.message == expected_message
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.STATUS
+        assert result[0].status.message == expected_message
 
     def test_runtime_error_maps_to_error(self):
         seq_event = _make_sequenced(
             RuntimeEventType.RUNTIME_ERROR, {"message": "fail", "code": 60001}
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert result.event_type == common_pb2.ERROR
-        assert result.error.message == "fail"
-        assert result.error.code == 60001
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.ERROR
+        assert result[0].error.message == "fail"
+        assert result[0].error.code == 60001
 
     def test_runtime_error_sanitizes_paths(self):
         seq_event = _make_sequenced(
@@ -105,10 +105,10 @@ class TestProtoEventMapper:
             },
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert "storage" not in result.error.message
-        assert "secret.txt" not in result.error.message
-        assert "[路径已隐藏]" in result.error.message
+        assert len(result) == 1
+        assert "storage" not in result[0].error.message
+        assert "secret.txt" not in result[0].error.message
+        assert "[路径已隐藏]" in result[0].error.message
 
     def test_done_sanitizes_paths(self):
         seq_event = _make_sequenced(
@@ -118,16 +118,16 @@ class TestProtoEventMapper:
             },
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert "workspace" not in result.done.message
-        assert "[路径已隐藏]" in result.done.message
+        assert len(result) == 1
+        assert "workspace" not in result[0].done.message
+        assert "[路径已隐藏]" in result[0].done.message
 
     def test_done_maps_to_done(self):
         seq_event = _make_sequenced(RuntimeEventType.DONE, {"message": "completed"})
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert result.event_type == common_pb2.DONE
-        assert result.done.message == "completed"
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.DONE
+        assert result[0].done.message == "completed"
 
     @pytest.mark.parametrize(
         "event_type",
@@ -142,7 +142,7 @@ class TestProtoEventMapper:
     def test_internal_events_not_mapped(self, event_type):
         seq_event = _make_sequenced(event_type)
         result = self.mapper.map_event(seq_event)
-        assert result is None
+        assert len(result) == 0
 
     def test_clarification_required_maps_to_single_tool_request(self):
         """CLARIFICATION_REQUIRED 必须映射为单条 ask_user TOOL_REQUEST。"""
@@ -166,11 +166,11 @@ class TestProtoEventMapper:
             RuntimeEventType.CLARIFICATION_REQUIRED, payload
         )
         result = self.mapper.map_event(seq_event)
-        assert result is not None
-        assert result.event_type == common_pb2.TOOL_REQUEST
-        assert result.tool_request.name == "ask_user"
-        assert result.tool_request.id == "qs_protocol_test"
-        arguments = json.loads(result.tool_request.arguments)
+        assert len(result) == 1
+        assert result[0].event_type == common_pb2.TOOL_REQUEST
+        assert result[0].tool_request.name == "ask_user"
+        assert result[0].tool_request.id == "qs_protocol_test"
+        arguments = json.loads(result[0].tool_request.arguments)
         assert arguments["questionSetId"] == "qs_protocol_test"
         assert arguments["protocolVersion"] == 1
         assert arguments["questions"][0]["id"] == "q7"
@@ -191,8 +191,8 @@ class TestProtoEventMapper:
         second = self.mapper.map_event(
             _make_sequenced(RuntimeEventType.CLARIFICATION_REQUIRED, payload)
         )
-        assert first is not None
-        assert second is None
+        assert len(first) == 1
+        assert len(second) == 0
 
     def test_ask_user_tool_result_not_mapped_to_ai_response(self):
         """ask_user TOOL_RESULT 不再被映射为 AI_RESPONSE 气泡。"""
@@ -206,7 +206,7 @@ class TestProtoEventMapper:
             },
         )
         result = self.mapper.map_event(seq_event)
-        assert result is None
+        assert len(result) == 0
 
     def test_agent_run_id_and_seq_preserved(self):
         seq_event = SequencedRuntimeEvent(
@@ -215,5 +215,27 @@ class TestProtoEventMapper:
             event=RuntimeEvent(RuntimeEventType.DONE, {"message": "ok"}),
         )
         result = self.mapper.map_event(seq_event)
-        assert result.agent_run_id == "42"
-        assert result.seq == 7
+        assert len(result) == 1
+        assert result[0].agent_run_id == "42"
+        assert result[0].seq == 7
+
+    def test_complete_implementation_maps_to_executed_and_status(self):
+        """complete_implementation 应同时发射 TOOL_EXECUTED + STATUS。"""
+        seq_event = _make_sequenced(
+            RuntimeEventType.TOOL_RESULT,
+            {
+                "id": "ci_1",
+                "name": "complete_implementation",
+                "arguments": '{"run_kind": "initial"}',
+                "result": "实现完成。生成文件 3 个：index.html、style.css、script.js。实现门禁已通过。",
+            },
+        )
+        result = self.mapper.map_event(seq_event)
+        assert len(result) == 2
+        # First: STATUS
+        assert result[0].event_type == common_pb2.STATUS
+        assert "实现完成" in result[0].status.message
+        # Second: TOOL_EXECUTED
+        assert result[1].event_type == common_pb2.TOOL_EXECUTED
+        assert result[1].tool_executed.name == "complete_implementation"
+        assert "index.html" in result[1].tool_executed.result

@@ -7,7 +7,7 @@ import com.adcage.acaicodefree.exception.BusinessException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class SingleFileParser implements CodePaser<SingleCodeResult>{
+public class SingleFileParser implements CodeParser<SingleCodeResult>{
 
     /**
      * SINGLE_FILE 代码块匹配模式 (```html ... ```)

@@ -11,6 +11,7 @@ import java.io.Serializable;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Deprecated
 public class ImageResource implements Serializable {
 
     private ImageCategoryEnum category;

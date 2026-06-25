@@ -14,10 +14,12 @@ import java.util.List;
 import java.util.UUID;
 
 @Slf4j
+@Deprecated
 public class MermaidDiagramTool {
 
     @FunctionalInterface
-    public interface MermaidCommandExecutor {
+    @Deprecated
+public interface MermaidCommandExecutor {
         int execute(List<String> command, Path outputFile) throws Exception;
     }
 

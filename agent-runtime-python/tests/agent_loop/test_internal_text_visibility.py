@@ -143,6 +143,6 @@ def test_agent_loop_lifecycle_events_are_classified_or_internal():
     for et in lifecycle_types:
         seq_event = _make_sequenced(et, {"iteration": 1, "mode": "plan"})
         result = mapper.map_event(seq_event)
-        assert result is None, (
+        assert len(result) == 0, (
             f"{et} is internal and should not produce a proto event, got: {result}"
         )

@@ -5,6 +5,7 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
+@Deprecated
 public enum ImageCategoryEnum {
     CONTENT("内容图片", "content"),
     ILLUSTRATION("插画", "illustration"),

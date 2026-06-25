@@ -21,7 +21,7 @@
           <a-space direction="vertical" :size="12">
             <template v-for="action in computedActions" :key="action">
               <!-- 查看对话 (核心功能，始终为主按钮) -->
-              <a-button v-if="action === 'chat'" type="primary" shape="round" class="action-btn" @click.stop="goToApp">
+              <a-button v-if="action === 'chat'" type="primary" shape="round" class="action-btn" @click.stop="handleChat">
                 <template #icon><MessageOutlined /></template>
                 查看对话
               </a-button>
@@ -122,7 +122,7 @@ const props = withDefaults(defineProps<Props>(), {
   showTime: true,
 })
 
-const emit = defineEmits(['delete', 'edit'])
+const emit = defineEmits(['delete', 'edit', 'cardClick'])
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 const defaultCover = 'https://gw.alipayobjects.com/zos/rmsportal/JiqGstEfoWAOHiTxclqi.png'
@@ -161,7 +161,15 @@ const openDeployUrl = () => {
   window.open(`${deployHost}/${props.app.deployKey}/`, '_blank')
 }
 
-const handleCardClick = () => goToApp()
+const handleCardClick = () => {
+  if (emit('cardClick', props.app)) return
+  goToApp()
+}
+
+const handleChat = () => {
+  if (emit('cardClick', props.app)) return
+  goToApp()
+}
 const handleDelete = () => emit('delete', props.app.id)
 
 const formatDate = (date: any) => {

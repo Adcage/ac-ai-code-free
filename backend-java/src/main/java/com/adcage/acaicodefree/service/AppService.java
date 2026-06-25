@@ -68,11 +68,12 @@ public interface AppService extends IService<App> {
      *
      * @param appId     应用 ID
      * @param sessionId 会话 ID（为空时由调用方先创建）
-     * @param message   用户消息
+     * @param message   传递给运行时的用户消息
+     * @param displayMessage 展示给用户并落库的消息
      * @param loginUser 当前登录用户
      * @return 流式代码生成结果
      */
-    Flux<String> chatToGenCode(Long appId, Long sessionId, String message, User loginUser);
+    Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage, User loginUser);
 
     /**
      * 创建对话会话

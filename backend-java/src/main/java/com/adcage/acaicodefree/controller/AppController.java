@@ -19,6 +19,7 @@ import com.adcage.acaicodefree.model.dto.app.AppAdminUpdateRequest;
 import com.adcage.acaicodefree.model.dto.app.AppDeployRequest;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.User;
+import com.adcage.acaicodefree.model.dto.chat.ChatCodeGenRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatSessionCreateRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatSessionRenameRequest;
@@ -265,18 +266,21 @@ public class AppController {
 
     /**
      * 对话生成代码（流式返回SSE）
-     * @param appId 应用 ID
-     * @param sessionId 会话 ID（不传则自动创建）
-     * @param message  用户消息
+     * @param chatCodeGenRequest 请求体
      * @param request 请求
      * @return 生成结果流
      */
     @RateLimit(type = RateLimitType.USER, rate = 5, intervalSeconds = 60, message = "AI 对话请求过于频繁，请稍后再试")
-    @GetMapping(value = "/chat/gen/code/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
-                                                       @RequestParam(required = false) Long sessionId,
-                                                       @RequestParam String message,
+    @PostMapping(value = "/chat/gen/code/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestBody ChatCodeGenRequest chatCodeGenRequest,
                                                        HttpServletRequest request) {
+        Long appId = chatCodeGenRequest.getAppId();
+        Long sessionId = chatCodeGenRequest.getSessionId();
+        String message = chatCodeGenRequest.getMessage();
+        String displayMessage = StrUtil.blankToDefault(
+                chatCodeGenRequest.getDisplayMessage(),
+                message
+        );
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 无效");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         // 获取当前登录用户
@@ -286,7 +290,13 @@ public class AppController {
             finalSessionId = appService.createChatSession(appId, loginUser);
         }
         final Long resolvedSessionId = finalSessionId;
-        Flux<String> stringFlux = appService.chatToGenCode(appId, resolvedSessionId, message, loginUser);
+        Flux<String> stringFlux = appService.chatToGenCode(
+                appId,
+                resolvedSessionId,
+                message,
+                displayMessage,
+                loginUser
+        );
         Map<String, Object> metaData = Map.of("sessionId", resolvedSessionId);
         String metaJson = JSONUtil.toJsonStr(metaData);
         ServerSentEvent<String> metaEvent = ServerSentEvent.<String>builder()

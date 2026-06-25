@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Component
+@Deprecated
 public class FileWriteTool extends BaseTool {
 
     @Override

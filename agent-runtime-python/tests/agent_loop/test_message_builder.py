@@ -1,6 +1,10 @@
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.agent_loop.message_builder import build_llm_messages
+from app.agent_loop.resume_answers import (
+    PLANNING_RESUME_PREFIX,
+    PLANNING_RESUME_SUFFIX,
+)
 from app.agent_loop.state import AgentLoopState
 from app.runtime.context import ChatHistoryEntry, CodeGenType, ExecutionContext, RunMode
 from app.runtime.state import ToolCallRecord
@@ -41,7 +45,11 @@ def test_new_request_contains_current_prompt_once():
 
 
 def test_resume_answer_is_after_previous_tool_history():
-    prompt = "需求补充：企业后台登录页面\n\n请继续生成。"
+    prompt = (
+        f"{PLANNING_RESUME_PREFIX}"
+        "{\"questionSetId\":\"qs1\",\"answers\":{\"q_device\":\"desktop\"}}"
+        f"{PLANNING_RESUME_SUFFIX}"
+    )
     state = AgentLoopState()
     state.executed_tool_calls = [
         ToolCallRecord(
@@ -59,16 +67,21 @@ def test_resume_answer_is_after_previous_tool_history():
         history=(
             ChatHistoryEntry(id=1, role="user", content="创建登录页面"),
             ChatHistoryEntry(id=2, role="ai", content="您想创建什么样的登录界面？"),
-            ChatHistoryEntry(id=3, role="user", content=prompt),
+            ChatHistoryEntry(
+                id=3,
+                role="user",
+                content="需求补充：\n[questionSetId]: qs1\n[q_device]: desktop\n\n请继续生成。",
+            ),
         ),
         is_resume=True,
     )
 
     messages = build_llm_messages("系统规则", context, state)
 
-    assert sum(message.content == prompt for message in messages) == 1
+    expected_resume = "需求补充：\n[questionSetId]: qs1\n[q_device]: desktop\n\n请继续生成。"
+    assert sum(message.content == expected_resume for message in messages) == 1
     assert isinstance(messages[-1], HumanMessage)
-    assert messages[-1].content == prompt
+    assert messages[-1].content == expected_resume
     observation_messages = [m for m in messages if isinstance(m, SystemMessage) and "历史工具操作记录" in m.content]
     assert len(observation_messages) >= 1
 

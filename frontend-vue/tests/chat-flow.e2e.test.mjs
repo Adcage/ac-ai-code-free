@@ -110,13 +110,18 @@ async function runChatFlow({ codeGenType, prompt, message, assertSse }) {
     const sessionId = String(createSessionRes.data.data)
     assert.ok(/^\d+$/.test(sessionId), '创建会话未返回合法 sessionId')
 
-    const sseResponse = await fetch(
-      `${BASE_URL}/app/chat/gen/code/stream?appId=${appId}&sessionId=${sessionId}&message=${encodeURIComponent(message)}`,
-      {
-        method: 'GET',
-        headers: { Cookie: cookie },
+    const sseResponse = await fetch(`${BASE_URL}/app/chat/gen/code/stream`, {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
       },
-    )
+      body: JSON.stringify({
+        appId,
+        sessionId,
+        message,
+      }),
+    })
     assert.equal(sseResponse.status, 200, `SSE 响应码异常: ${sseResponse.status}`)
     const contentType = sseResponse.headers.get('content-type') || ''
     if (!contentType.includes('text/event-stream')) {

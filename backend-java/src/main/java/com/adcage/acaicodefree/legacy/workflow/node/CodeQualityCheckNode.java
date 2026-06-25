@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 @Slf4j
+@Deprecated
 public class CodeQualityCheckNode {
 
     public static final String ROUTE_RETRY = "retry";

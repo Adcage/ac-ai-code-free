@@ -194,7 +194,13 @@ class SubmitRequirementBriefTool(BaseTool):
             application_direction,
             target_users,
         )
-        return "已记录需求摘要，可继续 discover_scope 阶段；如已涵盖范围，可进入 inspect_existing_project 或 select_skill。"
+        return (
+            f"需求摘要已记录。方向={application_direction}，"
+            f"目标用户={target_users}，"
+            f"功能范围={functional_scope[:200] if functional_scope else '未填写'}。"
+            f"阶段已推进到 {plan_state.plan_stage}。"
+            f"如已涵盖范围，可进入 inspect_existing_project 或 select_skill。"
+        )
 
 
 class RecordProjectInspectionInput(BaseModel):
@@ -277,7 +283,10 @@ class RecordProjectInspectionTool(BaseTool):
         if plan_state.plan_stage in ("discover_scope", "inspect_existing_project"):
             plan_state.advance_stage("select_skill")
         envelope.next_revision()
-        return "项目检查已记录；已进入 select_skill 阶段。"
+        return (
+            f"项目检查已记录（{decision}，参考 {len(evidence_files or [])} 个文件）；"
+            f"已进入 select_skill 阶段。"
+        )
 
 
 class ChooseSkillInput(BaseModel):
@@ -507,23 +516,11 @@ class ProposeDesignTool(BaseTool):
         plan_state.advance_stage("confirm_design")
         envelope.next_revision()
 
-        if hasattr(self._state, "conversation_messages"):
-            self._state.conversation_messages.append({
-                "role": "system",
-                "source": "plan",
-                "content": (
-                    "提交的设计方案摘要（供 ask_user 时直接引用）：\n"
-                    f"- 视觉方向：{visual_direction}\n"
-                    f"- 配色系统：{color_system}\n"
-                    f"- 字体排版：{typography}\n"
-                    f"- 组件语言：{component_language}\n"
-                    f"- 交互模型：{interaction_model}\n"
-                    f"- 响应式策略：{responsive_strategy}"
-                ),
-            })
-
         return (
-            "设计建议已提交，等待用户确认。请在回复中完整展示所有维度与备选，"
+            f"设计方案已提交（v{spec.design_version}）："
+            f"视觉方向={visual_direction[:100]}，配色={color_system[:100]}，"
+            f"字体={typography[:100]}，组件={component_language[:100]}。"
+            "等待用户确认。请在回复中完整展示所有维度与备选，"
             "然后调用 ask_user 让用户在 '没有需要调整' 和 '需要调整' 之间选择。"
         )
 
@@ -566,6 +563,9 @@ def _build_rationale(raw: dict) -> Rationale:
         reason=str(raw["reason"]),
         source_refs=[str(s) for s in raw.get("source_refs", []) or []],
     )
+
+
+DESIGN_CONFIRMATION_STAGE = "confirm_design"
 
 
 class ConfirmDesignInput(BaseModel):
@@ -630,16 +630,20 @@ class ConfirmDesignTool(BaseTool):
         spec.confirmation_message_id = message_id.strip()
         spec.confirmed_at = _now_iso()
         plan_state.design_specification = spec
+        design_version = spec.design_version
         plan_state.advance_stage("write_implementation_plan")
         envelope.next_revision()
-        return "设计已确认，可进入 write_implementation_plan 阶段并立即生成实施计划。"
+        return (
+            f"设计方案 v{design_version} 已确认（message_id={message_id}），"
+            "可进入 write_implementation_plan 阶段并立即生成实施计划。"
+        )
 
 
 def _ensure_design_asked_user(state: object) -> None:
-    """检查在 design_confirm 阶段是否已通过 ask_user 询问用户意见。"""
+    """检查在 confirm_design 阶段是否已通过 ask_user 询问用户意见。"""
     questions = getattr(state, "clarification_questions", None) or []
     has_design_question = any(
-        isinstance(q, dict) and q.get("stage") == "design_confirm"
+        isinstance(q, dict) and q.get("stage") == DESIGN_CONFIRMATION_STAGE
         for q in questions
     )
     if has_design_question:
@@ -647,7 +651,7 @@ def _ensure_design_asked_user(state: object) -> None:
     from app.core.error_codes import AgentErrorCode
     raise AgentRuntimeError(
         "设计确认前必须先通过 ask_user 向用户展示设计方案并获取反馈。"
-        "请先调用 ask_user(stage='design_confirm', questions=[...]) 让用户选择，"
+        "请先调用 ask_user(stage='confirm_design', questions=[...]) 让用户选择，"
         "用户回复确认后再调用 confirm_design。",
         code=AgentErrorCode.STATE_ERROR,
     )
@@ -667,7 +671,12 @@ class WriteImplementationPlanInput(BaseModel):
             "dependencies, inputs, outputs, test_requirements, acceptance_criteria"
         ),
     )
-    test_plan: list[dict] = Field(default_factory=list, description="TestRequirement 列表")
+    test_plan: list[PlanTestItem] = Field(
+        default_factory=list,
+        description=(
+            "TestRequirement 列表，每项必须包含 test_id, description, target, expected 四个必填字段"
+        ),
+    )
     acceptance_criteria: list[str] = Field(default_factory=list)
     prohibited_changes: list[str] = Field(default_factory=list)
     summary: str = Field(default="", description="一句话摘要（最多 200 字）")
@@ -693,7 +702,7 @@ class WriteImplementationPlanTool(BaseTool):
     async def _arun(
         self,
         tasks: list[dict],
-        test_plan: list[dict] | None = None,
+        test_plan: list[PlanTestItem] | None = None,
         acceptance_criteria: list[str] | None = None,
         prohibited_changes: list[str] | None = None,
         summary: str = "",
@@ -722,7 +731,8 @@ class WriteImplementationPlanTool(BaseTool):
             )
 
         impl_tasks = [_build_implementation_task(t) for t in tasks]
-        impl_tests = [_build_test_requirement(t) for t in (test_plan or [])]
+        # test_plan 已被 Pydantic 序列化为 PlanTestItem 实例，无需再校验
+        impl_tests = list(test_plan or [])
         design_version = plan_state.design_specification.design_version
 
         plan_model = ImplementationPlan(
@@ -744,8 +754,11 @@ class WriteImplementationPlanTool(BaseTool):
             self._state.plan_just_finished = True
             self._state.implementation_outline = {"text": summary[:200] or "实施计划已写入", "tasks": len(impl_tasks)}
         envelope.next_revision()
+        first_goal = impl_tasks[0].goal[:100] if impl_tasks else "无"
         return (
-            f"已写入 ImplementationPlan v{plan_model.plan_version}（来源设计版本 v{design_version}），"
+            f"已写入 ImplementationPlan v{plan_model.plan_version}"
+            f"（来源设计 v{design_version}，{len(impl_tasks)} 个任务，"
+            f"首个任务目标：{first_goal}），"
             "Plan 阶段完成；编排层将进入 Route 决定下一阶段。"
         )
 
@@ -777,27 +790,6 @@ def _build_implementation_task(raw: dict) -> ImplementationTask:
         acceptance_criteria=[
             str(a) for a in raw.get("acceptance_criteria", []) or []
         ],
-    )
-
-
-def _build_test_requirement(raw: dict) -> PlanTestItem:
-    if not isinstance(raw, dict):
-        raise AgentRuntimeError(
-            "TestRequirement 必须是对象",
-            code=AgentErrorCode.STATE_ERROR,
-        )
-    required = {"test_id", "description", "target", "expected"}
-    missing = required - set(raw.keys())
-    if missing:
-        raise AgentRuntimeError(
-            f"TestRequirement 缺少必填字段: {missing}",
-            code=AgentErrorCode.STATE_ERROR,
-        )
-    return PlanTestItem(
-        test_id=str(raw["test_id"]),
-        description=str(raw["description"]),
-        target=str(raw["target"]),
-        expected=str(raw["expected"]),
     )
 
 

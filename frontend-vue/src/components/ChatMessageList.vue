@@ -1,5 +1,8 @@
 <template>
   <div class="chat-message-list" ref="listRef">
+    <div v-if="hasMore" class="load-more-bar">
+      <a-button type="link" size="small" @click="$emit('loadEarlier')">加载更早的消息</a-button>
+    </div>
     <div
       v-for="(msg, index) in messages"
       :key="index"
@@ -165,12 +168,14 @@ const props = withDefaults(
     streamWarning?: string
     userAvatar?: string
     selectedElement?: ElementInfo | null
+    hasMore?: boolean
   }>(),
   {
     generating: false,
     streamWarning: '',
     userAvatar: '',
     selectedElement: null,
+    hasMore: false,
   },
 )
 
@@ -180,6 +185,7 @@ defineEmits<{
   planConfirm: [index: number]
   reloadSession: []
   clearSelectedElement: []
+  loadEarlier: []
 }>()
 
 const listRef = ref<HTMLElement>()

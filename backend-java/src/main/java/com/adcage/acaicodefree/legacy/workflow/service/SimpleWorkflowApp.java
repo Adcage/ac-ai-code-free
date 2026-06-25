@@ -14,6 +14,7 @@ import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 
 @Slf4j
+@Deprecated
 public class SimpleWorkflowApp {
 
     public static final Map<String, Channel<?>> SCHEMA = Map.of(

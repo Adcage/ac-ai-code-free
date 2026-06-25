@@ -15,6 +15,7 @@ import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
+@Deprecated
 public class CodeGenConcurrentWorkflow {
 
     private final ImagePlanNode imagePlanNode;

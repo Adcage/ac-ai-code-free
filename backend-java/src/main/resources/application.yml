@@ -71,6 +71,8 @@ langchain4j:
       max-retries: 2
 
 app:
+  security:
+    api-key-encryption-key: ${API_KEY_ENCRYPTION_KEY:}
   workspace:
     code-output-dir: ${APP_CODE_OUTPUT_DIR:../temp/code_output}
     code-deploy-dir: ${APP_CODE_DEPLOY_DIR:../temp/code_deploy}
@@ -119,6 +121,8 @@ app:
     max-retries: 3
     retry-delay-millis: 3000
     browser: chrome  # 浏览器类型：chrome, edge, firefox
+    cover-scan-interval-ms: 300000    # 封面兜底扫描间隔（毫秒），默认5分钟
+    cover-scan-lookback-hours: 24     # 封面兜底扫描回溯时间（小时）
 
 # 存储配置
 storage:

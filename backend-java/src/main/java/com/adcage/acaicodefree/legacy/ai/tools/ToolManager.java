@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
+@Deprecated
 public class ToolManager {
 
     @Resource

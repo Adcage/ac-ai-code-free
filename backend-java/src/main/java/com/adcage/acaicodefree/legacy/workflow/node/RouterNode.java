@@ -8,6 +8,7 @@ import org.bsc.langgraph4j.state.AgentState;
 import java.util.Map;
 
 @Slf4j
+@Deprecated
 public class RouterNode {
 
     public static final String ROUTE_SINGLE = "single_file";

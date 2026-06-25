@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 
+@Deprecated
 public abstract class BaseTool {
 
     private static final Logger log = LoggerFactory.getLogger(BaseTool.class);

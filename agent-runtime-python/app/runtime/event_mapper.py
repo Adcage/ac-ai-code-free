@@ -132,19 +132,26 @@ class ProtoEventMapper:
 
     def map_event(
         self, sequenced_event: SequencedRuntimeEvent
-    ) -> code_generation_pb2.CodeGenerationEvent | None:
+    ) -> list[code_generation_pb2.CodeGenerationEvent]:
+        """将 RuntimeEvent 映射为 0 到多个 CodeGenerationEvent。
+
+        返回列表支持一次 RuntimeEvent 发射多个协议事件（如 complete_implementation
+        同时发射 STATUS 和 TOOL_EXECUTED）。
+        """
         event = sequenced_event.event
 
         # CLARIFICATION_REQUIRED 由 event_mapper 折叠为 ask_user TOOL_REQUEST，
         # 同一 questionSetId 只下发一次。
         if event.event_type == RuntimeEventType.CLARIFICATION_REQUIRED:
-            return self._map_clarification_required(sequenced_event)
+            result = self._map_clarification_required(sequenced_event)
+            return [result] if result is not None else []
 
         if event.event_type in _INTERNAL_TYPES:
-            return None
+            return []
 
         if event.event_type == RuntimeEventType.TOOL_CALL:
-            return self._map_tool_call(sequenced_event)
+            result = self._map_tool_call(sequenced_event)
+            return [result] if result is not None else []
 
         if event.event_type == RuntimeEventType.TOOL_RESULT:
             return self._map_tool_result(sequenced_event)
@@ -152,7 +159,7 @@ class ProtoEventMapper:
         event_type_proto = _EVENT_TYPE_MAP.get(event.event_type)
         if event_type_proto is None:
             logger.warning("unmapped runtime event type: %s", event.event_type)
-            return None
+            return []
 
         data = event.data
         kwargs: dict = {
@@ -180,7 +187,7 @@ class ProtoEventMapper:
                 message=data.get("message", ""),
             )
 
-        return code_generation_pb2.CodeGenerationEvent(**kwargs)
+        return [code_generation_pb2.CodeGenerationEvent(**kwargs)]
 
     def _map_clarification_required(
         self, sequenced_event: SequencedRuntimeEvent
@@ -260,31 +267,60 @@ class ProtoEventMapper:
 
     def _map_tool_result(
         self, sequenced_event: SequencedRuntimeEvent
-    ) -> code_generation_pb2.CodeGenerationEvent | None:
+    ) -> list[code_generation_pb2.CodeGenerationEvent]:
         data = sequenced_event.event.data
         tool_name = data.get("name", "")
 
         if tool_name in _HIDDEN_TOOLS:
-            return None
+            return []
 
         # ask_user TOOL_RESULT 不映射为 AI_RESPONSE；只下发一次 TOOL_REQUEST（来自 CLARIFICATION_REQUIRED 折叠）
         if tool_name == "ask_user":
-            return None
+            return []
+
+        complete_impl_status = "正在提交实现完成"
+        if tool_name == "complete_implementation":
+            result = _sanitize_tool_result(tool_name, data.get("result", ""))
+            events: list[code_generation_pb2.CodeGenerationEvent] = []
+
+            # STATUS 事件：保持进度提示
+            events.append(code_generation_pb2.CodeGenerationEvent(
+                agent_run_id=str(sequenced_event.agent_run_id),
+                seq=sequenced_event.seq,
+                event_type=common_pb2.STATUS,
+                status=common_pb2.StatusData(
+                    message=f"{complete_impl_status}完成",
+                ),
+            ))
+
+            # TOOL_EXECUTED 事件：触发前端预览刷新，结果包含文件总结
+            events.append(code_generation_pb2.CodeGenerationEvent(
+                agent_run_id=str(sequenced_event.agent_run_id),
+                seq=sequenced_event.seq,
+                event_type=common_pb2.TOOL_EXECUTED,
+                tool_executed=common_pb2.ToolExecutedData(
+                    id=data.get("id", ""),
+                    name=tool_name,
+                    arguments=_sanitize_tool_arguments(tool_name, data.get("arguments", "")),
+                    result=result,
+                ),
+            ))
+            return events
 
         if tool_name in _STATUS_TOOLS:
-            return code_generation_pb2.CodeGenerationEvent(
+            return [code_generation_pb2.CodeGenerationEvent(
                 agent_run_id=str(sequenced_event.agent_run_id),
                 seq=sequenced_event.seq,
                 event_type=common_pb2.STATUS,
                 status=common_pb2.StatusData(
                     message=f"{_STATUS_TOOLS[tool_name].rstrip('.')}完成",
                 ),
-            )
+            )]
 
         if tool_name in _VISIBLE_TOOLS:
             sanitized_args = _sanitize_tool_arguments(tool_name, data.get("arguments", ""))
             sanitized_result = _sanitize_tool_result(tool_name, data.get("result", ""))
-            return code_generation_pb2.CodeGenerationEvent(
+            return [code_generation_pb2.CodeGenerationEvent(
                 agent_run_id=str(sequenced_event.agent_run_id),
                 seq=sequenced_event.seq,
                 event_type=common_pb2.TOOL_EXECUTED,
@@ -294,18 +330,18 @@ class ProtoEventMapper:
                     arguments=sanitized_args,
                     result=sanitized_result,
                 ),
-            )
+            )]
 
         status_msg = _STATUS_TOOLS.get(tool_name)
         if status_msg:
-            return code_generation_pb2.CodeGenerationEvent(
+            return [code_generation_pb2.CodeGenerationEvent(
                 agent_run_id=str(sequenced_event.agent_run_id),
                 seq=sequenced_event.seq,
                 event_type=common_pb2.STATUS,
                 status=common_pb2.StatusData(
                     message=f"{status_msg.rstrip('.')}完成",
                 ),
-            )
+            )]
 
         logger.warning("unclassified tool in TOOL_RESULT: %s", tool_name)
-        return None
+        return []

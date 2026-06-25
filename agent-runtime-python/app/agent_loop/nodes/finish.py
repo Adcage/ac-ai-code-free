@@ -15,13 +15,21 @@ class FinishNode:
 
     async def __call__(self, state: AgentLoopState) -> AgentLoopState:
         if state.status == "running":
-            if state.iteration >= state.max_iterations:
-                state.status = "failed"
-                if not state.final_summary:
-                    state.final_summary = "全局迭代上限已到，任务未能完成"
-            else:
-                state.status = "failed"
-                state.final_summary = state.final_summary or "运行异常终止，未产生有效完成证据"
+            # 兜底：如果 plan 已完成且有实施计划，视为成功而非失败
+            envelope = getattr(state, "_state_envelope", None)
+            if envelope is not None:
+                plan = getattr(envelope.workflow, "plan", None)
+                if plan is not None and getattr(plan, "implementation_plan", None) is not None:
+                    state.status = "completed"
+                    state.final_summary = state.final_summary or "实施方案已生成"
+            if state.status == "running":
+                if state.iteration >= state.max_iterations:
+                    state.status = "failed"
+                    if not state.final_summary:
+                        state.final_summary = "全局迭代上限已到，任务未能完成"
+                else:
+                    state.status = "failed"
+                    state.final_summary = state.final_summary or "运行异常终止，未产生有效完成证据"
 
         logger.info(
             "finish | status=%s files=%d iterations=%d switches=%d",

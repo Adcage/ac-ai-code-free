@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
+@Deprecated
 public class RetryOutputGuardrail {
 
     private static final Logger log = LoggerFactory.getLogger(RetryOutputGuardrail.class);

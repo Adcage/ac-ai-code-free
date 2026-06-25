@@ -21,8 +21,15 @@ class CompleteImplementationInput(BaseModel):
     source_plan_version: int = Field(description="执行的计划版本")
     completed_task_ids: list[str] = Field(default_factory=list, description="已完成任务 ID 列表")
     addressed_issue_ids: list[str] = Field(default_factory=list, description="已处理的校验问题 ID 列表")
-    verification_refs: list[str] = Field(default_factory=list, description="验证证据引用列表")
+    verification_refs: list[str] = Field(default_factory=list, description="验证证据引用列表（新生成可留空，修复/修改必填）")
     known_limitations: list[str] = Field(default_factory=list, description="已知限制")
+    summary: str = Field(
+        default="",
+        description=(
+            "实施总结：用自然语言说明完成了什么界面和功能。"
+            "例如「已完成登录页和注册页面的实现，包含表单验证和社交登录功能」"
+        ),
+    )
 
 
 class CompleteImplementationTool(BaseTool):
@@ -32,6 +39,7 @@ class CompleteImplementationTool(BaseTool):
         "提交实现完成声明。必须通过结构化门禁：所有目标任务完成、"
         "未关闭问题已处理、文件范围合规、预算未超限。"
         "门禁失败会返回具体缺失项，模型可在预算内继续处理。"
+        "提交时请用 summary 说明实现了什么界面和功能。"
     )
     args_schema: Type[BaseModel] = CompleteImplementationInput
 
@@ -51,6 +59,7 @@ class CompleteImplementationTool(BaseTool):
         addressed_issue_ids: list[str] | None = None,
         verification_refs: list[str] | None = None,
         known_limitations: list[str] | None = None,
+        summary: str = "",
     ) -> str:
         if self._state is None:
             raise AgentRuntimeError("未绑定 AgentLoopState", code=AgentErrorCode.STATE_ERROR)
@@ -72,8 +81,9 @@ class CompleteImplementationTool(BaseTool):
         if not state.implement_phase_files and not known_limitations:
             missing.append("无文件变更且无 no-code 理由；至少需要一项变更或明确说明原因")
 
-        if not verification_refs and state.implement_phase_files:
-            missing.append("有文件变更但无验证证据")
+        # 新生成（initial）无需验证证据，修改/修复需要
+        if run_kind != "initial" and not verification_refs and state.implement_phase_files:
+            missing.append("修改/修复场景必须有验证证据（verification_refs）")
 
         if missing:
             return (
@@ -83,11 +93,15 @@ class CompleteImplementationTool(BaseTool):
             )
 
         state.implement_just_finished = True
+        if summary:
+            state.final_summary = summary
+
         logger.info(
-            "complete_implementation | run_kind=%s tasks=%d issues=%d files=%d",
+            "complete_implementation | run_kind=%s tasks=%d issues=%d files=%d summary=%s",
             run_kind,
             len(completed_task_ids or []),
             len(addressed_issue_ids or []),
             len(state.implement_phase_files),
+            summary[:100] if summary else "(无)",
         )
-        return "实现完成门禁已通过，编排层将进入 Route 决定下一阶段。"
+        return "实现门禁已通过，实施完成。"
