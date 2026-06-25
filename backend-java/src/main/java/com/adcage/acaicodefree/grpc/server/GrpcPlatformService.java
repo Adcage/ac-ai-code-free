@@ -6,6 +6,7 @@ import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
 import com.adcage.acaicodefree.grpc.platform.*;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
+import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ModelConfig;
@@ -17,6 +18,7 @@ import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.AppVersionService;
 import com.adcage.acaicodefree.service.ModelConfigService;
+import com.adcage.acaicodefree.service.ScreenshotService;
 import com.adcage.acaicodefree.service.UserService;
 
 import io.grpc.stub.StreamObserver;
@@ -42,6 +44,8 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     private VueProjectBuildService vueProjectBuildService;
     @Resource
     private ChatHistoryMapper chatHistoryMapper;
+    @Resource
+    private ScreenshotService screenshotService;
 
     @Override
     public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
@@ -202,23 +206,42 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     @Override
     public void completeAgentRun(CompleteAgentRunRequest request, StreamObserver<CompleteAgentRunResponse> responseObserver) {
         try {
+            long agentRunId = request.getAgentRunId();
             String loopStateJson = request.getLoopStateJson();
+            Long appId = null;
+
             if (!loopStateJson.isEmpty()) {
-                agentRunService.pauseAgentRun(request.getAgentRunId(), loopStateJson);
+                agentRunService.pauseAgentRun(agentRunId, loopStateJson);
             } else if (request.getSuccess()) {
                 agentRunService.completeAgentRun(
-                        request.getAgentRunId(),
+                        agentRunId,
                         request.getWorkspacePath(),
                         request.getLatencyMs()
                 );
             } else {
                 agentRunService.failAgentRun(
-                        request.getAgentRunId(),
+                        agentRunId,
                         request.getErrorMessage()
                 );
             }
+
+            // 获取 appId 用于触发封面截图
+            AgentRun agentRun = agentRunService.getById(agentRunId);
+            if (agentRun != null) {
+                appId = agentRun.getAppId();
+            }
+
             responseObserver.onNext(CompleteAgentRunResponse.newBuilder().setOk(true).build());
             responseObserver.onCompleted();
+
+            // 在响应发送后异步触发封面截图（finally 式）
+            if (appId != null) {
+                try {
+                    screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
+                } catch (Exception e) {
+                    log.warn("触发封面截图失败（不影响主流程）, appId={}, agentRunId={}", appId, agentRunId, e);
+                }
+            }
         } catch (Exception e) {
             log.error("gRPC completeAgentRun failed", e);
             responseObserver.onNext(CompleteAgentRunResponse.newBuilder().setOk(false).build());
