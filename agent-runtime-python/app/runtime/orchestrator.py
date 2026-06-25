@@ -204,8 +204,18 @@ class RuntimeOrchestrator:
         )
 
     async def stream_generate(self, request):
-        async for event in self._run_agent_loop(request, RunMode.GENERATE):
-            yield event
+        engine = settings.agent_loop_engine
+        if engine == "vnext":
+            async for event in self._run_single_implement_vnext(request, RunMode.GENERATE):
+                yield event
+        elif engine == "legacy":
+            async for event in self._run_agent_loop(request, RunMode.GENERATE):
+                yield event
+        else:
+            raise AgentRuntimeError(
+                f"不支持的 agent_loop_engine 配置: {engine}",
+                code=AgentErrorCode.STATE_ERROR,
+            )
 
     async def stream_modify(self, request):
         async for event in self._run_agent_loop(request, RunMode.MODIFY):
@@ -348,3 +358,74 @@ class RuntimeOrchestrator:
             if seq_event is None:
                 break
             yield seq_event
+
+    async def _run_single_implement_vnext(self, request, run_mode: RunMode):
+        """vNext 单实现链路：模型流式对话 → SSE 传输。"""
+        from app.agent_loop_vnext.runner import SingleImplementLoopRunner
+
+        agent_run_id = int(request.agent_run_id)
+        event_bus = EventBus(agent_run_id=agent_run_id)
+        services = self._build_services(event_bus)
+        start_time = time.monotonic()
+
+        context = await self._build_context(request, run_mode)
+
+        async def _execute():
+            try:
+                runner = SingleImplementLoopRunner(context, services)
+                await runner.run()
+
+                latency_ms = int((time.monotonic() - start_time) * 1000)
+                await self._platform_client.complete_agent_run(
+                    agent_run_id=agent_run_id,
+                    success=True,
+                    workspace_path=context.workspace_path,
+                    latency_ms=latency_ms,
+                    error_message="",
+                    loop_state_json="",
+                )
+            except AgentRuntimeError as e:
+                logger.error("vNext runner error | agentRunId=%s error=%s", agent_run_id, e)
+                await event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.RUNTIME_ERROR,
+                    {"message": str(e), "code": int(e.code)},
+                ))
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"失败: {e}"}))
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(
+                    "vNext unexpected error | agentRunId=%s error=%s",
+                    agent_run_id, e, exc_info=True,
+                )
+                await event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.RUNTIME_ERROR,
+                    {"message": str(e), "code": AgentErrorCode.INTERNAL_ERROR},
+                ))
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"异常: {e}"}))
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                    )
+                except Exception:
+                    pass
+            finally:
+                await event_bus.close()
+
+        workflow_task = asyncio.create_task(_execute())
+
+        async for seq_event in self._drain_events(event_bus):
+            for proto_event in self._event_mapper.map_event(seq_event):
+                yield proto_event
+
+        await workflow_task

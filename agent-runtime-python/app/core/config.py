@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     agent_tool_history_max_chars: int = 120_000
     agent_tool_result_max_chars: int = 32_000
 
+    # vNext 链路引擎选择: "vnext" | "legacy"
+    agent_loop_engine: str = "vnext"
+
     llm_audit_enabled: bool = True
     llm_audit_dir: str = "../storage/llm_audit"
 
