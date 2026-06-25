@@ -64,6 +64,7 @@ agent-runtime-python/.mypy_cache/
 .opencode/
 .playwright-cli/
 .ruff_cache/
+.firecrawl/
 
 # Docs - only track specific subdirectories
 docs/*
