@@ -39,10 +39,6 @@ _STATUS_TOOLS: dict[str, str] = {
     "confirm_generation_mode": "正在确认生成模式...",
     "complete_implementation": "正在提交实现完成...",
     "submit_validation_report": "正在提交校验报告...",
-    "view": "正在查看文件...",
-    "create": "正在创建文件...",
-    "str_replace": "正在修改文件...",
-    "insert": "正在修改文件...",
 }
 
 _HIDDEN_TOOLS = frozenset({"finish", "ask_user"})
