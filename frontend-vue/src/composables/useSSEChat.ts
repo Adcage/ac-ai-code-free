@@ -166,16 +166,16 @@ export function useSSEChat(options: SSEChatOptions) {
 
     void (async () => {
       try {
-        const response = await ssePost(
-          '/app/chat/gen/code/stream',
-          buildChatStreamRequestBody({
+        const response = await ssePost({
+          path: '/app/chat/gen/code/stream',
+          body: buildChatStreamRequestBody({
             appId: unref(appId),
             sessionId,
             message: userMsg,
             displayMessage,
           }),
-          controller.signal,
-        )
+          signal: controller.signal,
+        })
 
         await readSseStream(response, (eventName, data) => {
           if (eventName === 'meta') {
@@ -277,11 +277,11 @@ export function useSSEChat(options: SSEChatOptions) {
       codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
 
     try {
-      const response = await ssePost(
-        '/app/chat/gen/code/stream/resume',
-        { sessionId },
-        controller.signal,
-      )
+      const response = await ssePost({
+        path: '/app/chat/gen/code/stream/resume',
+        body: { sessionId },
+        signal: controller.signal,
+      })
 
       await readSseStream(response, (eventName, data) => {
         if (eventName === 'business-error') {

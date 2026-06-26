@@ -112,6 +112,8 @@ interface Props {
   actions?: ActionType[]
   tagPosition?: 'top-right' | 'bottom-left'
   showTime?: boolean
+  /** 点击"查看对话"时是否自动导航到默认页面。设为 false 表示由父组件通过 @card-click 自行处理导航 */
+  navigateOnChat?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -120,6 +122,7 @@ const props = withDefaults(defineProps<Props>(), {
   size: 'default',
   tagPosition: 'bottom-left',
   showTime: true,
+  navigateOnChat: true,
 })
 
 const emit = defineEmits(['delete', 'edit', 'cardClick'])
@@ -162,13 +165,13 @@ const openDeployUrl = () => {
 }
 
 const handleCardClick = () => {
-  if (emit('cardClick', props.app)) return
-  goToApp()
+  emit('cardClick', props.app)
+  if (props.navigateOnChat) goToApp()
 }
 
 const handleChat = () => {
-  if (emit('cardClick', props.app)) return
-  goToApp()
+  emit('cardClick', props.app)
+  if (props.navigateOnChat) goToApp()
 }
 const handleDelete = () => emit('delete', props.app.id)
 

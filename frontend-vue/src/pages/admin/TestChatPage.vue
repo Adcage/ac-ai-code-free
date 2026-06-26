@@ -26,6 +26,7 @@
                 :app="app"
                 :show-user="false"
                 :actions="['chat', 'delete']"
+                :navigate-on-chat="false"
                 @delete="handleDeleteApp"
                 @card-click="selectApp"
               />
