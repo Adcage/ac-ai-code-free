@@ -63,6 +63,7 @@ agent-runtime-python/.mypy_cache/
 .worktrees/
 .opencode/
 .playwright-cli/
+.playwright-mcp\
 .ruff_cache/
 .firecrawl/
 
@@ -74,5 +75,3 @@ docs/*
 # Generated local docs artifacts
 docs/**/*.tmp
 docs/**/*.bak
-
-python-
