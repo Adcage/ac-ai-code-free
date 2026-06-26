@@ -432,8 +432,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     Map<String, String> extraInfo = new HashMap<>();
                     extraInfo.put("error", error.getMessage());
                     extraInfo.put("errorType", error.getClass().getSimpleName());
-                    log.error("代码生成流程异常, appId={}, sessionId={}, codeGenType={}, userId={}, message={}",
-                            appId, sessionId, codeGenTypeStr, loginUser.getId(), message, error);
                     String aiMessage = StrUtil.isBlank(readableAssistantMessageBuilder.toString())
                             ? "生成失败：" + error.getMessage()
                             : readableAssistantMessageBuilder.toString();
@@ -444,6 +442,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                         screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
                     } catch (Exception e) {
                         log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, e);
+                    }
+                })
+                .doOnCancel(() -> {
+                    int latencyMs = (int) (System.currentTimeMillis() - startTime);
+                    String aiMessage = readableAssistantMessageBuilder.toString();
+                    if (StrUtil.isNotBlank(aiMessage)) {
+                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, "{\"canceled\": true}");
+                        updateSessionSummary(sessionId);
                     }
                 });
     }
