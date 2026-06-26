@@ -27,7 +27,7 @@ def _map_code_gen_type(proto_value: int) -> CodeGenType:
         2: CodeGenType.MULTI_FILE,
         3: CodeGenType.VUE_PROJECT,
     }
-    return mapping.get(proto_value, CodeGenType.VUE_PROJECT)
+    return mapping.get(proto_value, CodeGenType.SINGLE_FILE)
 
 
 class RuntimeOrchestrator:

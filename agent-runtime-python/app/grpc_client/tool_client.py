@@ -16,7 +16,7 @@ def _map_code_gen_type(code_gen_type: str) -> int:
         "multi-file": common_pb2.MULTI_FILE,
         "vue_project": common_pb2.VUE_PROJECT,
     }
-    return mapping.get(code_gen_type, common_pb2.VUE_PROJECT)
+    return mapping.get(code_gen_type, common_pb2.SINGLE_FILE)
 
 
 class GrpcToolClient:

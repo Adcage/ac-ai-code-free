@@ -85,7 +85,7 @@ class AppServiceImplTest {
         assertNotNull(appId);
         ArgumentCaptor<App> appCaptor = ArgumentCaptor.forClass(App.class);
         verify(appService).save(appCaptor.capture());
-        assertEquals(CodeGenTypeEnum.MULTI_FILE.getValue(), appCaptor.getValue().getCodeGenType());
+        assertEquals(CodeGenTypeEnum.SINGLE_FILE.getValue(), appCaptor.getValue().getCodeGenType());
     }
 
     @Test

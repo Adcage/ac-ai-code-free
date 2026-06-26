@@ -417,14 +417,14 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             case SINGLE_FILE -> "single_file";
             case MULTI_FILE -> "multi-file";
             case VUE_PROJECT -> "vue_project";
-            default -> "vue_project";
+            default -> "single_file";
         };
     }
 
     private CodeGenType mapJavaCodeGenType(String javaType) {
-        if (javaType == null) return CodeGenType.VUE_PROJECT;
+        if (javaType == null) return CodeGenType.SINGLE_FILE;
         CodeGenTypeEnum enumValue = CodeGenTypeEnum.getEnumByValue(javaType);
-        if (enumValue == null) return CodeGenType.VUE_PROJECT;
+        if (enumValue == null) return CodeGenType.SINGLE_FILE;
         return switch (enumValue) {
             case SINGLE_FILE -> CodeGenType.SINGLE_FILE;
             case MULTI_FILE -> CodeGenType.MULTI_FILE;
