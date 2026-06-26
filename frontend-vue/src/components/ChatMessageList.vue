@@ -315,8 +315,23 @@ const md = new MarkdownIt({
   breaks: true,
 })
 
+/**
+ * Markdown 文本预处理：修复模型输出的常见格式问题
+ * - ATX 标题缺少空格：##标题 → ## 标题
+ * - 列表符号缺少空格：-项目 → - 项目
+ */
+const preprocessMarkdown = (text: string): string => {
+  return (
+    text
+      // 修复 ATX 标题：行首 1-6 个 # 后紧跟非空格字符，在 # 和内容之间插入空格
+      .replace(/^(#{1,6})([^#\s])/gm, '$1 $2')
+      // 修复无序列表：行首 - 或 * 后紧跟非空格字符
+      .replace(/^(\s*[-*])(\S)/gm, '$1 $2')
+  )
+}
+
 const renderMarkdown = (text: string) => {
-  return md.render(text)
+  return md.render(preprocessMarkdown(text))
 }
 
 const scrollToBottom = () => {
