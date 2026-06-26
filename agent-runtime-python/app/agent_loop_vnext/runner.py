@@ -1,14 +1,17 @@
-"""vNext 单实现链路 Runner — SSE 对话传输 + 工具调用。
+"""vNext 单实现链路 Runner — 迭代循环 + 工具调用。
 
 核心职责：
-1. 创建 Workspace/FileTools（对话一开始就创建）
-2. 构建系统提示词（使用 ImplementorPromptBuilder）
-3. 构建消息列表（使用 HistoryBuilder，注入对话历史）
+1. 创建 Workspace/FileTools
+2. 构建系统提示词（ImplementorPromptBuilder）
+3. 构建消息列表（HistoryBuilder）
 4. 绑定工具到模型
-5. 流式调用模型 → 逐 chunk 发射 TEXT_DELTA → 处理 tool_calls → DONE
+5. 迭代循环：流式调用模型 → 文本实时发射 → 收集 tool_calls → 执行工具 → 结果反馈模型 → 继续循环
+6. 退出条件：模型无 tool_calls（纯文本收尾）
 """
 
 import logging
+
+from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agent_loop_vnext.state import SingleImplementState
 from app.core.config import settings
@@ -30,8 +33,12 @@ class SingleImplementLoopRunner:
         self._state = SingleImplementState()
         self._event_bus = services.event_bus
 
+    @property
+    def state(self) -> SingleImplementState:
+        return self._state
+
     async def run(self) -> None:
-        """执行 vNext 对话循环。"""
+        """执行 vNext 迭代循环。"""
         from app.tools.file_tools import FileTools, Workspace
 
         # 1. 创建 Workspace（从 context.workspace_path，Java 传入）
@@ -67,34 +74,32 @@ class SingleImplementLoopRunner:
         # 6. 绑定工具到模型
         chat_model_with_tools = chat_model.bind_tools(tools)
 
+        # 7. 迭代循环
         try:
-            # 7. 流式调用模型
-            has_content = False
-            async for chunk in chat_model_with_tools.astream(messages):
-                # 处理文本内容
-                text = getattr(chunk, "content", None)
-                if text:
-                    has_content = True
-                    logger.debug("TEXT_DELTA chunk | length=%d", len(text))
-                    await self._event_bus.emit(RuntimeEvent(
-                        RuntimeEventType.TEXT_DELTA,
-                        {"text": text},
-                    ))
+            while True:
+                # 流式调用模型：文本边收边发，收集完整响应后提取 tool_calls
+                text_content, tool_calls = await self._stream_model_call(chat_model_with_tools, messages)
 
-                # 处理工具调用
-                tool_calls = getattr(chunk, "tool_calls", None)
-                if tool_calls:
-                    has_content = True
-                    await self._handle_tool_calls(tool_calls, tools)
+                # 无 tool_calls → 模型纯文本收尾，退出循环
+                if not tool_calls:
+                    logger.info("model finished without tool_calls | iteration=%d", self._state.iteration)
+                    self._state.status = "completed"
+                    break
 
-            if not has_content:
-                await self._event_bus.emit(RuntimeEvent(
-                    RuntimeEventType.RUNTIME_ERROR,
-                    {"message": "模型返回为空", "code": int(AgentErrorCode.MODEL_RESPONSE_EMPTY)},
+                # 追加 AIMessage（含 tool_calls）到消息列表
+                messages.append(AIMessage(
+                    content=text_content or "",
+                    tool_calls=tool_calls,
                 ))
 
-            # 完成
-            self._state.status = "completed"
+                # 执行工具，追加 ToolMessage 到消息列表
+                await self._execute_tool_calls(tool_calls, tools, messages)
+
+                # 递增迭代
+                self._state.iteration += 1
+                logger.info("iteration completed | iteration=%d", self._state.iteration)
+
+            # 发射完成事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.DONE,
                 {"message": "对话完成"},
@@ -102,6 +107,7 @@ class SingleImplementLoopRunner:
 
         except AgentRuntimeError as e:
             logger.error("vNext runner error: %s", e)
+            self._state.status = "failed"
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.RUNTIME_ERROR,
                 {"message": str(e), "code": int(e.code)},
@@ -111,6 +117,7 @@ class SingleImplementLoopRunner:
             ))
         except Exception as e:
             logger.error("vNext runner unexpected error: %s", e, exc_info=True)
+            self._state.status = "failed"
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.RUNTIME_ERROR,
                 {"message": str(e), "code": int(AgentErrorCode.INTERNAL_ERROR)},
@@ -119,41 +126,89 @@ class SingleImplementLoopRunner:
                 RuntimeEventType.DONE, {"message": f"异常: {e}"},
             ))
 
-    async def _handle_tool_calls(self, tool_calls: list, tools: list) -> None:
-        """处理模型触发的工具调用。"""
+    async def _stream_model_call(self, chat_model_with_tools, messages: list) -> tuple[str, list[dict]]:
+        """流式调用模型，文本实时发射，收集完整响应后提取 tool_calls。
+
+        Returns:
+            (text_content, tool_calls) — 文本内容和工具调用列表
+        """
+        collected_chunks = []
+
+        async for chunk in chat_model_with_tools.astream(messages):
+            collected_chunks.append(chunk)
+
+            # 文本内容 → 实时发射 TEXT_DELTA
+            text = getattr(chunk, "content", None)
+            if text:
+                logger.debug("TEXT_DELTA chunk | length=%d", len(text))
+                await self._event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.TEXT_DELTA,
+                    {"text": text},
+                ))
+
+        if not collected_chunks:
+            return "", []
+
+        # 合并所有 chunks 为完整响应
+        full_response = collected_chunks[0]
+        for c in collected_chunks[1:]:
+            full_response = full_response + c
+
+        text_content = full_response.content or ""
+
+        # 从完整响应提取 tool_calls（合并后才有完整参数）
+        tool_calls = []
+        if hasattr(full_response, "tool_calls") and full_response.tool_calls:
+            tool_calls = [
+                {"id": tc["id"], "name": tc["name"], "args": tc["args"]}
+                for tc in full_response.tool_calls
+            ]
+
+        return text_content, tool_calls
+
+    async def _execute_tool_calls(self, tool_calls: list[dict], tools: list, messages: list) -> None:
+        """执行工具调用，发射事件，追加 ToolMessage 到消息列表。"""
         for tc in tool_calls:
-            tool_name = tc.get("name", "")
-            tool_args = tc.get("args", {})
-            tool_id = tc.get("id", "")
+            tool_name = tc["name"]
+            tool_args = tc["args"]
+            tool_id = tc["id"]
 
             logger.info("tool_call | name=%s id=%s", tool_name, tool_id)
 
             # 发射 TOOL_CALL 事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.TOOL_CALL,
-                {
-                    "id": tool_id,
-                    "name": tool_name,
-                    "arguments": tool_args,
-                },
+                {"id": tool_id, "name": tool_name, "arguments": tool_args},
             ))
 
             # 查找匹配的工具并执行
             result = ""
+            tool_found = False
             for tool in tools:
                 if tool.name == tool_name:
+                    tool_found = True
                     try:
                         result = await tool._arun(**tool_args)
+                    except AgentRuntimeError as e:
+                        result = f"工具执行失败: {e}"
+                        logger.warning("tool error | name=%s error=%s", tool_name, e)
                     except Exception as e:
                         result = f"工具执行失败: {e}"
+                        logger.error("tool unexpected error | name=%s error=%s", tool_name, e, exc_info=True)
                     break
+
+            if not tool_found:
+                result = f"未知工具: {tool_name}"
+                logger.error("unknown tool | name=%s", tool_name)
 
             # 发射 TOOL_RESULT 事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.TOOL_RESULT,
-                {
-                    "id": tool_id,
-                    "name": tool_name,
-                    "result": result,
-                },
+                {"id": tool_id, "name": tool_name, "result": result},
+            ))
+
+            # 追加 ToolMessage 到消息列表（让模型看到工具结果）
+            messages.append(ToolMessage(
+                content=result,
+                tool_call_id=tool_id,
             ))
