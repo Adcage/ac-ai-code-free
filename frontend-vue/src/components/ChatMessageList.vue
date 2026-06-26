@@ -88,6 +88,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { LoadingOutlined } from '@ant-design/icons-vue'
+import MarkdownIt from 'markdown-it'
 import PlanningForm from '@/components/PlanningForm.vue'
 import PlanConfirmationCard from '@/components/PlanConfirmationCard.vue'
 
@@ -308,11 +309,14 @@ function stripToolEventLines(content: string) {
     .join('\n')
 }
 
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true,
+})
+
 const renderMarkdown = (text: string) => {
-  return text
-    .replace(/\n/g, '<br/>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
+  return md.render(text)
 }
 
 const scrollToBottom = () => {
@@ -385,6 +389,64 @@ defineExpose({ scrollToBottom, listRef })
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 13px;
+}
+
+.message-text :deep(pre) {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 8px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.message-text :deep(pre code) {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.message-text :deep(h1),
+.message-text :deep(h2),
+.message-text :deep(h3),
+.message-text :deep(h4) {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.message-text :deep(h1) { font-size: 18px; }
+.message-text :deep(h2) { font-size: 16px; }
+.message-text :deep(h3) { font-size: 15px; }
+.message-text :deep(h4) { font-size: 14px; }
+
+.message-text :deep(ul),
+.message-text :deep(ol) {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+
+.message-text :deep(li) {
+  margin: 2px 0;
+}
+
+.message-text :deep(p) {
+  margin: 4px 0;
+}
+
+.message-text :deep(blockquote) {
+  border-left: 3px solid var(--color-border);
+  padding-left: 10px;
+  margin: 8px 0;
+  color: var(--color-text-secondary);
+}
+
+.message-text :deep(a) {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.message-text :deep(a:hover) {
+  text-decoration: underline;
 }
 
 .user-msg .message-text :deep(code) {
