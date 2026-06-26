@@ -104,7 +104,7 @@ import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
-import { useSSEChat } from '@/composables/useSSEChat'
+import { useAppPreview } from '@/composables/useAppPreview'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
 
 const route = useRoute()
@@ -124,9 +124,6 @@ const app = ref<API.AppVO>()
 const enhancingInput = ref(false)
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
-const iframeUrl = ref('')
-const previewWarning = ref('')
-const previewStatus = ref<'idle' | 'generating' | 'checking' | 'ready' | 'failed'>('idle')
 const chatPanelWidth = ref(450)
 const resizing = ref(false)
 const resizeStartX = ref(0)
@@ -293,44 +290,16 @@ const doEnhanceInput = async (promptText: string) => {
   finally { enhancingInput.value = false }
 }
 
-// --- preview ---
-const updatePreview = async (refresh = false) => {
-  previewWarning.value = ''
-  selectedElement.value = null
-  const previewUrl = app.value?.previewUrl
-  if (!previewUrl) {
-    if (iframeUrl.value) { previewStatus.value = 'ready'; previewWarning.value = '预览地址暂不可用，显示的是上一次的预览结果' }
-    else { iframeUrl.value = ''; previewStatus.value = 'idle' }
-    return
-  }
-  const nextUrl = refresh ? `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : previewUrl
-  if (!refresh && iframeUrl.value) {
-    const currentBase = iframeUrl.value.split('?')[0]
-    const nextBase = nextUrl.split('?')[0]
-    if (currentBase === nextBase && previewStatus.value === 'ready') return
-  }
-  previewStatus.value = 'checking'
-  const resourceAvailable = await checkPreviewResource(nextUrl)
-  if (resourceAvailable) { previewStatus.value = 'ready'; iframeUrl.value = nextUrl; return }
-  if (iframeUrl.value) { previewStatus.value = 'ready'; previewWarning.value = '预览资源检查失败，显示的是上一次的预览结果' }
-  else { iframeUrl.value = ''; previewStatus.value = 'idle' }
-}
-
-const checkPreviewResource = async (url: string) => {
-  try {
-    const response = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' })
-    if (!response.ok) return false
-    const text = await response.text()
-    return !(text.includes('Whitelabel Error Page') || text.includes('No static resource'))
-  } catch { return false }
-}
-
-// --- SSE composable ---
-const { generating, startSSE, stopSSE, streamWarning } = useSSEChat({
+// --- SSE + 预览 ---
+const {
+  generating, startSSE, stopSSE, streamWarning,
+  iframeUrl, previewWarning, previewStatus,
+  updatePreview,
+} = useAppPreview(app, {
   appId,
   messages,
-  onPreviewUpdate: () => updatePreview(true),
-  onSessionsUpdate: loadSessions,
+  sessions,
+  loadSessions,
   onAppUpdate: (data) => {
     if (data.codeGenType && app.value) app.value.codeGenType = data.codeGenType
   },
@@ -426,6 +395,7 @@ const handleIframeLoad = () => { /* handled by PreviewPanel */ }
 // --- navigation & resize ---
 const entryPathStorageKey = `app_generate_entry_${appId}`
 
+// --- 生成结束时触发预览刷新 ---
 onMounted(() => {
   const backPath = (window.history.state?.back as string | undefined) || ''
   const forwardPath = (window.history.state?.forward as string | undefined) || ''
@@ -465,7 +435,16 @@ const startResize = (event: MouseEvent) => {
 }
 
 onUnmounted(() => {
+  stopSSE()
   stopResize()
+})
+
+// 同一路由切换应用时只重置状态，不停 SSE（让生成自然完成以保存历史）
+watch(() => route.params.id, () => {
+  if (generating.value) {
+    // 直接重置 generating 状态，不 abort SSE
+    generating.value = false
+  }
 })
 </script>
 

@@ -285,6 +285,9 @@ export function useSSEChat(options: SSEChatOptions) {
     const processJson = (jsonStr: string): boolean => {
       try {
         const messageObj = JSON.parse(jsonStr)
+        if (messageObj.type === 'tool_request' || messageObj.type === 'tool_executed') {
+          console.log('[SSE] tool event:', messageObj.type, messageObj.name)
+        }
         return dispatchMessageEvent(messageObj, aiMsgIndex)
       } catch {
         return false
@@ -324,8 +327,10 @@ export function useSSEChat(options: SSEChatOptions) {
     targetMessage.toolEvents.push(eventItem)
     // 工具执行完成 → 文件可能已变化，防抖触发预览检查
     if (eventItem.type === 'executed') {
+      console.log('[SSE] executed event, scheduling preview refresh')
       if (previewUpdateTimer) clearTimeout(previewUpdateTimer)
       previewUpdateTimer = setTimeout(() => {
+        console.log('[SSE] preview refresh firing')
         onPreviewUpdate()
         previewUpdateTimer = null
       }, 2000)

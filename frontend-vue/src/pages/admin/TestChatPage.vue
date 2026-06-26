@@ -139,7 +139,7 @@ import ChatMessageList from '@/components/ChatMessageList.vue'
 import type { ChatMessage } from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
-import { useSSEChat } from '@/composables/useSSEChat'
+import { useAppPreview } from '@/composables/useAppPreview'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
 
 const router = useRouter()
@@ -168,11 +168,6 @@ const editingSessionId = ref('')
 const editingTitle = ref('')
 const deployLoading = ref(false)
 
-// 预览状态
-const iframeUrl = ref('')
-const previewWarning = ref('')
-const previewStatus = ref<'idle' | 'generating' | 'checking' | 'ready' | 'failed'>('idle')
-
 // 布局状态
 const chatPanelWidth = ref(450)
 const resizing = ref(false)
@@ -183,12 +178,16 @@ const resizeStartWidth = ref(450)
 const chatMessageListRef = ref<InstanceType<typeof ChatMessageList>>()
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel>>()
 
-// SSE composable
-const { startSSE, generating, streamWarning } = useSSEChat({
+// SSE composable + 预览
+const {
+  startSSE, stopSSE, generating, streamWarning,
+  iframeUrl, previewWarning, previewStatus,
+  updatePreview,
+} = useAppPreview(currentApp, {
   appId: selectedAppId,
   messages,
-  onPreviewUpdate: updatePreview,
-  onSessionsUpdate: loadSessions,
+  sessions,
+  loadSessions,
   onAppUpdate: (data) => {
     if (data.codeGenType && currentApp.value) {
       currentApp.value.codeGenType = data.codeGenType
@@ -221,6 +220,7 @@ const initAppChat = async (appId: string) => {
 }
 
 const resetChatState = () => {
+  stopSSE()
   selectedAppId.value = ''
   currentApp.value = undefined
   messages.value = []
@@ -594,56 +594,6 @@ async function handlePlanConfirm(index: number) {
 
 function handlePlanningSkip(_index: number) {}
 
-// ======== 预览逻辑 ========
-
-async function updatePreview() {
-  const appId = selectedAppId.value
-  if (!appId) return
-  previewWarning.value = ''
-
-  const latestAiMessage = [...messages.value].reverse().find((item) => item.role === 'ai')
-  if (!latestAiMessage || latestAiMessage.status === 'failed') {
-    iframeUrl.value = ''
-    previewStatus.value = latestAiMessage?.status === 'failed' ? 'failed' : 'idle'
-    if (previewStatus.value === 'failed') {
-      previewWarning.value = '本次生成未产出可预览页面'
-    }
-    return
-  }
-
-  const previewUrl = currentApp.value?.previewUrl
-  if (!previewUrl) {
-    iframeUrl.value = ''
-    previewStatus.value = 'failed'
-    previewWarning.value = '预览地址暂不可用'
-    return
-  }
-
-  const nextUrl = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}`
-  previewStatus.value = 'checking'
-  const resourceAvailable = await checkPreviewResource(nextUrl)
-  if (resourceAvailable) {
-    previewStatus.value = 'ready'
-    iframeUrl.value = nextUrl
-    return
-  }
-  iframeUrl.value = ''
-  previewStatus.value = 'failed'
-  previewWarning.value = '预览资源不存在，通常是中间生成或构建失败导致目标文件未生成。'
-}
-
-
-const checkPreviewResource = async (url: string) => {
-  try {
-    const response = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' })
-    if (!response.ok) return false
-    const text = await response.text()
-    return !(text.includes('Whitelabel Error Page') || text.includes('No static resource'))
-  } catch {
-    return false
-  }
-}
-
 // ======== 部署 ========
 
 const doDeploy = async () => {
@@ -702,6 +652,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopSSE()
   stopResize()
   appsObserver?.disconnect()
 })
