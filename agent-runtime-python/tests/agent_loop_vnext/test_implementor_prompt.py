@@ -20,7 +20,14 @@ def test_build_system_prompt_contains_role():
     builder = ImplementorPromptBuilder(_make_context(), SingleImplementState())
     prompt = builder.build_system_prompt()
     assert "代码实现助手" in prompt
-    assert "仔细理解用户需求" in prompt
+
+
+def test_build_system_prompt_contains_workflow():
+    """系统提示词应包含工作方式描述。"""
+    builder = ImplementorPromptBuilder(_make_context(), SingleImplementState())
+    prompt = builder.build_system_prompt()
+    assert "工作方式" in prompt
+    assert "不要主动调用工具" in prompt
 
 
 def test_project_rules_single_file():
