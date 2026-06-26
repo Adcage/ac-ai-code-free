@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
+import myAxios from '@/request'
 import {
   createChatSession,
   listChatHistoryByPage,
@@ -37,6 +38,30 @@ const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => ({
   status: item.status || '',
   toolEvents: normalizeToolEvents(item.toolEvents || []),
 })
+
+export interface ActiveGenerationStatus {
+  active: boolean
+  agentRunId?: number
+  text?: string
+}
+
+/** 检查当前 session 是否有活跃的生成任务 */
+export const checkActiveGeneration = async (sessionId: string): Promise<ActiveGenerationStatus> => {
+  try {
+    const res = await myAxios.get('/app/chat/gen/active', { params: { sessionId } })
+    if (res.data?.code === 0) {
+      const data = res.data.data
+      if (data?.active) {
+        return { active: true, agentRunId: data.agentRunId, text: data.text || '' }
+      }
+      // active=false 但 text 不为空 → gRPC 刚完成，handler 已入库
+      if (data?.text) {
+        return { active: false, text: data.text }
+      }
+    }
+  } catch { /* 忽略错误 */ }
+  return { active: false }
+}
 
 export function useChatSession(appId: string) {
   const sessions = ref<API.ChatSessionVO[]>([])

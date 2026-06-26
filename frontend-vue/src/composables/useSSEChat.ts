@@ -1,5 +1,6 @@
 import { ref, unref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { ssePost } from '@/utils/sseRequest'
 import { extractBusinessChunk, splitConcatenatedJsonObjects } from './sseParser'
 import { buildChatStreamRequestBody } from '@/utils/chatStreamRequest'
 
@@ -61,6 +62,8 @@ export function useSSEChat(options: SSEChatOptions) {
   const streamWarning = ref('')
   let currentAbortController: AbortController | null = null
   let previewUpdateTimer: ReturnType<typeof setTimeout> | null = null
+
+
 
   const finalizeGeneration = (aiMsgIndex: number, streamCompleted: boolean, delayPreviewRefresh = false) => {
     currentAbortController = null
@@ -158,39 +161,21 @@ export function useSSEChat(options: SSEChatOptions) {
     const isStructuredToolMode =
       codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL
     const controller = new AbortController()
     currentAbortController = controller
 
     void (async () => {
       try {
-        const response = await fetch(`${baseUrl}/app/chat/gen/code/stream`, {
-          method: 'POST',
-          credentials: 'include',
-          cache: 'no-store',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(
-            buildChatStreamRequestBody({
-              appId: unref(appId),
-              sessionId,
-              message: userMsg,
-              displayMessage,
-            }),
-          ),
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(errorText || `HTTP ${response.status}`)
-        }
-        const contentType = response.headers.get('content-type') || ''
-        if (!contentType.includes('text/event-stream')) {
-          const abnormalBody = await response.text()
-          throw new Error(abnormalBody || 'SSE 响应类型错误')
-        }
+        const response = await ssePost(
+          '/app/chat/gen/code/stream',
+          buildChatStreamRequestBody({
+            appId: unref(appId),
+            sessionId,
+            message: userMsg,
+            displayMessage,
+          }),
+          controller.signal,
+        )
 
         await readSseStream(response, (eventName, data) => {
           if (eventName === 'meta') {
@@ -273,6 +258,68 @@ export function useSSEChat(options: SSEChatOptions) {
     generating.value = false
   }
 
+  /**
+   * 重连到活跃生成：前端切走再回来时，续收后续实时事件。
+   * POST /resume 从 Sink 订阅新事件，追加到现有的 AI message。
+   * @param sessionId   会话 ID
+   * @param codeGenType 代码生成类型（决定是否 JSON 解析）
+   * @param aiMsgIndex  已存在的 AI message 的索引
+   */
+  const resumeSSE = async (sessionId: string, codeGenType?: string, aiMsgIndex?: number): Promise<boolean> => {
+    const msgIndex = aiMsgIndex ?? messages.value.length - 1
+    if (msgIndex < 0 || msgIndex >= messages.value.length) return false
+    generating.value = true
+
+    const controller = new AbortController()
+    currentAbortController = controller
+
+    const isStructuredToolMode =
+      codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
+
+    try {
+      const response = await ssePost(
+        '/app/chat/gen/code/stream/resume',
+        { sessionId },
+        controller.signal,
+      )
+
+      await readSseStream(response, (eventName, data) => {
+        if (eventName === 'business-error') {
+          finalizeGeneration(msgIndex, false)
+          return true
+        }
+        if (eventName === 'done') {
+          finalizeGeneration(msgIndex, true, true)
+          return true
+        }
+        if (eventName === 'meta') return false
+
+        const rawData = data
+        if (rawData === '[DONE]') {
+          finalizeGeneration(msgIndex, true, true)
+          return true
+        }
+
+        const fragments = extractBusinessChunk(rawData)
+        for (const fragment of fragments) {
+          if (fragment === '[DONE]') {
+            finalizeGeneration(msgIndex, true, true)
+            return true
+          }
+          if (fragment) appendStreamChunk(msgIndex, fragment, isStructuredToolMode)
+        }
+        return false
+      })
+
+      finalizeGeneration(msgIndex, true, true)
+      return true
+    } catch (error) {
+      if (controller.signal.aborted) return false
+      finalizeGeneration(msgIndex, false)
+      return false
+    }
+  }
+
   const appendStreamChunk = (aiMsgIndex: number, chunk: string, structuredToolMode: boolean) => {
     if (!chunk) return
     if (!structuredToolMode) {
@@ -285,10 +332,18 @@ export function useSSEChat(options: SSEChatOptions) {
     const processJson = (jsonStr: string): boolean => {
       try {
         const messageObj = JSON.parse(jsonStr)
-        if (messageObj.type === 'tool_request' || messageObj.type === 'tool_executed') {
-          console.log('[SSE] tool event:', messageObj.type, messageObj.name)
+        if (messageObj && typeof messageObj === 'object') {
+          // 直接处理 ai_response，绕开 dispatchMessageEvent 可能的异常
+          if (messageObj.type === 'ai_response' && typeof messageObj.data === 'string') {
+            const data = messageObj.data
+            if (data && data !== 'waiting_for_user' && messages.value[aiMsgIndex]) {
+              messages.value[aiMsgIndex].content += data
+              return true
+            }
+          }
+          return dispatchMessageEvent(messageObj, aiMsgIndex)
         }
-        return dispatchMessageEvent(messageObj, aiMsgIndex)
+        return false
       } catch {
         return false
       }
@@ -327,10 +382,8 @@ export function useSSEChat(options: SSEChatOptions) {
     targetMessage.toolEvents.push(eventItem)
     // 工具执行完成 → 文件可能已变化，防抖触发预览检查
     if (eventItem.type === 'executed') {
-      console.log('[SSE] executed event, scheduling preview refresh')
       if (previewUpdateTimer) clearTimeout(previewUpdateTimer)
       previewUpdateTimer = setTimeout(() => {
-        console.log('[SSE] preview refresh firing')
         onPreviewUpdate()
         previewUpdateTimer = null
       }, 2000)
@@ -547,5 +600,6 @@ export function useSSEChat(options: SSEChatOptions) {
     streamWarning,
     startSSE,
     stopSSE,
+    resumeSSE,
   }
 }

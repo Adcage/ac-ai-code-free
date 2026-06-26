@@ -60,15 +60,18 @@ export function useAppPreview(
     }
   }
 
+  let lastLoggedPreviewUrl = ''
+
   const updatePreview = async () => {
-    console.log('[AppPreview] updatePreview, previewUrl:', appRef.value?.previewUrl)
+    if (appRef.value?.previewUrl && appRef.value.previewUrl !== lastLoggedPreviewUrl) {
+      console.log('[AppPreview] updatePreview, previewUrl:', appRef.value.previewUrl)
+      lastLoggedPreviewUrl = appRef.value.previewUrl
+    }
     previewWarning.value = ''
 
     // 如果还没有 previewUrl，先尝试刷新 app 数据
     if (!appRef.value?.previewUrl) {
-      console.log('[AppPreview] no previewUrl, refreshing app data...')
       await refreshAppData()
-      console.log('[AppPreview] after refresh, previewUrl:', appRef.value?.previewUrl)
     }
 
     const previewUrl = appRef.value?.previewUrl
@@ -117,6 +120,7 @@ export function useAppPreview(
     // SSE 能力
     startSSE: sseChat.startSSE,
     stopSSE: sseChat.stopSSE,
+    resumeSSE: sseChat.resumeSSE,
     generating: sseChat.generating,
     streamWarning: sseChat.streamWarning,
     // 预览状态

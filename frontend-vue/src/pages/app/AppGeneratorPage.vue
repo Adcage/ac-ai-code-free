@@ -105,6 +105,7 @@ import ChatMessageList from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
 import { useAppPreview } from '@/composables/useAppPreview'
+import { checkActiveGeneration } from '@/composables/useChatSession'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
 
 const route = useRoute()
@@ -163,6 +164,23 @@ const loadApp = async () => {
       if (sessions.value.length > 0 && sessions.value[0].id) {
         currentSessionId.value = normalizeId(sessions.value[0].id)
         await loadRemoteHistory(currentSessionId.value)
+        // 检查是否有活跃生成
+        const activeGen = await checkActiveGeneration(currentSessionId.value)
+        if (activeGen.active) {
+          // gRPC 还在跑：立即显示 generating 指示器，展示累积文本，尝试 SSE 重连
+          generating.value = true
+          const msgIdx = messages.value.length
+          messages.value.push({ role: 'ai', content: activeGen.text || '', status: 'running', toolEvents: [] })
+          const resumed = await resumeSSE(currentSessionId.value, app.value?.codeGenType, msgIdx)
+          if (!resumed && currentSessionId.value) {
+            generating.value = false
+            await loadRemoteHistory(currentSessionId.value)
+          }
+        } else if (activeGen.text) {
+          // gRPC 刚完成（handler 已入库），展示文本后 reload 刷新历史
+          messages.value.push({ role: 'ai', content: activeGen.text, status: 'success', toolEvents: [] })
+          setTimeout(() => handleReloadCurrentSession(), 500)
+        }
         await updatePreview()
       } else {
         const newSessionId = await createSession()
@@ -292,7 +310,7 @@ const doEnhanceInput = async (promptText: string) => {
 
 // --- SSE + 预览 ---
 const {
-  generating, startSSE, stopSSE, streamWarning,
+  generating, startSSE, stopSSE, resumeSSE, streamWarning,
   iframeUrl, previewWarning, previewStatus,
   updatePreview,
 } = useAppPreview(app, {
