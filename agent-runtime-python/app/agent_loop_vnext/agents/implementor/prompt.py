@@ -49,6 +49,15 @@ _RULES_MAP: dict[str, str] = {
 }
 
 
+_OUTPUT_FORMAT = (
+    "输出格式规范：\n"
+    "1. 回复中的 Markdown 必须符合标准语法：ATX 标题（# 标记）后面必须跟一个空格，例如 `## 标题` 而非 `##标题`。\n"
+    "2. 列表项前必须有空行与上文分隔，列表符号后必须跟空格，例如 `- 项目` 而非 `-项目`。\n"
+    "3. 代码块必须使用三反引号围栏格式，并标注语言标识。\n"
+    "4. 禁止将完整源码输出到回复中，代码应通过工具写入文件。"
+)
+
+
 class ImplementorPromptBuilder:
     """代码实现 Agent 的提示词构建器。"""
 
@@ -61,6 +70,7 @@ class ImplementorPromptBuilder:
         parts = [
             self._render_role(),
             self._render_project_rules(),
+            self._render_output_format(),
         ]
         return "\n\n".join(p for p in parts if p)
 
@@ -82,6 +92,10 @@ class ImplementorPromptBuilder:
             code_gen_type,
             f"项目类型：{code_gen_type}\n生成代码时请遵循该类型项目的目录结构和文件规范。",
         )
+
+    def _render_output_format(self) -> str:
+        """渲染输出格式规范。"""
+        return _OUTPUT_FORMAT
 
     def _get_effective_code_gen_type(self) -> str:
         code_gen_type = self._context.code_gen_type
