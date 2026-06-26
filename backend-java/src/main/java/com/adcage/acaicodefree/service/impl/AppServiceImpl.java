@@ -16,6 +16,8 @@ import com.adcage.acaicodefree.constant.UserConstant;
 import com.adcage.acaicodefree.core.artifact.ArtifactManifestReader;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService.BuildResult;
+import com.adcage.acaicodefree.core.generation.ActiveGeneration;
+import com.adcage.acaicodefree.core.generation.ActiveGenerationManager;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
@@ -67,6 +69,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -97,6 +100,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private ScreenshotService screenshotService;
+
+    @Resource
+    private ActiveGenerationManager activeGenerationManager;
 
     @Resource
     private CodeGenerationRuntimeRouter codeGenerationRuntimeRouter;
@@ -351,7 +357,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();
         AtomicReference<String> workflowCodeGenTypeRef = new AtomicReference<>();
         AtomicReference<String> workflowGeneratedDirRef = new AtomicReference<>();
+        AtomicBoolean historySaved = new AtomicBoolean(false);
         long startTime = System.currentTimeMillis();
+
+        // 7a. 注册活跃生成状态 + 完成回调
+        // 内部订阅者（GrpcPythonAgentRuntime 中的 sink.asFlux().subscribe()）
+        // 会在 gRPC onComplete/onError → sink.tryEmitComplete() 后触发此回调，
+        // 确保 SSE 断开后 AI 回复仍能入库。
+        ActiveGeneration activeGen = activeGenerationManager.register(sessionId, agentRunId);
+        activeGen.setOnGenerationCompleted(finalText -> {
+            log.info("[Handler] onGenerationCompleted fired, sessionId={}, agentRunId={}, historySaved={}, textLen={}",
+                    sessionId, agentRunId, historySaved.get(), finalText != null ? finalText.length() : 0);
+            if (historySaved.compareAndSet(false, true)) {
+                int latencyMs = (int) (System.currentTimeMillis() - startTime);
+                String msg = StrUtil.blankToDefault(finalText, "");
+                saveHistoryMessage(sessionId, appId, loginUser.getId(), msg, "ai", "success", codeGenTypeStr, latencyMs, "{\"completed_by\": \"handler\"}");
+                updateSessionSummary(sessionId);
+                log.info("[Handler] Saved to DB, sessionId={}, length={}", sessionId, msg.length());
+            } else {
+                log.info("[Handler] CAS skipped (doOnComplete already saved), sessionId={}", sessionId);
+            }
+            activeGenerationManager.remove(sessionId);
+            log.info("[Handler] Removed ActiveGeneration, sessionId={}", sessionId);
+        });
+
         Flux<String> sourceStream = runtime.stream(runtimeRequest);
         Flux<String> handledStream = streamHandlerExecutor.handle(codeGenTypeEnum, sourceStream, readableAssistantMessageBuilder);
         return handledStream
@@ -418,9 +447,17 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             }
                         }
                     }
-                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
-                    updateSessionSummary(sessionId);
-                    // Agent 运行结束后触发封面截图
+                    // doOnComplete 正常保存（SSE 连接状态下）。
+                    // 若 handler 已通过内部订阅者保存（SSE 断开后 gRPC 完成），CAS 跳过。
+                    if (historySaved.compareAndSet(false, true)) {
+                        log.info("[doOnComplete] Saving to DB, sessionId={}, status={}, textLen={}",
+                                sessionId, status, aiMessage != null ? aiMessage.length() : 0);
+                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
+                        updateSessionSummary(sessionId);
+                    } else {
+                        log.info("[doOnComplete] CAS skipped (handler already saved), sessionId={}", sessionId);
+                    }
+                    // Agent 运行结束后触发封面截图（无论谁保存、何种方式完成）
                     try {
                         screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
                     } catch (Exception e) {
@@ -436,6 +473,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             ? "生成失败：" + error.getMessage()
                             : readableAssistantMessageBuilder.toString();
                     saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, JSONUtil.toJsonStr(extraInfo));
+                    historySaved.set(true);
                     updateSessionSummary(sessionId);
                     // Agent 运行异常结束后也触发封面截图
                     try {
@@ -444,12 +482,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                         log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, e);
                     }
                 })
-                .doOnCancel(() -> {
-                    int latencyMs = (int) (System.currentTimeMillis() - startTime);
-                    String aiMessage = readableAssistantMessageBuilder.toString();
-                    if (StrUtil.isNotBlank(aiMessage)) {
-                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, "{\"canceled\": true}");
-                        updateSessionSummary(sessionId);
+                .doFinally(signalType -> {
+                    log.info("[doFinally] signalType={}, historySaved={}, sessionId={}",
+                            signalType, historySaved.get(), sessionId);
+                    if (historySaved.get()) {
+                        activeGenerationManager.remove(sessionId);
+                        log.info("[doFinally] Removed ActiveGeneration, sessionId={}", sessionId);
                     }
                 });
     }
@@ -689,7 +727,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "代码生成类型错误");
             return codeGenTypeEnum;
         }
-        return CodeGenTypeEnum.MULTI_FILE;
+        return CodeGenTypeEnum.SINGLE_FILE;
     }
 
     private CodeGenTypeEnum parseCodeGenType(String valueOrName) {

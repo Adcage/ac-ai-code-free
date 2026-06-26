@@ -1,5 +1,7 @@
 package com.adcage.acaicodefree.grpc.client;
 
+import com.adcage.acaicodefree.core.generation.ActiveGeneration;
+import com.adcage.acaicodefree.core.generation.ActiveGenerationManager;
 import com.adcage.acaicodefree.grpc.codegen.*;
 import com.adcage.acaicodefree.grpc.common.*;
 import com.adcage.acaicodefree.grpc.common.GenerationMode;
@@ -12,12 +14,14 @@ import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import cn.hutool.json.JSONUtil;
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import reactor.core.publisher.Sinks.EmitResult;
 
 import java.util.concurrent.TimeUnit;
 
@@ -30,6 +34,9 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
     @GrpcClient("python-agent")
     private CodeGenerationServiceGrpc.CodeGenerationServiceStub codeGenServiceStub;
 
+    @Resource
+    private ActiveGenerationManager activeGenerationManager;
+
     @Value("${agent.grpc.stream-deadline-seconds:300}")
     private int streamDeadlineSeconds;
 
@@ -40,29 +47,73 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
 
     @Override
     public Flux<String> stream(CodeGenerationRequest request) {
-        Sinks.Many<String> sink = Sinks.many().unicast().onBackpressureBuffer();
+        // multicast: 允许内部监听器和 SSE 订阅者互不影响
+        Sinks.Many<String> sink = Sinks.many().multicast().directBestEffort();
 
         com.adcage.acaicodefree.grpc.codegen.CodeGenerationRequest grpcRequest = buildGrpcRequest(request);
+
+        // 注册内存中的活跃生成状态（computeIfAbsent，不会覆盖 AppServiceImpl 已注册的 handler）
+        ActiveGeneration activeGen = activeGenerationManager.register(
+                request.getSessionId(), request.getAgentRunId()
+        );
+        // 存储 Sink 供 SSE 重连端点取用
+        activeGen.setSink(sink);
+
+        // ── 内部订阅者：保证 Sink 始终有 >= 1 个订阅者 ──
+        // 即使 SSE 断开（订阅者 B 被移除），此订阅者仍存在。
+        // 确保 tryEmitComplete() 不因 FAIL_ZERO_SUBSCRIBER 而静默失败。
+        // onComplete 时触发 AppServiceImpl 注册的 handler 完成入库。
+        sink.asFlux().subscribe(
+                null,  // onNext: no-op（StreamObserver.onNext 中已更新 activeGen）
+                error -> {
+                    log.error("[Stream] Internal subscriber error: {}, sessionId={}, textLen={}",
+                            error.getMessage(), request.getSessionId(), activeGen.getText().length(), error);
+                    activeGen.setCompleted(true);
+                    activeGen.fireGenerationCompleted(activeGen.getText());
+                },
+                () -> {
+                    log.info("[Stream] Internal subscriber onComplete, sessionId={}, agentRunId={}, textLen={}",
+                            request.getSessionId(), request.getAgentRunId(), activeGen.getText().length());
+                    activeGen.fireGenerationCompleted(activeGen.getText());
+                }
+        );
 
         prepareStreamGenerateStub().streamGenerate(grpcRequest, new StreamObserver<>() {
             @Override
             public void onNext(CodeGenerationEvent event) {
+                // 累积 AI 文本（始终执行，无论是否有 SSE 订阅者）
+                if (event.getEventType() == com.adcage.acaicodefree.grpc.common.EventType.AI_RESPONSE) {
+                    String text = event.getAiResponse().getText();
+                    if (text != null) {
+                        activeGen.appendText(text);
+                    }
+                }
+
                 String json = mapEventToStreamMessageJson(event);
                 if (json != null) {
-                    sink.tryEmitNext(json);
+                    EmitResult result = sink.tryEmitNext(json);
+                    if (log.isDebugEnabled()) {
+                        log.debug("[Stream] tryEmitNext result={}, sessionId={}", result, request.getSessionId());
+                    }
                 }
             }
 
             @Override
             public void onError(Throwable t) {
-                log.error("gRPC StreamGenerate error: {}", t.getMessage(), t);
+                log.error("[Stream] gRPC StreamGenerate error: {}, sessionId={}, textLen={}",
+                        t.getMessage(), request.getSessionId(), activeGen.getText().length(), t);
+                activeGen.setCompleted(true);
                 sink.tryEmitNext(JSONUtil.toJsonStr(new AiResponseMessage("生成失败：" + t.getMessage())));
                 sink.tryEmitComplete();
             }
 
             @Override
             public void onCompleted() {
-                sink.tryEmitComplete();
+                log.info("[Stream] gRPC StreamGenerate onCompleted, sessionId={}, agentRunId={}, textLen={}",
+                        request.getSessionId(), request.getAgentRunId(), activeGen.getText().length());
+                activeGen.setCompleted(true);
+                EmitResult result = sink.tryEmitComplete();
+                log.info("[Stream] tryEmitComplete result={}, sessionId={}", result, request.getSessionId());
             }
         });
 
@@ -119,12 +170,12 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
     }
 
     private CodeGenType mapJavaCodeGenTypeStr(String type) {
-        if (type == null) return CodeGenType.VUE_PROJECT;
+        if (type == null) return CodeGenType.SINGLE_FILE;
         return switch (type) {
             case "single_file" -> CodeGenType.SINGLE_FILE;
             case "multi-file" -> CodeGenType.MULTI_FILE;
             case "vue_project" -> CodeGenType.VUE_PROJECT;
-            default -> CodeGenType.VUE_PROJECT;
+            default -> CodeGenType.SINGLE_FILE;
         };
     }
 

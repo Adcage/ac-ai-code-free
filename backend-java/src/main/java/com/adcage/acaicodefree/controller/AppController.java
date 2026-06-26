@@ -27,6 +27,8 @@ import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
+import com.adcage.acaicodefree.core.generation.ActiveGeneration;
+import com.adcage.acaicodefree.core.generation.ActiveGenerationManager;
 import com.adcage.acaicodefree.ratelimit.annotation.RateLimit;
 import com.adcage.acaicodefree.ratelimit.enums.RateLimitType;
 import com.adcage.acaicodefree.service.AppService;
@@ -44,6 +46,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 import java.util.List;
 import java.util.Map;
@@ -67,6 +70,9 @@ public class AppController {
 
     @Resource
     private ProjectDownloadService projectDownloadService;
+
+    @Resource
+    private ActiveGenerationManager activeGenerationManager;
 
     @Resource
     private PythonPromptEnhanceService pythonPromptEnhanceService;
@@ -338,6 +344,80 @@ public class AppController {
     }
 
     /**
+     * 重连活跃生成（SSE 续流）
+     * 用户断线后重入页面时，通过此端点重新订阅 Sink 收后续实时事件。
+     */
+    @PostMapping(value = "/chat/gen/code/stream/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> resumeGeneration(@RequestBody Map<String, Object> body,
+                                                          HttpServletRequest request) {
+        if (body == null || body.get("sessionId") == null) {
+            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "会话 ID 无效");
+        }
+        Long sessionId = Long.parseLong(body.get("sessionId").toString());
+        ThrowUtils.throwIf(sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 无效");
+        User loginUser = userService.getLoginUser(request);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        log.info("[Resume] resumeGeneration called, sessionId={}, userId={}", sessionId, loginUser.getId());
+
+        ActiveGeneration gen = activeGenerationManager.get(sessionId);
+        log.info("[Resume] activeGeneration found={}, completed={}, textLen={}",
+                gen != null, gen != null && gen.isCompleted(), gen != null ? gen.getText().length() : -1);
+
+        if (gen == null || gen.isCompleted()) {
+            log.info("[Resume] No active generation, returning 404 to frontend, sessionId={}", sessionId);
+            Map<String, Object> err = Map.of("code", 404, "message", "没有活跃的生成任务");
+            return Flux.just(ServerSentEvent.<String>builder()
+                    .event("business-error")
+                    .data(JSONUtil.toJsonStr(err))
+                    .build());
+        }
+
+        Sinks.Many<String> sink = gen.getSink();
+        if (sink == null) {
+            log.warn("[Resume] Sink is null for active generation, sessionId={}", sessionId);
+            Map<String, Object> err = Map.of("code", 500, "message", "生成 Sink 不可用");
+            return Flux.just(ServerSentEvent.<String>builder()
+                    .event("business-error")
+                    .data(JSONUtil.toJsonStr(err))
+                    .build());
+        }
+
+        log.info("[Resume] Sink acquired, subscribing for sessionId={}, agentRunId={}", sessionId, gen.getAgentRunId());
+
+        // meta 事件携带 agentRunId
+        Map<String, Object> metaData = Map.of("sessionId", sessionId, "resumed", true);
+        ServerSentEvent<String> metaEvent = ServerSentEvent.<String>builder()
+                .event("meta")
+                .data(JSONUtil.toJsonStr(metaData))
+                .build();
+
+        ServerSentEvent<String> doneEvent = ServerSentEvent.<String>builder()
+                .event("done")
+                .data("")
+                .build();
+
+        // 从 Sink 订阅后续事件流
+        Flux<String> eventFlux = sink.asFlux();
+
+        return Flux.just(metaEvent)
+                .concatWith(eventFlux.map(chunk -> {
+                    Map<String, String> data = Map.of("d", chunk);
+                    return ServerSentEvent.<String>builder()
+                            .data(JSONUtil.toJsonStr(data))
+                            .build();
+                }))
+                .concatWith(Mono.just(doneEvent))
+                .onErrorResume(error -> {
+                    log.error("Resume SSE error, sessionId={}", sessionId, error);
+                    Map<String, Object> errorData = Map.of("code", 500, "message", "重连失败：" + error.getMessage());
+                    return Flux.just(ServerSentEvent.<String>builder()
+                            .event("business-error")
+                            .data(JSONUtil.toJsonStr(errorData))
+                            .build());
+                });
+    }
+
+    /**
      * 创建会话
      *
      * @param chatSessionCreateRequest 创建会话请求
@@ -368,6 +448,28 @@ public class AppController {
         User loginUser = userService.getLoginUser(request);
         List<ChatSessionVO> chatSessionVOList = appService.listChatSession(appId, loginUser);
         return ResultUtils.success(chatSessionVOList);
+    }
+
+    /**
+     * 查询会话是否有活跃生成（前端重连用）
+     *
+     * @param sessionId 会话 ID
+     * @return 活跃生成状态和累积文本
+     */
+    @GetMapping("/chat/gen/active")
+    public BaseResponse<Map<String, Object>> getActiveGeneration(@RequestParam Long sessionId) {
+        ActiveGeneration gen = activeGenerationManager.get(sessionId);
+        if (gen == null) {
+            log.info("[Active] No active generation for sessionId={}", sessionId);
+            return ResultUtils.success(Map.of("active", false));
+        }
+        log.info("[Active] sessionId={}, active={}, completed={}, textLen={}, agentRunId={}",
+                sessionId, !gen.isCompleted(), gen.isCompleted(), gen.getText().length(), gen.getAgentRunId());
+        return ResultUtils.success(Map.of(
+                "active", !gen.isCompleted(),
+                "agentRunId", gen.getAgentRunId(),
+                "text", gen.getText()
+        ));
     }
 
     /**
