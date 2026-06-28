@@ -5,7 +5,8 @@ from langchain_core.messages import AIMessageChunk
 
 from app.agent_loop.nodes.step_base import _stream_invoke
 from app.agent_loop.tool_policy import PLAN_TOOLS
-from app.runtime.event_mapper import ProtoEventMapper, _INTERNAL_TYPES
+from app.agent_loop.event_mapper import LegacyEventMapper
+from app.runtime.event_mapper import _INTERNAL_TYPES
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.event_bus import SequencedRuntimeEvent
 
@@ -104,7 +105,7 @@ async def test_empty_model_emits_nothing():
 
 
 def test_plan_tools_are_all_classified():
-    mapper = ProtoEventMapper()
+    mapper = LegacyEventMapper()
     unclassified = []
     for tool_name in sorted(PLAN_TOOLS):
         seq_event = _make_sequenced(
@@ -139,7 +140,7 @@ def test_agent_loop_lifecycle_events_are_classified_or_internal():
             f"{et} should be in _INTERNAL_TYPES to avoid 'unmapped runtime event type' warning"
         )
 
-    mapper = ProtoEventMapper()
+    mapper = LegacyEventMapper()
     for et in lifecycle_types:
         seq_event = _make_sequenced(et, {"iteration": 1, "mode": "plan"})
         result = mapper.map_event(seq_event)

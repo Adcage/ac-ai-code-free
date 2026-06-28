@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.grpc import common_pb2
-from app.runtime.event_mapper import ProtoEventMapper
+from app.agent_loop.event_mapper import LegacyEventMapper
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.event_bus import SequencedRuntimeEvent
 
@@ -20,7 +20,7 @@ def _make_sequenced(
 
 class TestProtoEventMapper:
     def setup_method(self):
-        self.mapper = ProtoEventMapper()
+        self.mapper = LegacyEventMapper()
 
     def test_text_delta_maps_to_ai_response(self):
         seq_event = _make_sequenced(

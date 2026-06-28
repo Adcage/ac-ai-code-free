@@ -12,7 +12,6 @@ from app.artifacts.writer import ArtifactWriter
 from app.quality.structure_checker import StructureChecker
 from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext, AttachmentInfo, _CODE_GEN_TYPE_TO_GENERATION_MODE
 from app.runtime.event_bus import EventBus
-from app.runtime.event_mapper import ProtoEventMapper
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.services import RuntimeServices
 from app.services.chat_model_factory import ChatModelFactory
@@ -62,7 +61,19 @@ class RuntimeOrchestrator:
         self._asset_manager = create_default_asset_manager()
         self._quality_checker = StructureChecker()
         self._artifact_writer = ArtifactWriter()
-        self._event_mapper = ProtoEventMapper()
+        self._event_mapper = None  # 延迟初始化，见 _get_mapper()
+
+    def _get_mapper(self):
+        """按引擎配置返回对应的 ProtoEventMapper 子类。"""
+        if self._event_mapper is not None:
+            return self._event_mapper
+        if settings.agent_loop_engine == "vnext":
+            from app.agent_loop_vnext.event_mapper import VNextEventMapper
+            self._event_mapper = VNextEventMapper()
+        else:
+            from app.agent_loop.event_mapper import LegacyEventMapper
+            self._event_mapper = LegacyEventMapper()
+        return self._event_mapper
 
     def _build_services(self, event_bus: EventBus) -> RuntimeServices:
         from app.prompts.registry import PromptModuleRegistry
@@ -392,7 +403,7 @@ class RuntimeOrchestrator:
         workflow_task = asyncio.create_task(_execute())
 
         async for seq_event in self._drain_events(event_bus):
-            for proto_event in self._event_mapper.map_event(seq_event):
+            for proto_event in self._get_mapper().map_event(seq_event):
                 yield proto_event
 
         await workflow_task
@@ -414,6 +425,11 @@ class RuntimeOrchestrator:
         start_time = time.monotonic()
 
         context = await self._build_context(request, run_mode)
+
+        # 根据上下文配置 mapper（如 is_test、脱敏策略等）
+        mapper = self._get_mapper()
+        if hasattr(mapper, 'set_is_test'):
+            mapper.set_is_test(context.is_test)
 
         async def _execute():
             try:
@@ -470,7 +486,7 @@ class RuntimeOrchestrator:
         workflow_task = asyncio.create_task(_execute())
 
         async for seq_event in self._drain_events(event_bus):
-            for proto_event in self._event_mapper.map_event(seq_event):
+            for proto_event in self._get_mapper().map_event(seq_event):
                 yield proto_event
 
         await workflow_task
