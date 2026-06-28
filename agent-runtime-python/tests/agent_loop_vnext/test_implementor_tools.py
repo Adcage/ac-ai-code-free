@@ -5,12 +5,12 @@ from app.agent_loop_vnext.shared.tools.base import AgentTool
 from app.tools.file_tools import FileTools, Workspace
 
 
-def test_create_implementor_tools_returns_7_tools():
-    """implementor 应绑定 7 个工具（含 load_skill）。"""
+def test_create_implementor_tools_returns_8_tools():
+    """implementor 应绑定 8 个工具（含 load_skill + Bash）。"""
     ws = Workspace("/tmp/test")
     ft = FileTools(ws)
     tools = create_implementor_tools(ft)
-    assert len(tools) == 7
+    assert len(tools) == 8
 
 
 def test_create_implementor_tools_all_are_agent_tools():
@@ -23,9 +23,9 @@ def test_create_implementor_tools_all_are_agent_tools():
 
 
 def test_create_implementor_tools_has_correct_names():
-    """工具名应为 Read, Write, Edit, Insert, Glob, Grep, load_skill。"""
+    """工具名应为 Read, Write, Edit, Insert, Glob, Grep, load_skill, Bash。"""
     ws = Workspace("/tmp/test")
     ft = FileTools(ws)
     tools = create_implementor_tools(ft)
     names = {t.name for t in tools}
-    assert names == {"Read", "Write", "Edit", "Insert", "Glob", "Grep", "load_skill"}
+    assert names == {"Read", "Write", "Edit", "Insert", "Glob", "Grep", "load_skill", "Bash"}

@@ -91,6 +91,8 @@ class ImplementorPromptBuilder:
             "- 需要实现代码时，使用工具创建或修改文件\n"
             "- 需要了解项目现有结构时，使用 Read 工具查看\n"
             "- 需要搜索文件时，使用 Glob 按文件名搜索或 Grep 按内容搜索\n"
+            "- 需要执行命令时（如安装依赖、构建项目），使用 Bash 工具\n"
+            "- Bash 工具每次只能执行一条命令，不支持 &&、||、|、; 等操作符。多条命令请分多次调用\n"
             "- 不需要工具时直接回复，不要主动调用工具"
         )
 
@@ -115,7 +117,12 @@ class ImplementorPromptBuilder:
         if not all_skills:
             return ""
 
-        lines = ["## 可用技能", "使用 load_skill 工具加载技能，加载后可通过 Read 工具使用 skill/{技能ID}/ 路径前缀读取参考文件。", ""]
+        lines = [
+            "## 可用技能",
+            "可使用 load_skill 工具加载一个或多个技能。每次调用加载一个技能，可多次调用加载不同技能。",
+            "加载后可通过 Read 工具使用 skill/{技能ID}/ 路径前缀读取参考文件。",
+            "",
+        ]
 
         for skill in all_skills:
             lines.append(f"- **{skill.id}**: {skill.description}")

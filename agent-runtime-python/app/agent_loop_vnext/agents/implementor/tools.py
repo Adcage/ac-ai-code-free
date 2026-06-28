@@ -4,6 +4,7 @@
 """
 
 from app.agent_loop_vnext.shared.tools.base import AgentTool
+from app.agent_loop_vnext.shared.tools.bash_tool import BashTool
 from app.agent_loop_vnext.shared.tools.file_tools import (
     EditTool,
     GlobTool,
@@ -32,4 +33,5 @@ def create_implementor_tools(
         GlobTool(file_tools=file_tools),
         GrepTool(file_tools=file_tools),
         LoadSkillTool(skill_registry=skill_registry, state=state),
+        BashTool(file_tools=file_tools),
     ]

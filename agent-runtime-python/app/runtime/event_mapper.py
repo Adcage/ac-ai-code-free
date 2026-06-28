@@ -28,6 +28,7 @@ _VISIBLE_TOOLS = frozenset({
     "Glob",
     "Grep",
     "load_skill",
+    "Bash",
 })
 
 _STATUS_TOOLS: dict[str, str] = {
@@ -141,6 +142,10 @@ def _sanitize_tool_arguments(tool_name: str, arguments_str: str) -> str:
             args["path"] = _sanitize_path(args["path"])
     elif tool_name == "load_skill":
         pass  # skill_id 不需要脱敏
+    elif tool_name == "Bash":
+        if "command" in args:
+            cmd = args["command"]
+            args["command"] = (cmd[:200] + "...") if len(cmd) > 200 else cmd
     else:
         for key in list(args.keys()):
             val = str(args[key])
@@ -157,7 +162,7 @@ def _sanitize_tool_result(tool_name: str, result_str: str) -> str:
     if tool_name == "read_file":
         return _sanitize_path_in_message(result_str)
     # vNext 工具名
-    if tool_name in ("Read", "Write", "Edit", "Insert", "Glob", "Grep", "load_skill"):
+    if tool_name in ("Read", "Write", "Edit", "Insert", "Glob", "Grep", "load_skill", "Bash"):
         return _sanitize_path_in_message(result_str)
     if tool_name == "ask_user":
         return _sanitize_path_in_message(result_str)
