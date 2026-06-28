@@ -11,6 +11,7 @@ from app.runtime.event_bus import SequencedRuntimeEvent
 logger = logging.getLogger("app.runtime.event_mapper")
 
 _VISIBLE_TOOLS = frozenset({
+    # legacy agent_loop 工具名
     "write_file",
     "read_file",
     "read_dir",
@@ -19,6 +20,14 @@ _VISIBLE_TOOLS = frozenset({
     "create",
     "str_replace",
     "insert",
+    # vNext 工具名（对齐 Claude Code CLI 风格）
+    "Read",
+    "Write",
+    "Edit",
+    "Insert",
+    "Glob",
+    "Grep",
+    "load_skill",
 })
 
 _STATUS_TOOLS: dict[str, str] = {
@@ -109,6 +118,29 @@ def _sanitize_tool_arguments(tool_name: str, arguments_str: str) -> str:
         args.pop("insert_text", None)
         if "path" in args:
             args["path"] = _sanitize_path(args["path"])
+    # vNext 工具名
+    elif tool_name == "Read":
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+        args.pop("view_range", None)
+    elif tool_name == "Write":
+        args.pop("content", None)
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+    elif tool_name == "Edit":
+        args.pop("old_str", None)
+        args.pop("new_str", None)
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+    elif tool_name == "Insert":
+        args.pop("insert_text", None)
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+    elif tool_name in ("Glob", "Grep"):
+        if "path" in args:
+            args["path"] = _sanitize_path(args["path"])
+    elif tool_name == "load_skill":
+        pass  # skill_id 不需要脱敏
     else:
         for key in list(args.keys()):
             val = str(args[key])
@@ -123,6 +155,9 @@ def _sanitize_tool_result(tool_name: str, result_str: str) -> str:
     if tool_name in ("write_file", "read_dir", "create", "str_replace", "insert", "view"):
         return _sanitize_path_in_message(result_str)
     if tool_name == "read_file":
+        return _sanitize_path_in_message(result_str)
+    # vNext 工具名
+    if tool_name in ("Read", "Write", "Edit", "Insert", "Glob", "Grep", "load_skill"):
         return _sanitize_path_in_message(result_str)
     if tool_name == "ask_user":
         return _sanitize_path_in_message(result_str)
