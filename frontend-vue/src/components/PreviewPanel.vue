@@ -121,7 +121,9 @@ const visualEditor = createVisualEditor({
   getIframe: () => iframeRef.value,
   onElementHover: () => {},
   onElementSelected: (element) => {
-    emit('elementSelected', element)
+    if (element) {
+      emit('elementSelected', element)
+    }
   },
   onModeChange: (enabled) => {
     editMode.value = enabled
@@ -208,16 +210,22 @@ defineExpose({ visualEditor, iframeRef })
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.92);
   min-width: 0;
+  border: 1px solid rgba(220, 207, 196, 0.9);
+  border-radius: 22px;
+  box-shadow: var(--color-panel-shadow);
+  overflow: hidden;
 }
 
 .preview-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(220, 207, 196, 0.9);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 250, 247, 0.92));
 }
 
 .preview-warning {
@@ -230,8 +238,10 @@ defineExpose({ visualEditor, iframeRef })
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 16px;
-  background: var(--color-background);
+  padding: 18px;
+  background:
+    radial-gradient(circle at top, rgba(200, 90, 62, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(245, 239, 232, 0.8), rgba(253, 249, 245, 0.95));
 }
 
 .preview-body.desktop {
@@ -245,8 +255,9 @@ defineExpose({ visualEditor, iframeRef })
 .preview-body.mobile .preview-iframe {
   width: 375px;
   max-height: 812px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border: 1px solid rgba(220, 207, 196, 0.95);
+  border-radius: 22px;
+  box-shadow: 0 16px 30px rgba(28, 24, 21, 0.08);
 }
 
 .preview-iframe {
@@ -254,6 +265,8 @@ defineExpose({ visualEditor, iframeRef })
   height: 100%;
   border: none;
   background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 18px 34px rgba(28, 24, 21, 0.08);
 }
 
 .preview-empty {
@@ -267,18 +280,27 @@ defineExpose({ visualEditor, iframeRef })
 .empty-content {
   text-align: center;
   color: var(--color-text-tertiary);
+  padding: 48px 40px;
+  min-width: min(420px, 100%);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(220, 207, 196, 0.88);
+  box-shadow: 0 18px 36px rgba(28, 24, 21, 0.06);
 }
 
 .empty-icon {
+  font-family: var(--font-heading);
   font-size: 48px;
+  font-weight: 700;
   margin-bottom: 12px;
-  opacity: 0.3;
+  color: rgba(28, 24, 21, 0.18);
 }
 
 .version-panel {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid rgba(220, 207, 196, 0.9);
   max-height: 300px;
   overflow-y: auto;
+  background: rgba(252, 250, 247, 0.94);
 }
 
 .version-panel-header {
@@ -319,7 +341,7 @@ defineExpose({ visualEditor, iframeRef })
 
 .version-no {
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-cta);
   font-size: 13px;
 }
 

@@ -101,7 +101,7 @@ import {
   looksLikeRiskRejection, buildSelectedElementPrompt,
   extractLatestFailureReason, isTimeoutFailureReason,
 } from '@/utils/appGenerator'
-import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
+import ChatSessionPanel, { type SessionItem } from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
@@ -327,7 +327,7 @@ const {
 })
 
 // --- session handlers (delegate to composable + local UI state) ---
-const startRename = (session: API.ChatSessionVO) => {
+const startRename = (session: SessionItem) => {
   editingSessionId.value = normalizeId(session.id)
   editingTitle.value = session.title || ''
   nextTick(() => {
@@ -336,21 +336,21 @@ const startRename = (session: API.ChatSessionVO) => {
   })
 }
 
-const confirmRename = (session: API.ChatSessionVO) => {
+const confirmRename = (session: SessionItem) => {
   if (editingSessionId.value !== normalizeId(session.id)) return
   const newTitle = editingTitle.value.trim()
   editingSessionId.value = ''
-  renameChatSession(session, newTitle)
+  renameChatSession(session as API.ChatSessionVO, newTitle)
 }
 
-const confirmDeleteSession = (session: API.ChatSessionVO) => {
+const confirmDeleteSession = (session: SessionItem) => {
   Modal.confirm({
     title: '确认删除会话',
     content: `确定要删除「${session.title || '未命名会话'}」吗？删除后不可恢复。`,
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => deleteChatSession(session),
+    onOk: () => deleteChatSession(session as API.ChatSessionVO),
   })
 }
 
@@ -474,18 +474,20 @@ watch(() => route.params.id, () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-background);
+  background:
+    linear-gradient(180deg, rgba(253, 249, 245, 0.98), rgba(245, 239, 232, 0.94));
 }
 
 .top-nav {
   height: 56px;
   padding: 0 20px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(220, 207, 196, 0.9);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 250, 247, 0.92));
+  box-shadow: 0 10px 24px rgba(28, 24, 21, 0.04);
 }
 
 .app-name {
@@ -500,28 +502,35 @@ watch(() => route.params.id, () => {
   flex: 1;
   display: flex;
   overflow: hidden;
+  gap: 12px;
+  padding: 18px;
 }
 
 .chat-panel {
-  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.92);
   min-width: 320px;
   max-width: 70vw;
   flex-shrink: 0;
+  border: 1px solid rgba(220, 207, 196, 0.92);
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: var(--color-panel-shadow);
 }
 
 .panel-splitter {
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   background: transparent;
   transition: background 0.2s;
   flex-shrink: 0;
+  border-radius: 999px;
+  margin: 10px 0;
 }
 
 .panel-splitter:hover {
-  background: var(--color-cta-lighter);
+  background: rgba(200, 90, 62, 0.12);
 }
 
 .status-tag {
@@ -545,5 +554,25 @@ watch(() => route.params.id, () => {
 
 .deploy-btn:hover {
   box-shadow: 0 6px 16px rgba(200, 90, 62, 0.35) !important;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .chat-panel {
+    max-width: 100%;
+    width: 100% !important;
+  }
+
+  .panel-splitter {
+    display: none;
+  }
 }
 </style>

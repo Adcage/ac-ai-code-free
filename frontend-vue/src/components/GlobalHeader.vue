@@ -100,7 +100,7 @@ const handleLogout = () => {
 
 <style scoped>
 .global-header {
-  background: var(--color-header-bg);
+  background: rgba(28, 45, 61, 0.92) !important;
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--color-border-dark);
   padding: 0;
@@ -109,6 +109,7 @@ const handleLogout = () => {
   z-index: 1000;
   height: 64px;
   line-height: 64px;
+  box-shadow: none !important;
 }
 
 .header-content {
@@ -174,7 +175,7 @@ const handleLogout = () => {
 
 .nav-link-active {
   color: #ffffff;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .nav-link-active::after {
@@ -249,7 +250,7 @@ const handleLogout = () => {
   display: none;
   flex-direction: column;
   padding: var(--space-sm) var(--space-lg);
-  background: var(--color-header-bg);
+  background: rgba(28, 45, 61, 0.96);
   border-bottom: 1px solid var(--color-border-dark);
 }
 

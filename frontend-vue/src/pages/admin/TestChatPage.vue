@@ -136,7 +136,7 @@ import {
 } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import AppCard from '@/components/AppCard.vue'
-import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
+import ChatSessionPanel, { type SessionItem } from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
 import type { AttachmentInfo, ChatMessage } from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
@@ -442,19 +442,19 @@ const handleSwitchSession = async (sessionId?: string | number) => {
   await updatePreview()
 }
 
-const startRename = (session: API.ChatSessionVO) => {
+const startRename = (session: SessionItem) => {
   editingSessionId.value = normalizeId(session.id)
   editingTitle.value = session.title || ''
 }
 
-const confirmRename = async (session: API.ChatSessionVO) => {
+const confirmRename = async (session: SessionItem) => {
   const sid = normalizeId(session.id)
   if (editingSessionId.value !== sid) return
   const newTitle = editingTitle.value.trim()
   editingSessionId.value = ''
   if (!newTitle || newTitle === session.title) return
   try {
-    const res = await renameSession({ sessionId: session.id as number, title: newTitle })
+    const res = await renameSession({ sessionId: Number(session.id), title: newTitle })
     if (res.data?.code === 0) {
       session.title = newTitle
       message.success('重命名成功')
@@ -464,7 +464,7 @@ const confirmRename = async (session: API.ChatSessionVO) => {
   }
 }
 
-const confirmDeleteSession = (session: API.ChatSessionVO) => {
+const confirmDeleteSession = (session: SessionItem) => {
   const sid = normalizeId(session.id)
   if (!sid) return
   Modal.confirm({
@@ -475,7 +475,7 @@ const confirmDeleteSession = (session: API.ChatSessionVO) => {
     cancelText: '取消',
     onOk: async () => {
       try {
-        const res = await deleteSession({ id: session.id as number })
+        const res = await deleteSession({ id: Number(session.id) })
         if (res.data?.code === 0) {
           message.success('会话已删除')
           if (currentSessionId.value === sid) {
@@ -689,7 +689,8 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-background);
+  background:
+    linear-gradient(180deg, rgba(253, 249, 245, 0.98), rgba(245, 239, 232, 0.94));
 }
 
 /* 应用选择区 */
@@ -756,26 +757,33 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   overflow: hidden;
+  gap: 12px;
+  padding: 18px;
 }
 
 .chat-panel {
-  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.92);
   min-width: 320px;
   max-width: 70vw;
   flex-shrink: 0;
+  border: 1px solid rgba(220, 207, 196, 0.92);
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: var(--color-panel-shadow);
 }
 
 .chat-panel-header {
   height: 44px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(220, 207, 196, 0.92);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 250, 247, 0.92));
 }
 
 .chat-panel-header-left {
@@ -800,14 +808,31 @@ onUnmounted(() => {
 }
 
 .panel-splitter {
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   background: transparent;
   transition: background 0.2s;
   flex-shrink: 0;
+  border-radius: 999px;
+  margin: 10px 0;
 }
 
 .panel-splitter:hover {
-  background: var(--color-border);
+  background: rgba(200, 90, 62, 0.12);
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .chat-panel {
+    max-width: 100%;
+    width: 100% !important;
+  }
+
+  .panel-splitter {
+    display: none;
+  }
 }
 </style>
