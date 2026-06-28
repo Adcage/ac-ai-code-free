@@ -24,6 +24,7 @@ import com.adcage.acaicodefree.exception.ThrowUtils;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatAttachmentInfo;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
@@ -269,7 +270,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
-    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage, User loginUser) {
+    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage,
+                                        List<ChatAttachmentInfo> attachments, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
@@ -334,8 +336,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
 
         // 6. 运行准备完成后再保存用户消息；同步失败时事务会回滚 AgentRun 认领/创建
+        String userMessageExtra = null;
+        if (attachments != null && !attachments.isEmpty()) {
+            userMessageExtra = JSONUtil.toJsonStr(Map.of("attachments", attachments));
+        }
         saveHistoryMessage(sessionId, appId, loginUser.getId(), persistedUserMessage, "user", "success",
-                app.getCodeGenType(), 0, null);
+                app.getCodeGenType(), 0, userMessageExtra);
         updateSessionSummary(sessionId);
 
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
@@ -352,6 +358,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .workspacePath(workspacePath)
                 .loopStateJson(loopStateJson)
                 .isTest(UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole()))
+                .attachments(attachments)
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();
@@ -582,6 +589,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
             BeanUtil.copyProperties(history, chatHistoryVO);
             chatHistoryVO.setToolEvents(extractToolEvents(history));
+            chatHistoryVO.setAttachments(extractAttachments(history));
             return chatHistoryVO;
         }).collect(Collectors.toList());
         Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, chatHistoryPage.getTotalRow());
@@ -844,6 +852,38 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             return toolEvents;
         }
         return extractToolEventsFromMessage(history.getMessage());
+    }
+
+    private List<ChatAttachmentInfo> extractAttachments(ChatHistory history) {
+        if (history == null || StrUtil.isBlank(history.getExtra())) {
+            return null;
+        }
+        try {
+            JSONObject extraJson = JSONUtil.parseObj(history.getExtra());
+            JSONArray attachmentsArray = extraJson.getJSONArray("attachments");
+            if (attachmentsArray == null || attachmentsArray.isEmpty()) {
+                return null;
+            }
+            List<ChatAttachmentInfo> attachments = new ArrayList<>();
+            for (Object item : attachmentsArray) {
+                if (!(item instanceof JSONObject attObj)) {
+                    continue;
+                }
+                ChatAttachmentInfo info = new ChatAttachmentInfo();
+                info.setId(attObj.getStr("id"));
+                info.setFileName(attObj.getStr("fileName"));
+                info.setFileSize(attObj.getLong("fileSize"));
+                info.setMimeType(attObj.getStr("mimeType"));
+                info.setStorageType(attObj.getStr("storageType"));
+                info.setStoragePath(attObj.getStr("storagePath"));
+                info.setUrl(attObj.getStr("url"));
+                attachments.add(info);
+            }
+            return attachments;
+        } catch (Exception e) {
+            log.warn("解析 chat_history.extra 附件数据失败, id={}", history.getId(), e);
+            return null;
+        }
     }
 
     private List<ToolEventVO> extractToolEventsFromExtra(String extra) {

@@ -282,13 +282,15 @@ public class AppController {
                                                        HttpServletRequest request) {
         Long appId = chatCodeGenRequest.getAppId();
         Long sessionId = chatCodeGenRequest.getSessionId();
-        String message = chatCodeGenRequest.getMessage();
+        String rawMessage = chatCodeGenRequest.getMessage();
+        boolean hasAttachments = chatCodeGenRequest.getAttachments() != null && !chatCodeGenRequest.getAttachments().isEmpty();
+        String message = StrUtil.isBlank(rawMessage) && hasAttachments ? "[附件消息]" : rawMessage;
         String displayMessage = StrUtil.blankToDefault(
                 chatCodeGenRequest.getDisplayMessage(),
                 message
         );
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 无效");
-        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
+        ThrowUtils.throwIf(StrUtil.isBlank(message) && !hasAttachments, ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
         Long finalSessionId = sessionId;
@@ -301,6 +303,7 @@ public class AppController {
                 resolvedSessionId,
                 message,
                 displayMessage,
+                chatCodeGenRequest.getAttachments(),
                 loginUser
         );
         Map<String, Object> metaData = Map.of("sessionId", resolvedSessionId);

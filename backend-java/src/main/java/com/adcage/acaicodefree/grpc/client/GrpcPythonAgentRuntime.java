@@ -158,6 +158,21 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
             builder.setGenerationMode(mapGenerationMode(request.getApp().getGenerationMode()));
         }
 
+        // 映射附件列表
+        if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+            for (var att : request.getAttachments()) {
+                builder.addAttachments(com.adcage.acaicodefree.grpc.common.AttachmentInfo.newBuilder()
+                        .setId(att.getId() != null ? att.getId() : "")
+                        .setFileName(att.getFileName() != null ? att.getFileName() : "")
+                        .setFileSize(att.getFileSize() != null ? att.getFileSize() : 0L)
+                        .setMimeType(att.getMimeType() != null ? att.getMimeType() : "")
+                        .setStorageType(att.getStorageType() != null ? att.getStorageType() : "")
+                        .setStoragePath(att.getStoragePath() != null ? att.getStoragePath() : "")
+                        .setUrl(att.getUrl() != null ? att.getUrl() : "")
+                        .build());
+            }
+        }
+
         return builder.build();
     }
 

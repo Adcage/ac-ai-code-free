@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.service;
 import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatAttachmentInfo;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
@@ -70,10 +71,12 @@ public interface AppService extends IService<App> {
      * @param sessionId 会话 ID（为空时由调用方先创建）
      * @param message   传递给运行时的用户消息
      * @param displayMessage 展示给用户并落库的消息
+     * @param attachments 附件列表
      * @param loginUser 当前登录用户
      * @return 流式代码生成结果
      */
-    Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage, User loginUser);
+    Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage,
+                                List<ChatAttachmentInfo> attachments, User loginUser);
 
     /**
      * 创建对话会话

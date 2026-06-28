@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.grpc.server;
 import java.util.List;
 
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
+import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
 import com.adcage.acaicodefree.grpc.platform.*;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
@@ -283,15 +284,26 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             List<ChatHistory> historyList = chatHistoryMapper.selectListByQuery(queryWrapper);
             GetChatHistoryResponse.Builder builder = GetChatHistoryResponse.newBuilder();
             for (ChatHistory record : historyList) {
-                ChatHistoryEntry entry = ChatHistoryEntry.newBuilder()
+                ChatHistoryEntry.Builder entryBuilder = ChatHistoryEntry.newBuilder()
                         .setId(record.getId() != null ? record.getId() : 0L)
                         .setRole(record.getMessageType() != null ? record.getMessageType() : "")
                         .setContent(record.getMessage() != null ? record.getMessage() : "")
                         .setCreatedAt(record.getCreateTime() != null
                                 ? record.getCreateTime().atZone(java.time.ZoneId.systemDefault()).toEpochSecond()
-                                : 0L)
-                        .build();
-                builder.addEntries(entry);
+                                : 0L);
+                // 从 extra JSON 中提取附件元数据
+                String extra = record.getExtra();
+                if (extra != null && !extra.isBlank() && extra.contains("attachments")) {
+                    try {
+                        cn.hutool.json.JSONObject extraJson = JSONUtil.parseObj(extra);
+                        if (extraJson.containsKey("attachments")) {
+                            entryBuilder.setAttachmentsJson(extraJson.getJSONArray("attachments").toString());
+                        }
+                    } catch (Exception e) {
+                        log.warn("解析 chat_history.extra 附件数据失败, id={}", record.getId(), e);
+                    }
+                }
+                builder.addEntries(entryBuilder.build());
             }
             responseObserver.onNext(builder.build());
             responseObserver.onCompleted();

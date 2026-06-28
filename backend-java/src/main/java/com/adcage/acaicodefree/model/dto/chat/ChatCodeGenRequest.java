@@ -3,6 +3,7 @@ package com.adcage.acaicodefree.model.dto.chat;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 对话生成代码请求
@@ -29,6 +30,11 @@ public class ChatCodeGenRequest implements Serializable {
      * 展示给用户并落库的消息；为空时回退到 message
      */
     private String displayMessage;
+
+    /**
+     * 附件列表
+     */
+    private List<ChatAttachmentInfo> attachments;
 
     private static final long serialVersionUID = 1L;
 }
