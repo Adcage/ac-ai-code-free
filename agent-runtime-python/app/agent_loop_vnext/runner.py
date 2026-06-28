@@ -45,9 +45,12 @@ class SingleImplementLoopRunner:
         workspace = Workspace(self._context.workspace_path)
         file_tools = FileTools(workspace)
 
-        # 2. 创建工具集（注入 file_tools）
+        # 2. 创建工具集（注入 file_tools + skill_registry + state）
         from app.agent_loop_vnext.agents.implementor.tools import create_implementor_tools
-        tools = create_implementor_tools(file_tools)
+        skill_registry = None
+        if self._services.asset_manager is not None:
+            skill_registry = self._services.asset_manager.get_index().skill_registry
+        tools = create_implementor_tools(file_tools, skill_registry=skill_registry, state=self._state)
 
         # 3. 解析模型配置
         await self._services.model_resolver.load_bundle(self._context)
@@ -61,9 +64,9 @@ class SingleImplementLoopRunner:
             "timeout": settings.model_request_timeout,
         })
 
-        # 4. 构建系统提示词（使用 PromptBuilder）
+        # 4. 构建系统提示词（使用 PromptBuilder，注入 skill_registry）
         from app.agent_loop_vnext.agents.implementor.prompt import ImplementorPromptBuilder
-        prompt_builder = ImplementorPromptBuilder(self._context, self._state)
+        prompt_builder = ImplementorPromptBuilder(self._context, self._state, skill_registry=skill_registry)
         system_prompt = prompt_builder.build_system_prompt()
 
         # 5. 构建消息列表（使用 HistoryBuilder，支持附件多模态）

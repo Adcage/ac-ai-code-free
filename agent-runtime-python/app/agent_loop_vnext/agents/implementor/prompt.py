@@ -1,6 +1,7 @@
 """代码实现 Agent 的提示词构建器。"""
 
 from app.agent_loop_vnext.state import SingleImplementState
+from app.capabilities.skills.registry import SkillRegistry
 from app.runtime.context import ExecutionContext
 
 _SINGLE_FILE_RULES = (
@@ -61,9 +62,15 @@ _OUTPUT_FORMAT = (
 class ImplementorPromptBuilder:
     """代码实现 Agent 的提示词构建器。"""
 
-    def __init__(self, context: ExecutionContext, state: SingleImplementState) -> None:
+    def __init__(
+        self,
+        context: ExecutionContext,
+        state: SingleImplementState,
+        skill_registry: SkillRegistry | None = None,
+    ) -> None:
         self._context = context
         self._state = state
+        self._skill_registry = skill_registry
 
     def build_system_prompt(self) -> str:
         """构建系统提示词，由多个段落组合。"""
@@ -71,6 +78,7 @@ class ImplementorPromptBuilder:
             self._render_role(),
             self._render_project_rules(),
             self._render_output_format(),
+            self._render_skills(),
         ]
         return "\n\n".join(p for p in parts if p)
 
@@ -97,6 +105,34 @@ class ImplementorPromptBuilder:
     def _render_output_format(self) -> str:
         """渲染输出格式规范。"""
         return _OUTPUT_FORMAT
+
+    def _render_skills(self) -> str:
+        """渲染可用技能摘要和已加载技能的参考文件前缀。"""
+        if self._skill_registry is None:
+            return ""
+
+        all_skills = self._skill_registry.all()
+        if not all_skills:
+            return ""
+
+        lines = ["## 可用技能", "使用 load_skill 工具加载技能，加载后可通过 Read 工具使用 skill/{技能ID}/ 路径前缀读取参考文件。", ""]
+
+        for skill in all_skills:
+            lines.append(f"- **{skill.id}**: {skill.description}")
+
+        # 已加载技能的参考文件前缀
+        if self._state.loaded_skills:
+            lines.append("")
+            lines.append("## 已加载技能参考文件")
+            for skill_id, loaded in self._state.loaded_skills.items():
+                if loaded.references:
+                    lines.append(f"**{skill_id}** 的参考文件（使用 Read 工具读取）：")
+                    for ref in loaded.references:
+                        lines.append(f"- skill/{skill_id}/{ref}")
+                else:
+                    lines.append(f"**{skill_id}**: 无参考文件")
+
+        return "\n".join(lines)
 
     def _get_effective_code_gen_type(self) -> str:
         code_gen_type = self._context.code_gen_type

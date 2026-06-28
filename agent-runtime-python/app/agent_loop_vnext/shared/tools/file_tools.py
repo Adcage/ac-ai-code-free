@@ -14,6 +14,7 @@ from typing import Type
 from pydantic import BaseModel, Field
 
 from app.agent_loop_vnext.shared.tools.base import AgentTool
+from app.agent_loop_vnext.state import SingleImplementState
 from app.tools.file_tools import FileTools
 
 logger = logging.getLogger("app.agent_loop_vnext.shared.tools.file_tools")
@@ -76,28 +77,54 @@ class GrepInput(BaseModel):
 
 # --- Tools ---
 
+_SKILL_PATH_PREFIX = "skill/"
+
+
 class ReadTool(AgentTool):
     name: str = "Read"
-    description: str = "查看文件内容或列出目录结构。目录为空时返回'目录为空'，文件为空时返回'文件内容为空'。"
+    description: str = "查看文件内容或列出目录结构。读取技能参考文件时使用 skill/{技能ID}/ 路径前缀。"
     args_schema: Type[BaseModel] = ReadInput
     file_tools: FileTools | None = None
+    state: SingleImplementState | None = None
 
     async def _arun(self, path: str, view_range: list[int] | None = None) -> str:
-        abs_path = self.file_tools._workspace.resolve(path)
+        from app.core.error_codes import AgentErrorCode
+        from app.core.exceptions import AgentRuntimeError
+
+        # 检测 skill/ 路径前缀
+        if path.startswith(_SKILL_PATH_PREFIX):
+            abs_path = self._resolve_skill_path(path)
+        else:
+            abs_path = self.file_tools._workspace.resolve(path)
 
         if os.path.isdir(abs_path):
-            result = await self.file_tools.read_dir(path)
-            return result if result else "目录为空"
+            # 目录浏览：列出目录内容
+            try:
+                entries = sorted(os.listdir(abs_path))
+                if not entries:
+                    return "目录为空"
+                return "\n".join(entries)
+            except OSError as e:
+                raise AgentRuntimeError(
+                    f"读取目录失败: {path}", code=AgentErrorCode.TOOL_CALL_FAILED
+                ) from e
 
         if not os.path.exists(abs_path):
-            from app.core.error_codes import AgentErrorCode
-            from app.core.exceptions import AgentRuntimeError
+            # 文件不存在时，尝试提示正确的 skill/ 前缀
+            hint = self._suggest_skill_prefix(path)
+            msg = f"文件不存在: {path}"
+            if hint:
+                msg += f"\n提示: {hint}"
+            raise AgentRuntimeError(msg, code=AgentErrorCode.TOOL_CALL_FAILED)
 
+        try:
+            with open(abs_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
             raise AgentRuntimeError(
-                f"文件不存在: {path}", code=AgentErrorCode.TOOL_CALL_FAILED
-            )
+                f"读取文件失败: {e}", code=AgentErrorCode.TOOL_CALL_FAILED
+            ) from e
 
-        content = await self.file_tools.read_file(path)
         if not content.strip():
             return "文件内容为空"
 
@@ -108,9 +135,59 @@ class ReadTool(AgentTool):
                 end = len(lines)
             if start < 1:
                 start = 1
-            content = "\n".join(lines[start - 1:end])
+            content = "\n".join(lines[start - 1 : end])
 
         return content
+
+    def _resolve_skill_path(self, path: str) -> str:
+        """解析 skill/{skill_id}/... 路径前缀，返回绝对路径。"""
+        from app.core.error_codes import AgentErrorCode
+        from app.core.exceptions import AgentRuntimeError
+
+        # 去掉 "skill/" 前缀，拆出 skill_id 和剩余路径
+        remainder = path[len(_SKILL_PATH_PREFIX) :]
+        parts = remainder.split("/", 1)
+        if len(parts) < 2 or not parts[0]:
+            raise AgentRuntimeError(
+                f"skill 路径格式无效，应为 skill/{{技能ID}}/{{文件路径}}: {path}",
+                code=AgentErrorCode.PATH_TRAVERSAL_BLOCKED,
+            )
+
+        skill_id = parts[0]
+        relative_path = parts[1]
+
+        if self.state is None or skill_id not in self.state.loaded_skills:
+            raise AgentRuntimeError(
+                f"技能 {skill_id} 未加载，请先使用 load_skill 加载",
+                code=AgentErrorCode.SKILL_RESOURCE_NOT_FOUND,
+            )
+
+        loaded = self.state.loaded_skills[skill_id]
+
+        # 路径穿越防护：限制在 Skill 目录内
+        if not relative_path:
+            raise AgentRuntimeError(
+                "路径不能为空", code=AgentErrorCode.PATH_TRAVERSAL_BLOCKED
+            )
+        normalized = os.path.normpath(os.path.join(loaded.source_dir, relative_path))
+        if not normalized.startswith(loaded.source_dir):
+            raise AgentRuntimeError(
+                f"路径穿越被拦截: {path}",
+                code=AgentErrorCode.PATH_TRAVERSAL_BLOCKED,
+            )
+
+        return normalized
+
+    def _suggest_skill_prefix(self, path: str) -> str:
+        """文件不存在时，检查是否匹配已加载 Skill 的参考文件，返回提示。"""
+        if self.state is None:
+            return ""
+        filename = os.path.basename(path)
+        for skill_id, loaded in self.state.loaded_skills.items():
+            for ref in loaded.references:
+                if os.path.basename(ref) == filename:
+                    return f"如果要读取技能参考文件，请使用路径 skill/{skill_id}/{ref}"
+        return ""
 
 
 class WriteTool(AgentTool):
