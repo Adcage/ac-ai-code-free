@@ -23,6 +23,18 @@ class RunMode(str, Enum):
 
 
 @dataclass(frozen=True)
+class AttachmentInfo:
+    """附件元数据，从 gRPC AttachmentInfo 映射。"""
+    id: str
+    file_name: str
+    file_size: int
+    mime_type: str
+    storage_type: str  # "local" | "cos"
+    storage_path: str
+    url: str
+
+
+@dataclass(frozen=True)
 class AppContext:
     id: int
     name: str
@@ -36,6 +48,7 @@ class ChatHistoryEntry:
     id: int
     role: str
     content: str
+    attachments: tuple[AttachmentInfo, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -55,3 +68,4 @@ class ExecutionContext:
     is_test: bool = False
     is_resume: bool = False
     generation_mode: str | None = None
+    attachments: tuple[AttachmentInfo, ...] = ()

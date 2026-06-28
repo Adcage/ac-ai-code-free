@@ -10,7 +10,7 @@ from app.modeling.policy import ModelPolicy
 from app.modeling.resolver import ModelResolver
 from app.artifacts.writer import ArtifactWriter
 from app.quality.structure_checker import StructureChecker
-from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext, _CODE_GEN_TYPE_TO_GENERATION_MODE
+from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext, AttachmentInfo, _CODE_GEN_TYPE_TO_GENERATION_MODE
 from app.runtime.event_bus import EventBus
 from app.runtime.event_mapper import ProtoEventMapper
 from app.runtime.events import RuntimeEvent, RuntimeEventType
@@ -19,6 +19,29 @@ from app.services.chat_model_factory import ChatModelFactory
 from app.grpc_client.platform_client import GrpcPlatformClient
 
 logger = logging.getLogger("app.runtime.orchestrator")
+
+
+def _parse_attachments_json(attachments_json: str | None) -> tuple[AttachmentInfo, ...]:
+    """从 JSON 字符串解析附件元数据列表。"""
+    if not attachments_json:
+        return ()
+    try:
+        import json
+        items = json.loads(attachments_json)
+        return tuple(
+            AttachmentInfo(
+                id=item.get("id", ""),
+                file_name=item.get("fileName", ""),
+                file_size=item.get("fileSize", 0),
+                mime_type=item.get("mimeType", ""),
+                storage_type=item.get("storageType", "local"),
+                storage_path=item.get("storagePath", ""),
+                url=item.get("url", ""),
+            )
+            for item in items
+        )
+    except Exception:
+        return ()
 
 
 def _map_code_gen_type(proto_value: int) -> CodeGenType:
@@ -176,11 +199,32 @@ class RuntimeOrchestrator:
             try:
                 history = await self._platform_client.get_chat_history(request.session_id)
                 chat_history = tuple(
-                    ChatHistoryEntry(id=h["id"], role=h["role"], content=h["content"])
+                    ChatHistoryEntry(
+                        id=h["id"],
+                        role=h["role"],
+                        content=h["content"],
+                        attachments=_parse_attachments_json(h.get("attachments_json")),
+                    )
                     for h in history
                 )
             except Exception as e:
                 logger.warning("failed to load chat history: %s", e)
+
+        # 解析当前请求的附件
+        request_attachments: tuple[AttachmentInfo, ...] = ()
+        if hasattr(request, "attachments") and request.attachments:
+            request_attachments = tuple(
+                AttachmentInfo(
+                    id=a.id,
+                    file_name=a.file_name,
+                    file_size=a.file_size,
+                    mime_type=a.mime_type,
+                    storage_type=a.storage_type,
+                    storage_path=a.storage_path,
+                    url=a.url,
+                )
+                for a in request.attachments
+            )
 
         return ExecutionContext(
             agent_run_id=int(request.agent_run_id),
@@ -201,6 +245,7 @@ class RuntimeOrchestrator:
             is_test=getattr(request, "is_test", False),
             is_resume=is_resume,
             generation_mode=generation_mode,
+            attachments=request_attachments,
         )
 
     async def stream_generate(self, request):

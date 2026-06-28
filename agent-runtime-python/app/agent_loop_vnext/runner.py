@@ -66,10 +66,10 @@ class SingleImplementLoopRunner:
         prompt_builder = ImplementorPromptBuilder(self._context, self._state)
         system_prompt = prompt_builder.build_system_prompt()
 
-        # 5. 构建消息列表（使用 HistoryBuilder）
+        # 5. 构建消息列表（使用 HistoryBuilder，支持附件多模态）
         from app.agent_loop_vnext.shared.history import HistoryBuilder
         history_builder = HistoryBuilder()
-        messages = history_builder.build_messages(self._context, system_prompt)
+        messages = await history_builder.build_messages(self._context, system_prompt)
 
         # 6. 绑定工具到模型
         chat_model_with_tools = chat_model.bind_tools(tools)

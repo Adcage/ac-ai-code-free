@@ -99,7 +99,7 @@ class GrpcPlatformClient:
         stub = await self._get_stub()
         request = platform_service_pb2.GetChatHistoryRequest(session_id=session_id, limit=limit)
         response = await stub.GetChatHistory(request, metadata=get_internal_metadata())
-        return [{"id": e.id, "role": e.role, "content": e.content} for e in response.entries]
+        return [{"id": e.id, "role": e.role, "content": e.content, "attachments_json": e.attachments_json} for e in response.entries]
 
     async def get_app_detail(self, app_id: int) -> dict:
         stub = await self._get_stub()
