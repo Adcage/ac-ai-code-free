@@ -26,38 +26,52 @@
           />
         </template>
         <template v-else-if="msg.role === 'ai'">
-          <div class="message-content">
-            <template v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]" :key="`parsed-${index}`">
+          <div v-if="shouldShowTooling(msg)" class="message-tooling" @click.stop>
+            <button
+              type="button"
+              class="message-tool-summary"
+              :class="{ 'is-interactive': hasToolLog(msg) }"
+              @click.stop="toggleToolLog(index)"
+            >
+              <span class="message-tool-summary-dot" :class="getSummaryDotClass(msg)"></span>
+              <span class="message-tool-summary-text">{{ getMessageToolSummary(msg) }}</span>
+              <span v-if="msg.toolCalls?.length" class="message-tool-summary-meta">
+                {{ msg.toolCalls.length }} 次工具调用
+              </span>
+              <span v-if="hasToolLog(msg)" class="message-tool-summary-arrow">
+                {{ isToolLogExpanded(index, msg) ? '收起' : '展开' }}
+              </span>
+            </button>
+            <div v-if="hasToolLog(msg) && isToolLogExpanded(index, msg)" class="message-tool-log">
               <div
-                v-if="parsed.aiText"
+                v-for="toolCall in msg.toolCalls"
+                :key="toolCall.id"
+                class="message-tool-log-row"
+              >
+                <span
+                  class="message-tool-log-dot"
+                  :class="{
+                    'is-running': toolCall.status === 'running',
+                    'is-completed': toolCall.status === 'completed',
+                    'is-failed': toolCall.status === 'failed',
+                  }"
+                ></span>
+                <div class="message-tool-log-copy">
+                  <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                  <span class="message-tool-log-desc">{{ toolCall.description }}</span>
+                </div>
+                <span class="message-tool-log-status">{{ formatToolCallStatus(toolCall.status) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="message-content">
+            <template v-for="parsed in [parseAiMessage(msg.content)]" :key="`parsed-${index}`">
+              <div
+                v-if="parsed"
                 class="message-text"
-                v-html="renderMarkdown(parsed.aiText)"
+                v-html="renderMarkdown(parsed)"
                 @click="handleMessageTextClick"
               ></div>
-              <details v-if="parsed.toolEvents.length" class="tool-call-card">
-                <summary class="tool-call-summary">
-                  <span class="tool-call-title">工具调用（{{ parsed.toolEvents.length }}）</span>
-                  <span class="tool-call-hint">点击查看执行详情</span>
-                </summary>
-                <div class="tool-call-list">
-                  <div
-                    v-for="(eventItem, toolIndex) in parsed.toolEvents"
-                    :key="`tool-${index}-${toolIndex}`"
-                    class="tool-call-item"
-                  >
-                    <span :class="['tool-call-tag', eventItem.type]">
-                      {{
-                        eventItem.type === 'request'
-                          ? '调用中'
-                          : eventItem.type === 'executed'
-                            ? '已完成'
-                            : '进行中'
-                      }}
-                    </span>
-                    <span class="tool-call-text">{{ eventItem.text }}</span>
-                  </div>
-                </div>
-              </details>
             </template>
           </div>
         </template>
@@ -120,36 +134,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { LoadingOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
 import MarkdownIt from 'markdown-it'
 import PlanningForm from '@/components/PlanningForm.vue'
 import PlanConfirmationCard from '@/components/PlanConfirmationCard.vue'
 import { getDisplayMessageContent } from '@/utils/chatAttachmentDisplay'
-
-export interface ToolEvent {
-  type: 'request' | 'executed' | 'status'
-  text: string
-}
-
-export interface ChatMessage {
-  role: 'user' | 'ai'
-  content: string
-  status?: string
-  toolEvents?: ToolEvent[]
-  planning?: PlanningQuestionSet
-  attachments?: AttachmentInfo[]
-}
-
-export interface AttachmentInfo {
-  id: string
-  fileName: string
-  fileSize: number
-  mimeType: string
-  storageType: string
-  storagePath: string
-  url: string
-}
+import { buildMessageToolSummary } from '@/utils/chatMessageTooling'
+import type { AttachmentInfo } from '@/utils/chatStreamRequest'
+import type { ChatMessage, PlanningQuestion, PlanningQuestionSet } from '@/types/chat'
 
 export interface ElementInfo {
   tagName: string
@@ -157,32 +150,6 @@ export interface ElementInfo {
   selector?: string
   textContent?: string
   [key: string]: unknown
-}
-
-type PlanningOption = {
-  id?: string
-  value?: string
-  label: string
-  description?: string
-  recommended?: boolean
-}
-
-type PlanningQuestion = {
-  id: string
-  prompt?: string
-  question: string
-  inputType: 'single_select' | 'multi_select'
-  required: boolean
-  options?: PlanningOption[]
-  reason?: string
-  placeholder?: string
-}
-
-type PlanningQuestionSet = {
-  questionSetId: string
-  stage?: string
-  protocolVersion?: number
-  questions: PlanningQuestion[]
 }
 
 type PlanningData =
@@ -193,7 +160,7 @@ type PlanningData =
       // 兼容旧字段
       question?: string
       inputType?: string
-      options?: PlanningOption[]
+      options?: PlanningQuestion['options']
       required?: boolean
     }
   | { planningType: 'plan_confirmation'; outline: PlanOutline; title?: string }
@@ -236,6 +203,15 @@ defineEmits<{
 }>()
 
 const listRef = ref<HTMLElement>()
+const expandedToolLogs = ref<Record<number, boolean>>({})
+
+function closeAllToolLogs() {
+  expandedToolLogs.value = {}
+}
+
+function handleDocumentClick() {
+  closeAllToolLogs()
+}
 
 function getPlanningData(index: number): PlanningData | null {
   const msg = props.messages[index]
@@ -292,52 +268,11 @@ function getPlanningAnswers(index: number): Record<string, string> | null {
   return Object.keys(answers).length > 0 ? answers : null
 }
 
-function parseAiMessage(
-  content: string,
-  presetToolEvents: ToolEvent[] = [],
-): { aiText: string; toolEvents: ToolEvent[] } {
-  if (presetToolEvents.length > 0) {
-    return {
-      aiText: stripToolEventLines(content).trim(),
-      toolEvents: presetToolEvents,
-    }
-  }
-  const lines = content.split('\n')
-  const aiTextLines: string[] = []
-  const toolEvents: ToolEvent[] = []
-
-  lines.forEach((line) => {
-    const trimmedLine = line.trim()
-    if (trimmedLine === 'waiting_for_user' || trimmedLine.startsWith('Agent loop completed:')) {
-      return
-    }
-    if (trimmedLine.startsWith('[状态]')) {
-      toolEvents.push({ type: 'status', text: trimmedLine.replace('[状态]', '').trim() || '处理中' })
-      return
-    }
-    if (trimmedLine.startsWith('[工具调用]')) {
-      toolEvents.push({ type: 'request', text: trimmedLine.replace('[工具调用]', '').trim() || '执行工具调用' })
-      return
-    }
-    if (trimmedLine.startsWith('[工具完成]')) {
-      toolEvents.push({ type: 'executed', text: trimmedLine.replace('[工具完成]', '').trim() || '工具执行成功' })
-      return
-    }
-    if (trimmedLine.startsWith('准备写入文件')) {
-      toolEvents.push({ type: 'request', text: trimmedLine })
-      return
-    }
-    if (trimmedLine.startsWith('已写入文件')) {
-      toolEvents.push({ type: 'executed', text: trimmedLine })
-      return
-    }
-    aiTextLines.push(line)
-  })
-
-  return { aiText: aiTextLines.join('\n').trim(), toolEvents }
+function parseAiMessage(content: string): string {
+  return stripLegacyToolMarkers(content).trim()
 }
 
-function stripToolEventLines(content: string) {
+function stripLegacyToolMarkers(content: string) {
   return content
     .replace(/\n?waiting_for_user\n?/g, '')
     .replace(/\n?Agent loop completed:.*?\n?/g, '')
@@ -365,6 +300,47 @@ function getFileAttachments(attachments?: AttachmentInfo[]) {
 
 function hasDisplayMessageContent(content: string, attachments?: AttachmentInfo[]) {
   return getDisplayMessageContent(content, attachments).trim().length > 0
+}
+
+function getMessageToolSummary(msg: ChatMessage) {
+  return buildMessageToolSummary({
+    status: msg.status,
+    toolStatus: msg.toolStatus,
+    toolCalls: msg.toolCalls,
+  })
+}
+
+function shouldShowTooling(msg: ChatMessage) {
+  return msg.role === 'ai' && (getMessageToolSummary(msg).length > 0 || hasToolLog(msg))
+}
+
+function hasToolLog(msg: ChatMessage) {
+  return Boolean(msg.toolCalls && msg.toolCalls.length > 0)
+}
+
+function isToolLogExpanded(index: number, msg: ChatMessage) {
+  if (expandedToolLogs.value[index] !== undefined) {
+    return expandedToolLogs.value[index]
+  }
+  return msg.status === 'running'
+}
+
+function toggleToolLog(index: number) {
+  if (!props.messages[index] || !hasToolLog(props.messages[index])) return
+  const nextExpanded = !isToolLogExpanded(index, props.messages[index])
+  expandedToolLogs.value = nextExpanded ? { [index]: true } : {}
+}
+
+function formatToolCallStatus(status: 'running' | 'completed' | 'failed') {
+  if (status === 'completed') return '已完成'
+  if (status === 'failed') return '失败'
+  return '进行中'
+}
+
+function getSummaryDotClass(msg: ChatMessage) {
+  if (msg.status === 'failed') return 'is-failed'
+  if (msg.status === 'running') return 'is-running'
+  return 'is-completed'
 }
 
 const md = new MarkdownIt({
@@ -422,6 +398,14 @@ watch(
   () => props.messages.length,
   () => scrollToBottom(),
 )
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleDocumentClick)
+})
 
 defineExpose({ scrollToBottom, listRef })
 </script>
@@ -545,6 +529,125 @@ defineExpose({ scrollToBottom, listRef })
   gap: 4px;
 }
 
+.message-tooling {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.message-tool-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #7b6e62;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.message-tool-summary.is-interactive {
+  cursor: pointer;
+}
+
+.message-tool-summary-dot,
+.message-tool-log-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.message-tool-summary-dot.is-running,
+.message-tool-log-dot.is-running {
+  background: #d4944c;
+  box-shadow: 0 0 0 4px rgba(212, 148, 76, 0.14);
+}
+
+.message-tool-summary-dot.is-completed,
+.message-tool-log-dot.is-completed {
+  background: #4f9d69;
+}
+
+.message-tool-summary-dot.is-failed,
+.message-tool-log-dot.is-failed {
+  background: #d85c4a;
+}
+
+.message-tool-summary-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-tool-summary-meta,
+.message-tool-summary-arrow {
+  color: #a08f81;
+  white-space: nowrap;
+}
+
+.message-tool-log {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 24;
+  width: min(360px, calc(100vw - 112px));
+  max-width: calc(100vw - 112px);
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(220, 207, 196, 0.7);
+  border-radius: 14px;
+  background: rgba(255, 252, 249, 0.96);
+  box-shadow:
+    0 18px 36px rgba(28, 24, 21, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(10px);
+}
+
+.message-tool-log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.message-tool-log-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  flex: 1;
+}
+
+.message-tool-log-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4e4036;
+}
+
+.message-tool-log-desc {
+  font-size: 12px;
+  color: #7b6e62;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-tool-log-status {
+  font-size: 11px;
+  color: #9f8d80;
+  white-space: nowrap;
+}
+
 .message-content {
   padding: 12px 16px;
   border-radius: 14px;
@@ -657,73 +760,6 @@ defineExpose({ scrollToBottom, listRef })
   color: rgba(255, 255, 255, 0.95);
 }
 
-.tool-call-card {
-  margin-top: 8px;
-  border: 1px solid rgba(220, 207, 196, 0.88);
-  border-radius: 12px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 24px rgba(28, 24, 21, 0.05);
-}
-
-.tool-call-summary {
-  padding: 8px 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  background: rgba(248, 244, 240, 0.92);
-}
-
-.tool-call-title {
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-.tool-call-hint {
-  color: var(--color-text-muted);
-}
-
-.tool-call-list {
-  padding: 8px 12px;
-}
-
-.tool-call-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 12px;
-}
-
-.tool-call-tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.tool-call-tag.request {
-  background: rgba(91, 139, 169, 0.14);
-  color: var(--color-info);
-}
-
-.tool-call-tag.executed {
-  background: rgba(74, 157, 107, 0.12);
-  color: var(--color-success);
-}
-
-.tool-call-tag.status {
-  background: rgba(212, 148, 76, 0.14);
-  color: var(--color-warning);
-}
-
-.tool-call-text {
-  color: var(--color-text-secondary);
-}
-
 .generating-indicator {
   text-align: center;
   padding: 16px;
@@ -742,5 +778,18 @@ defineExpose({ scrollToBottom, listRef })
 .selected-element-content {
   font-size: 12px;
   line-height: 1.8;
+}
+
+@media (max-width: 768px) {
+  .message-tool-log {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 20px;
+    top: auto;
+    width: auto;
+    max-width: none;
+    max-height: min(50vh, 320px);
+  }
 }
 </style>

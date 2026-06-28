@@ -95,7 +95,7 @@ import { LeftOutlined, CloudUploadOutlined, DownloadOutlined } from '@ant-design
 import { deployApp, getAppVoById, enhancePrompt } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import type { ElementInfo } from '@/utils/visualEditor'
-import { useChatSession, type AttachmentInfo } from '@/composables/useChatSession'
+import { useChatSession } from '@/composables/useChatSession'
 import {
   formatCodeGenType, formatCoverTaskStatus, coverTaskStatusColor,
   looksLikeRiskRejection, buildSelectedElementPrompt,
@@ -109,6 +109,7 @@ import ImagePreviewer from '@/components/ImagePreviewer.vue'
 import { useAppPreview } from '@/composables/useAppPreview'
 import { checkActiveGeneration } from '@/composables/useChatSession'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
+import type { AttachmentInfo } from '@/utils/chatStreamRequest'
 
 const route = useRoute()
 const router = useRouter()
@@ -172,7 +173,7 @@ const loadApp = async () => {
           // gRPC 还在跑：立即显示 generating 指示器，展示累积文本，尝试 SSE 重连
           generating.value = true
           const msgIdx = messages.value.length
-          messages.value.push({ role: 'ai', content: activeGen.text || '', status: 'running', toolEvents: [] })
+          messages.value.push({ role: 'ai', content: activeGen.text || '', status: 'running', toolStatus: '', toolCalls: [] })
           const resumed = await resumeSSE(currentSessionId.value, app.value?.codeGenType, msgIdx)
           if (!resumed && currentSessionId.value) {
             generating.value = false
@@ -180,7 +181,7 @@ const loadApp = async () => {
           }
         } else if (activeGen.text) {
           // gRPC 刚完成（handler 已入库），展示文本后 reload 刷新历史
-          messages.value.push({ role: 'ai', content: activeGen.text, status: 'success', toolEvents: [] })
+          messages.value.push({ role: 'ai', content: activeGen.text, status: 'success', toolStatus: '', toolCalls: [] })
           setTimeout(() => handleReloadCurrentSession(), 500)
         }
         await updatePreview()

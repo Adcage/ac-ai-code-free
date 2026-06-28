@@ -9,7 +9,8 @@
  */
 import { ref, unref, type Ref } from 'vue'
 import { getAppVoById } from '@/api/appController'
-import { useSSEChat, type ChatMessage, type ToolEvent } from './useSSEChat'
+import { useSSEChat } from './useSSEChat'
+import type { ChatMessage } from '@/types/chat'
 
 export type PreviewStatus = 'idle' | 'generating' | 'checking' | 'ready' | 'failed'
 

@@ -8,40 +8,13 @@ import {
   renameSession,
   deleteSession,
 } from '@/api/appController'
-
-export interface ToolEvent {
-  type: 'request' | 'executed' | 'status'
-  text: string
-}
-
-export interface ChatMessage {
-  role: 'user' | 'ai'
-  content: string
-  status?: string
-  toolEvents?: ToolEvent[]
-  planning?: any
-  attachments?: AttachmentInfo[]
-}
-
-export interface AttachmentInfo {
-  id: string
-  fileName: string
-  fileSize: number
-  mimeType: string
-  storageType: string
-  storagePath: string
-  url: string
-}
-
-const normalizeToolEvents = (events?: API.ToolEventVO[]) => {
-  if (!events || events.length === 0) return []
-  return events
-    .filter((item) => (item.type === 'request' || item.type === 'executed') && !!item.text)
-    .map((item) => ({
-      type: item.type as 'request' | 'executed',
-      text: item.text as string,
-    }))
-}
+import type { AttachmentInfo } from '@/utils/chatStreamRequest'
+import type { ChatMessage } from '@/types/chat'
+import {
+  buildMessageToolSummary,
+  normalizeToolEvents,
+  parseToolCallsFromHistory,
+} from '@/utils/chatMessageTooling'
 
 const parseAttachments = (extra?: string | null): AttachmentInfo[] | undefined => {
   if (!extra) return undefined
@@ -55,13 +28,21 @@ const parseAttachments = (extra?: string | null): AttachmentInfo[] | undefined =
   }
 }
 
-const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => ({
-  role: item.messageType === 'user' ? 'user' : 'ai',
-  content: item.message || '',
-  status: item.status || '',
-  toolEvents: normalizeToolEvents(item.toolEvents || []),
-  attachments: parseAttachments(item.extra),
-})
+const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => {
+  const toolCalls = parseToolCallsFromHistory(item.extra, item.toolEvents || [])
+  return {
+    role: item.messageType === 'user' ? 'user' : 'ai',
+    content: item.message || '',
+    status: item.status || '',
+    toolEvents: normalizeToolEvents(item.toolEvents || []),
+    toolCalls,
+    toolStatus: buildMessageToolSummary({
+      status: item.status || '',
+      toolCalls,
+    }),
+    attachments: parseAttachments(item.extra),
+  }
+}
 
 export interface ActiveGenerationStatus {
   active: boolean

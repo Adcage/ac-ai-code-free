@@ -138,7 +138,6 @@ import { useLoginUserStore } from '@/stores/LoginUser'
 import AppCard from '@/components/AppCard.vue'
 import ChatSessionPanel, { type SessionItem } from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
-import type { AttachmentInfo, ChatMessage } from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
 import { useAppPreview } from '@/composables/useAppPreview'
@@ -146,6 +145,9 @@ import { checkActiveGeneration } from '@/composables/useChatSession'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
 import { parseChatHistoryAttachments } from '@/utils/chatAttachmentDisplay'
 import ImagePreviewer from '@/components/ImagePreviewer.vue'
+import type { AttachmentInfo } from '@/utils/chatStreamRequest'
+import type { ChatMessage } from '@/types/chat'
+import { buildMessageToolSummary, normalizeToolEvents, parseToolCallsFromHistory } from '@/utils/chatMessageTooling'
 
 const router = useRouter()
 const route = useRoute()
@@ -221,7 +223,7 @@ const initAppChat = async (appId: string) => {
       // gRPC 还在跑：立即显示 generating 指示器，展示累积文本，尝试 SSE 重连
       generating.value = true
       const msgIdx = messages.value.length
-      messages.value.push({ role: 'ai', content: activeGen.text || '', status: 'running', toolEvents: [] })
+      messages.value.push({ role: 'ai', content: activeGen.text || '', status: 'running', toolStatus: '', toolCalls: [] })
       const resumed = await resumeSSE(currentSessionId.value, currentApp.value?.codeGenType, msgIdx)
       if (!resumed && currentSessionId.value) {
         generating.value = false
@@ -229,7 +231,7 @@ const initAppChat = async (appId: string) => {
       }
     } else if (activeGen.text) {
       // gRPC 刚完成（handler 已入库），展示文本后 reload 刷新历史
-      messages.value.push({ role: 'ai', content: activeGen.text, status: 'success', toolEvents: [] })
+      messages.value.push({ role: 'ai', content: activeGen.text, status: 'success', toolStatus: '', toolCalls: [] })
       setTimeout(() => {
         if (currentSessionId.value) loadRemoteHistory(currentSessionId.value)
       }, 500)
@@ -403,18 +405,21 @@ const loadRemoteHistory = async (sessionId: string) => {
   })
   if (res.data?.code === 0) {
     const historyList = res.data.data?.records || []
-    messages.value = historyList.map((item) => ({
-      role: item.messageType === 'user' ? 'user' : ('ai' as const),
-      content: item.message || '',
-      status: item.status || '',
-      toolEvents: (item.toolEvents || [])
-        .filter((e: API.ToolEventVO) => (e.type === 'request' || e.type === 'executed') && !!e.text)
-        .map((e: API.ToolEventVO) => ({
-          type: e.type as 'request' | 'executed',
-          text: e.text as string,
-        })),
-      attachments: parseChatHistoryAttachments(item.extra),
-    }))
+    messages.value = historyList.map((item) => {
+      const toolCalls = parseToolCallsFromHistory(item.extra, item.toolEvents || [])
+      return {
+        role: item.messageType === 'user' ? 'user' : ('ai' as const),
+        content: item.message || '',
+        status: item.status || '',
+        toolEvents: normalizeToolEvents(item.toolEvents || []),
+        toolCalls,
+        toolStatus: buildMessageToolSummary({
+          status: item.status || '',
+          toolCalls,
+        }),
+        attachments: parseChatHistoryAttachments(item.extra),
+      }
+    })
     nextTick(() => {
       chatMessageListRef.value?.scrollToBottom()
     })
