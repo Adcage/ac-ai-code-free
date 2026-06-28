@@ -160,7 +160,7 @@ class AppServiceImplWorkflowTest {
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-agent");
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个官网", "帮我做一个官网", loginUser));
+                () -> appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个官网", "帮我做一个官网", null, loginUser));
 
         org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("Java AI runtime 已禁用"));
         verify(workflowCodeGeneratorService, never()).executeWorkflowWithFlux(anyLong(), anyString());
@@ -170,7 +170,7 @@ class AppServiceImplWorkflowTest {
     void chatToGenCodeWhenPythonAgentShouldNotUseWorkflowService() {
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "python-agent");
 
-        List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个单页", "帮我做一个单页", loginUser)
+        List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个单页", "帮我做一个单页", null, loginUser)
                 .collectList()
                 .block();
 

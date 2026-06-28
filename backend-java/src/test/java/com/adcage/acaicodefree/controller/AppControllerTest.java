@@ -10,6 +10,8 @@ import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
 import com.adcage.acaicodefree.model.dto.app.AppAdminUpdateRequest;
 import com.adcage.acaicodefree.model.dto.app.AppEditRequest;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatAttachmentInfo;
+import com.adcage.acaicodefree.model.dto.chat.ChatCodeGenRequest;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.User;
@@ -32,6 +34,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -148,6 +151,37 @@ class AppControllerTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.PARAMS_ERROR.getCode()));
 
         verify(appService, never()).createApp(any(AppAddRequest.class), any(User.class));
+    }
+
+    @Test
+    void chatToGenCodeShouldAcceptAttachmentOnlyMessage() throws Exception {
+        ChatAttachmentInfo attachment = new ChatAttachmentInfo();
+        attachment.setId("att-1");
+        attachment.setFileName("design.jpg");
+        attachment.setFileSize(1024L);
+        attachment.setMimeType("image/jpeg");
+        attachment.setStorageType("local");
+        attachment.setStoragePath("chat_attachments/2026/06/27/design.jpg");
+        attachment.setUrl("http://localhost:8700/api/storage/chat_attachments/2026/06/27/design.jpg");
+        List<ChatAttachmentInfo> attachments = List.of(attachment);
+
+        ChatCodeGenRequest request = new ChatCodeGenRequest();
+        request.setAppId(1L);
+        request.setSessionId(2L);
+        request.setMessage("");
+        request.setDisplayMessage("");
+        request.setAttachments(attachments);
+
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(appService.chatToGenCode(eq(1L), eq(2L), eq("[附件消息]"), eq("[附件消息]"), eq(attachments), eq(loginUser)))
+                .thenReturn(Flux.just("ok"));
+
+        mockMvc.perform(post("/app/chat/gen/code/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSONUtil.toJsonStr(request)))
+                .andExpect(status().isOk());
+
+        verify(appService).chatToGenCode(eq(1L), eq(2L), eq("[附件消息]"), eq("[附件消息]"), eq(attachments), eq(loginUser));
     }
 
     @Test

@@ -121,7 +121,7 @@ class AppServiceImplTest {
 
         workspaceProperties.setAgentWorkspaceDir("/data/agent-workspaces");
 
-        appService.chatToGenCode(appId, sessionId, message, message, loginUser);
+        appService.chatToGenCode(appId, sessionId, message, message, null, loginUser);
 
         verify(modelConfigService).getDefaultEnabledModelConfig(userId);
 
@@ -168,7 +168,7 @@ class AppServiceImplTest {
 
         workspaceProperties.setAgentWorkspaceDir("/tmp/workspaces");
 
-        appService.chatToGenCode(appId, sessionId, message, message, loginUser);
+        appService.chatToGenCode(appId, sessionId, message, message, null, loginUser);
 
         verify(agentRunService).createAgentRun(appId, sessionId, userId, "python-agent",
                 null, null, null);
@@ -215,7 +215,7 @@ class AppServiceImplTest {
         when(chatHistoryMapper.insert(any())).thenReturn(1);
         when(agentRunService.claimLatestPausedRun(appId, sessionId, userId)).thenReturn(paused);
 
-        appService.chatToGenCode(appId, sessionId, "企业后台登录页面", "企业后台登录页面", loginUser);
+        appService.chatToGenCode(appId, sessionId, "企业后台登录页面", "企业后台登录页面", null, loginUser);
 
         verify(agentRunService, never()).createAgentRun(
                 anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any());
@@ -248,7 +248,7 @@ class AppServiceImplTest {
 
         BusinessException error = assertThrows(
                 BusinessException.class,
-                () -> appService.chatToGenCode(appId, sessionId, "重复提交", "重复提交", loginUser));
+                () -> appService.chatToGenCode(appId, sessionId, "重复提交", "重复提交", null, loginUser));
 
         assertTrue(error.getMessage().contains("当前会话正在生成"));
         verify(agentRunService, never()).createAgentRun(
@@ -284,7 +284,7 @@ class AppServiceImplTest {
         when(agentRunService.createAgentRun(eq(appId), eq(sessionId), eq(userId), eq("python-agent"),
                 isNull(), isNull(), isNull())).thenReturn(77L);
 
-        appService.chatToGenCode(appId, sessionId, runtimeMessage, displayMessage, loginUser);
+        appService.chatToGenCode(appId, sessionId, runtimeMessage, displayMessage, null, loginUser);
 
         ArgumentCaptor<ChatHistory> historyCaptor = ArgumentCaptor.forClass(ChatHistory.class);
         verify(chatHistoryMapper, atLeastOnce()).insert(historyCaptor.capture());
