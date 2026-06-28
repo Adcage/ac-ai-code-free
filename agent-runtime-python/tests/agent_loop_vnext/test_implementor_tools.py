@@ -23,9 +23,9 @@ def test_create_implementor_tools_all_are_agent_tools():
 
 
 def test_create_implementor_tools_has_correct_names():
-    """工具名应为 Read, Write, Edit, Insert, Glob, Grep, load_skill, Bash。"""
+    """工具名应为 Read, Write, Edit, Insert, Glob, Grep, LoadSkill, Bash。"""
     ws = Workspace("/tmp/test")
     ft = FileTools(ws)
     tools = create_implementor_tools(ft)
     names = {t.name for t in tools}
-    assert names == {"Read", "Write", "Edit", "Insert", "Glob", "Grep", "load_skill", "Bash"}
+    assert names == {"Read", "Write", "Edit", "Insert", "Glob", "Grep", "LoadSkill", "Bash"}

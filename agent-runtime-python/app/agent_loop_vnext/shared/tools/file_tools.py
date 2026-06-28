@@ -158,7 +158,7 @@ class ReadTool(AgentTool):
 
         if self.state is None or skill_id not in self.state.loaded_skills:
             raise AgentRuntimeError(
-                f"技能 {skill_id} 未加载，请先使用 load_skill 加载",
+                f"技能 {skill_id} 未加载，请先使用 LoadSkill 加载",
                 code=AgentErrorCode.SKILL_RESOURCE_NOT_FOUND,
             )
 

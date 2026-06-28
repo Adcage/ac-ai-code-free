@@ -1,4 +1,4 @@
-"""vNext Skill 工具集：load_skill。"""
+"""vNext Skill 工具集：LoadSkill。"""
 
 import logging
 
@@ -16,7 +16,7 @@ class LoadSkillInput(BaseModel):
 
 
 class LoadSkillTool(AgentTool):
-    name: str = "load_skill"
+    name: str = "LoadSkill"
     description: str = "加载指定技能的规则和参考文件列表。加载后可通过 Read 工具使用 skill/{skill_id}/ 路径前缀读取参考文件。"
     args_schema: type = LoadSkillInput
     skill_registry: SkillRegistry | None = None
@@ -58,7 +58,7 @@ class LoadSkillTool(AgentTool):
         )
         self.state.loaded_skills[skill_id] = loaded
 
-        logger.info("load_skill | skill_id=%s refs=%d", skill_id, len(loaded.references))
+        logger.info("LoadSkill | skill_id=%s refs=%d", skill_id, len(loaded.references))
 
         # 构造返回内容：正文 + 参考文件列表
         parts = [skill_def.body]
