@@ -23,6 +23,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
 
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -87,6 +90,27 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
                     if (text != null) {
                         activeGen.appendText(text);
                     }
+                }
+
+                // 采集工具调用事件 → 入库到 extra.toolCalls
+                if (event.getEventType() == com.adcage.acaicodefree.grpc.common.EventType.TOOL_REQUEST) {
+                    ToolRequestData req = event.getToolRequest();
+                    activeGen.addToolCall(Map.of(
+                            "type", "request",
+                            "id", req.getId(),
+                            "name", req.getName(),
+                            "arguments", req.getArguments()
+                    ));
+                }
+                if (event.getEventType() == com.adcage.acaicodefree.grpc.common.EventType.TOOL_EXECUTED) {
+                    ToolExecutedData exec = event.getToolExecuted();
+                    activeGen.addToolCall(Map.of(
+                            "type", "executed",
+                            "id", exec.getId(),
+                            "name", exec.getName(),
+                            "arguments", exec.getArguments(),
+                            "result", exec.getResult()
+                    ));
                 }
 
                 String json = mapEventToStreamMessageJson(event);

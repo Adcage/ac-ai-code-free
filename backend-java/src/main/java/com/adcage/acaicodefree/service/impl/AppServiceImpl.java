@@ -378,7 +378,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             if (historySaved.compareAndSet(false, true)) {
                 int latencyMs = (int) (System.currentTimeMillis() - startTime);
                 String msg = StrUtil.blankToDefault(finalText, "");
-                saveHistoryMessage(sessionId, appId, loginUser.getId(), msg, "ai", "success", codeGenTypeStr, latencyMs, "{\"completed_by\": \"handler\"}");
+                saveHistoryMessage(sessionId, appId, loginUser.getId(), msg, "ai", "success", codeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, "{\"completed_by\": \"handler\"}"));
                 updateSessionSummary(sessionId);
                 log.info("[Handler] Saved to DB, sessionId={}, length={}", sessionId, msg.length());
             } else {
@@ -459,7 +459,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     if (historySaved.compareAndSet(false, true)) {
                         log.info("[doOnComplete] Saving to DB, sessionId={}, status={}, textLen={}",
                                 sessionId, status, aiMessage != null ? aiMessage.length() : 0);
-                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
+                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, extra));
                         updateSessionSummary(sessionId);
                     } else {
                         log.info("[doOnComplete] CAS skipped (handler already saved), sessionId={}", sessionId);
@@ -479,7 +479,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     String aiMessage = StrUtil.isBlank(readableAssistantMessageBuilder.toString())
                             ? "生成失败：" + error.getMessage()
                             : readableAssistantMessageBuilder.toString();
-                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, JSONUtil.toJsonStr(extraInfo));
+                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, JSONUtil.toJsonStr(extraInfo)));
                     historySaved.set(true);
                     updateSessionSummary(sessionId);
                     // Agent 运行异常结束后也触发封面截图
@@ -892,7 +892,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         try {
             JSONObject extraJson = JSONUtil.parseObj(extra);
-            JSONArray toolEventArray = extraJson.getJSONArray("toolEvents");
+            // 优先新格式 toolCalls，兼容旧格式 toolEvents
+            JSONArray toolEventArray = extraJson.getJSONArray("toolCalls");
+            if (toolEventArray == null || toolEventArray.isEmpty()) {
+                toolEventArray = extraJson.getJSONArray("toolEvents");
+            }
             if (toolEventArray == null || toolEventArray.isEmpty()) {
                 return new ArrayList<>();
             }
@@ -902,7 +906,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     continue;
                 }
                 String type = normalizeToolEventType(eventObj.getStr("type"));
-                String text = eventObj.getStr("text", "");
+                // 新格式用 name 作为 text，旧格式直接用 text
+                String text = eventObj.getStr("text");
+                if (StrUtil.isBlank(text)) {
+                    text = eventObj.getStr("name", "");
+                }
                 if (StrUtil.isNotBlank(type) && StrUtil.isNotBlank(text)) {
                     toolEvents.add(new ToolEventVO(type, text));
                 }
@@ -989,6 +997,26 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             case MULTI_FILE -> AppConstant.MULTI_FILE_OUTPUT_PREFIX;
             case VUE_PROJECT -> AppConstant.VUE_PROJECT_OUTPUT_PREFIX;
         };
+    }
+
+    /** 构造入库 extra JSON：合并已有 extra + toolCalls。 */
+    private String buildExtraJsonWithToolCalls(Long sessionId, String existingExtra) {
+        ActiveGeneration activeGen = activeGenerationManager.get(sessionId);
+        if (activeGen == null || activeGen.getToolCalls().isEmpty()) {
+            return existingExtra;
+        }
+        JSONObject extraJson;
+        if (StrUtil.isNotBlank(existingExtra)) {
+            try {
+                extraJson = JSONUtil.parseObj(existingExtra);
+            } catch (Exception e) {
+                extraJson = new JSONObject();
+            }
+        } else {
+            extraJson = new JSONObject();
+        }
+        extraJson.put("toolCalls", new JSONArray(activeGen.getToolCalls()));
+        return extraJson.toString();
     }
 
 }

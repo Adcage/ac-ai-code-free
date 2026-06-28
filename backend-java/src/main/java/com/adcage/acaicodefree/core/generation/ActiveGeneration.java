@@ -2,6 +2,9 @@ package com.adcage.acaicodefree.core.generation;
 
 import reactor.core.publisher.Sinks;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -13,6 +16,7 @@ public class ActiveGeneration {
     private final Long sessionId;
     private final Long agentRunId;
     private final StringBuilder accumulatedText = new StringBuilder();
+    private final List<Map<String, Object>> toolCalls = new ArrayList<>();
     private final long startTime = System.currentTimeMillis();
     private volatile boolean completed = false;
 
@@ -33,6 +37,14 @@ public class ActiveGeneration {
 
     public String getText() {
         return accumulatedText.toString();
+    }
+
+    public void addToolCall(Map<String, Object> toolCall) {
+        toolCalls.add(toolCall);
+    }
+
+    public List<Map<String, Object>> getToolCalls() {
+        return toolCalls;
     }
 
     public Long getSessionId() {

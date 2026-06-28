@@ -4,22 +4,21 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.ai.model.message.StreamMessageTypeEnum;
-import com.adcage.acaicodefree.service.FileOperationService;
-import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
-import java.util.HashSet;
-import java.util.Set;
-
+/**
+ * SSE 流处理器：将 JSON 消息流转换为可读文本。
+ *
+ * 职责：
+ * - ai_response → 累积到 readableOutput（纯 AI 文本）
+ * - tool_request / tool_executed / status → 静默通过（不污染 readableOutput）
+ * - 工具调用已由 GrpcPythonAgentRuntime 采集后结构化入库（extra.toolCalls）
+ */
 @Component
 public class JsonMessageStreamHandler {
 
-    @Resource
-    private FileOperationService fileOperationService;
-
     public Flux<String> handle(Flux<String> stream, StringBuilder readableOutput) {
-        Set<String> printedToolRequestIds = new HashSet<>();
         return stream.flatMap(chunk -> {
             if (StrUtil.isBlank(chunk)) {
                 return Flux.empty();
@@ -40,96 +39,9 @@ public class JsonMessageStreamHandler {
                 readableOutput.append(data);
                 return Flux.just(chunk);
             }
-            if (StreamMessageTypeEnum.TOOL_REQUEST.getValue().equals(type)) {
-                String id = jsonObject.getStr("id", "");
-                if (!printedToolRequestIds.add(id)) {
-                    return Flux.empty();
-                }
-                String toolName = jsonObject.getStr("name", "");
-                if ("ask_user".equals(toolName) || "finish".equals(toolName)) {
-                    return Flux.just(chunk);
-                }
-                JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
-                String requestText = buildToolRequestText(toolName, arguments);
-                if (StrUtil.isNotBlank(requestText)) {
-                    readableOutput.append("\n[工具调用] ").append(requestText).append('\n');
-                }
-                return Flux.just(chunk);
-            }
-            if (StreamMessageTypeEnum.TOOL_EXECUTED.getValue().equals(type)) {
-                String toolName = jsonObject.getStr("name", "");
-                if ("ask_user".equals(toolName) || "finish".equals(toolName)) {
-                    return Flux.just(chunk);
-                }
-                String result = jsonObject.getStr("result", "");
-                JSONObject arguments = parseArguments(jsonObject.getStr("arguments", ""));
-                String executedText = buildToolExecutedText(toolName, arguments, result);
-                if (StrUtil.isNotBlank(executedText)) {
-                    readableOutput.append("\n[工具完成] ").append(executedText).append('\n');
-                }
-                return Flux.just(chunk);
-            }
-            if (StreamMessageTypeEnum.STATUS.getValue().equals(type)) {
-                return Flux.just(chunk);
-            }
-            if ("workflow_event".equals(type)) {
-                return Flux.just(chunk);
-            }
-            readableOutput.append(chunk);
+            // tool_request / tool_executed / status / workflow_event
+            // 不再写入 readableOutput，工具调用已由 GrpcPythonAgentRuntime 采集
             return Flux.just(chunk);
         });
     }
-
-    private JSONObject parseArguments(String argumentsText) {
-        if (StrUtil.isBlank(argumentsText)) {
-            return new JSONObject();
-        }
-        try {
-            return JSONUtil.parseObj(argumentsText);
-        } catch (Exception e) {
-            return new JSONObject();
-        }
-    }
-
-    private String buildToolRequestText(String toolName, JSONObject arguments) {
-        if (fileOperationService != null) {
-            String text = fileOperationService.generateToolRequestResponse(toolName, arguments);
-            if (StrUtil.isNotBlank(text)) {
-                return text;
-            }
-        }
-        String path = extractPath(arguments);
-        if (StrUtil.isNotBlank(path)) {
-            return "准备处理文件 " + path;
-        }
-        return StrUtil.isBlank(toolName) ? "正在执行工具" : "正在执行工具 " + toolName;
-    }
-
-    private String buildToolExecutedText(String toolName, JSONObject arguments, String result) {
-        if (fileOperationService != null) {
-            String text = fileOperationService.generateToolExecutedResult(toolName, arguments, result);
-            if (StrUtil.isNotBlank(text)) {
-                return text;
-            }
-        }
-        String path = extractPath(arguments);
-        if (StrUtil.isNotBlank(path)) {
-            return "已处理文件 " + path;
-        }
-        // 不原样返回 result：多行结果（文件内容、校验输出）会破坏持久化消息的行解析，
-        // 刷新时泄漏进对话气泡。统一回退到单行摘要。
-        return StrUtil.isBlank(toolName) ? "工具执行成功" : "工具执行成功 " + toolName;
-    }
-
-    private String extractPath(JSONObject arguments) {
-        if (arguments == null || arguments.isEmpty()) {
-            return "";
-        }
-        String relativeFilePath = arguments.getStr("relativeFilePath", "");
-        if (StrUtil.isNotBlank(relativeFilePath)) {
-            return relativeFilePath;
-        }
-        return arguments.getStr("relativeDirPath", "");
-    }
-
 }
