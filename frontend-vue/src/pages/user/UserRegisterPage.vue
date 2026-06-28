@@ -3,10 +3,10 @@
     <div class="brand-side">
       <div class="brand-content">
         <div class="brand-logo">
-          <img alt="AC AI Code" src="/logo.png" class="logo-img" />
-          <span class="brand-name">AC AI Code</span>
+          <img alt="原象 Morpha" src="/logo.png" class="logo-img" />
+          <span class="brand-name">原象 Morpha</span>
         </div>
-        <p class="brand-tagline">AI 驱动的代码生成平台</p>
+        <p class="brand-tagline">AI 驱动的设计创作平台</p>
         <div class="brand-features">
           <div class="feature-item">
             <Sparkles :size="20" class="feature-icon" />
@@ -36,7 +36,7 @@
     <div class="form-side">
       <div class="form-card">
         <h1 class="form-title">注册</h1>
-        <p class="form-subtitle">创建账号，开始使用 AI 生成代码</p>
+        <p class="form-subtitle">创建账号，开始你的设计创作</p>
 
         <a-form
           :model="formState"

@@ -93,7 +93,7 @@
         </template>
       </div>
     </div>
-    <div v-if="generating" class="generating-indicator"><LoadingOutlined /> AI 正在思考并生成代码...</div>
+    <div v-if="generating" class="generating-indicator"><LoadingOutlined /> AI 正在思考并生成内容...</div>
 
     <div v-if="streamWarning" class="stream-warning">
       <a-alert type="warning" show-icon :message="streamWarning" />

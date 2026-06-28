@@ -423,7 +423,7 @@ const loadRemoteHistory = async (sessionId: string) => {
 
 const handleCreateSession = async () => {
   if (generating.value) {
-    message.warning('正在生成代码，请稍后再新建会话')
+    message.warning('正在生成内容，请稍后再新建会话')
     return
   }
   const newSessionId = await createSession()

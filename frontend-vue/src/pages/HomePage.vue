@@ -70,7 +70,7 @@
       <div class="section-inner">
         <div class="features-top">
           <div class="features-top-left">
-            <h2 class="features-heading">为创作者而生<br>不止于 <span class="text-cta">AI 代码</span></h2>
+            <h2 class="features-heading">为创作者而生<br>不止于 <span class="text-cta">AI 设计</span></h2>
             <p class="section-subheading" style="text-align: left; margin-bottom: 0;">强大的 AI 驱动，让创意变为现实。</p>
           </div>
           <div class="features-top-right">
@@ -89,7 +89,7 @@
           <div class="bento-card bento-span-2">
             <div class="bento-icon"><Sparkles :size="28" /></div>
             <h3 class="bento-title">AI 智能生成</h3>
-            <p class="bento-desc">一句话描述需求即可生成完整应用代码，从想法到产品只需几分钟</p>
+            <p class="bento-desc">一句话描述需求即可生成完整设计页面与应用内容，从想法到作品只需几分钟</p>
           </div>
           <div class="bento-card brand-card">
             <div class="bento-icon"><Layers :size="28" /></div>
@@ -184,7 +184,7 @@
                   </div>
                   <div class="preview-card">
                     <div class="preview-card-label">项目</div>
-                    <div class="preview-card-title">AC AI Code 改版</div>
+                    <div class="preview-card-title">原象 Morpha 改版</div>
                     <div class="preview-card-meta">进行中</div>
                   </div>
                   <div class="preview-card highlight">
