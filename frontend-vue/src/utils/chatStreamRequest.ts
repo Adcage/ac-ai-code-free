@@ -1,8 +1,19 @@
+export interface AttachmentInfo {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  storageType: string
+  storagePath: string
+  url: string
+}
+
 export interface ChatStreamRequestInput {
   appId: string | number
   sessionId?: string | number | null
   message: string
   displayMessage?: string
+  attachments?: AttachmentInfo[]
 }
 
 export interface ChatStreamRequestBody {
@@ -10,6 +21,7 @@ export interface ChatStreamRequestBody {
   sessionId?: string
   message: string
   displayMessage: string
+  attachments?: AttachmentInfo[]
 }
 
 /**
@@ -26,6 +38,9 @@ export function buildChatStreamRequestBody(input: ChatStreamRequestInput): ChatS
   }
   if (input.sessionId !== undefined && input.sessionId !== null && input.sessionId !== '') {
     body.sessionId = String(input.sessionId)
+  }
+  if (input.attachments && input.attachments.length > 0) {
+    body.attachments = input.attachments
   }
   return body
 }

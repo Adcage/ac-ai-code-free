@@ -19,7 +19,7 @@ export interface SseRequestOptions {
   /** 请求路径（相对于 baseURL） */
   path: string
   /** POST JSON body */
-  body?: Record<string, unknown>
+  body?: object
   /** AbortSignal，用于取消请求 */
   signal?: AbortSignal
 }

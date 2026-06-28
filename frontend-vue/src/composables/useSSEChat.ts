@@ -2,7 +2,7 @@ import { ref, unref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { ssePost } from '@/utils/sseRequest'
 import { extractBusinessChunk, splitConcatenatedJsonObjects } from './sseParser'
-import { buildChatStreamRequestBody } from '@/utils/chatStreamRequest'
+import { buildChatStreamRequestBody, type AttachmentInfo } from '@/utils/chatStreamRequest'
 
 export interface ToolEvent {
   type: 'request' | 'executed' | 'status'
@@ -41,6 +41,7 @@ export interface ChatMessage {
   status?: string
   toolEvents?: ToolEvent[]
   planning?: PlanningQuestionSet
+  attachments?: AttachmentInfo[]
 }
 
 export interface SSEChatOptions {
@@ -150,11 +151,21 @@ export function useSSEChat(options: SSEChatOptions) {
     sessionId: string,
     codeGenType?: string,
     displayMessage?: string,
+    attachments?: AttachmentInfo[],
   ) => {
     generating.value = true
     streamWarning.value = ''
     let streamCompleted = false
     let hasBusinessError = false
+
+    // 标记用户消息中的附件（前端展示用）
+    if (attachments && attachments.length > 0) {
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.role === 'user') {
+        lastMsg.attachments = attachments
+      }
+    }
+
     const aiMsgIndex = messages.value.length
     messages.value.push({ role: 'ai', content: '', status: 'running' })
 
@@ -166,14 +177,16 @@ export function useSSEChat(options: SSEChatOptions) {
 
     void (async () => {
       try {
+        const requestBody = buildChatStreamRequestBody({
+          appId: unref(appId),
+          sessionId,
+          message: userMsg,
+          displayMessage,
+          attachments,
+        })
         const response = await ssePost({
           path: '/app/chat/gen/code/stream',
-          body: buildChatStreamRequestBody({
-            appId: unref(appId),
-            sessionId,
-            message: userMsg,
-            displayMessage,
-          }),
+          body: requestBody,
           signal: controller.signal,
         })
 

@@ -107,6 +107,7 @@
         @clear-selected-element="() => {}"
       />
     </div>
+    <ImagePreviewer />
   </div>
 </template>
 
@@ -137,12 +138,14 @@ import { useLoginUserStore } from '@/stores/LoginUser'
 import AppCard from '@/components/AppCard.vue'
 import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
-import type { ChatMessage } from '@/components/ChatMessageList.vue'
+import type { AttachmentInfo, ChatMessage } from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
 import { useAppPreview } from '@/composables/useAppPreview'
 import { checkActiveGeneration } from '@/composables/useChatSession'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
+import { parseChatHistoryAttachments } from '@/utils/chatAttachmentDisplay'
+import ImagePreviewer from '@/components/ImagePreviewer.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -410,6 +413,7 @@ const loadRemoteHistory = async (sessionId: string) => {
           type: e.type as 'request' | 'executed',
           text: e.text as string,
         })),
+      attachments: parseChatHistoryAttachments(item.extra),
     }))
     nextTick(() => {
       chatMessageListRef.value?.scrollToBottom()
@@ -511,18 +515,19 @@ const ensureSessionReady = async () => {
   }
 }
 
-const doChatWithMessage = async (rawMessage: string) => {
-  if (generating.value || !rawMessage) return
+const doChatWithMessage = async (rawMessage: string, attachments?: AttachmentInfo[]) => {
+  const attachmentCount = attachments?.length || 0
+  if (generating.value || (!rawMessage && attachmentCount === 0)) return
   const sessionId = await ensureSessionReady()
   if (!sessionId) {
     message.warning('会话初始化中，请稍后再试')
     return
   }
-  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
+  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [], attachments })
   iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(rawMessage, sessionId, currentApp.value?.codeGenType)
+  startSSE(rawMessage, sessionId, currentApp.value?.codeGenType, undefined, attachments)
 }
 
 const handleReloadCurrentSession = async () => {

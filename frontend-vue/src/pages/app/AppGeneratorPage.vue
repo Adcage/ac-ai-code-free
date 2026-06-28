@@ -83,6 +83,7 @@
         @clear-selected-element="clearSelectedElement"
       />
     </div>
+    <ImagePreviewer />
   </div>
 </template>
 
@@ -94,7 +95,7 @@ import { LeftOutlined, CloudUploadOutlined, DownloadOutlined } from '@ant-design
 import { deployApp, getAppVoById, enhancePrompt } from '@/api/appController'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import type { ElementInfo } from '@/utils/visualEditor'
-import { useChatSession } from '@/composables/useChatSession'
+import { useChatSession, type AttachmentInfo } from '@/composables/useChatSession'
 import {
   formatCodeGenType, formatCoverTaskStatus, coverTaskStatusColor,
   looksLikeRiskRejection, buildSelectedElementPrompt,
@@ -104,6 +105,7 @@ import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
+import ImagePreviewer from '@/components/ImagePreviewer.vue'
 import { useAppPreview } from '@/composables/useAppPreview'
 import { checkActiveGeneration } from '@/composables/useChatSession'
 import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
@@ -204,15 +206,16 @@ const handleReloadCurrentSession = async () => {
 }
 
 // --- chat ---
-const doChatWithMessage = async (rawMessage: string) => {
-  if (hasActivePlanning() || generating.value || !rawMessage) return
+const doChatWithMessage = async (rawMessage: string, attachments?: AttachmentInfo[]) => {
+  const attachmentCount = attachments?.length || 0
+  if (hasActivePlanning() || generating.value || (!rawMessage && attachmentCount === 0)) return
   const sessionId = await ensureSessionReady()
   if (!sessionId) { message.warning('会话初始化中，请稍后再试'); return }
   const promptMessage = buildSelectedElementPrompt(rawMessage, selectedElement.value)
-  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
+  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [], attachments })
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(promptMessage, sessionId, app.value?.codeGenType)
+  startSSE(promptMessage, sessionId, app.value?.codeGenType, undefined, attachments)
 }
 
 function hasActivePlanning(): boolean {
@@ -482,6 +485,7 @@ watch(() => route.params.id, () => {
   align-items: center;
   justify-content: space-between;
   background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-name {
@@ -489,6 +493,7 @@ watch(() => route.params.id, () => {
   font-size: 16px;
   margin-left: 8px;
   color: var(--color-text);
+  font-family: var(--font-heading);
 }
 
 .main-content {
@@ -516,11 +521,29 @@ watch(() => route.params.id, () => {
 }
 
 .panel-splitter:hover {
-  background: var(--color-border);
+  background: var(--color-cta-lighter);
 }
 
 .status-tag {
   display: inline-flex;
   align-items: center;
+}
+
+.download-btn {
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
+}
+
+.download-btn:hover {
+  border-color: var(--color-cta) !important;
+  color: var(--color-cta) !important;
+}
+
+.deploy-btn {
+  box-shadow: var(--shadow-cta) !important;
+}
+
+.deploy-btn:hover {
+  box-shadow: 0 6px 16px rgba(200, 90, 62, 0.35) !important;
 }
 </style>

@@ -25,10 +25,15 @@
             @cancel="$emit('planningSkip', index)"
           />
         </template>
-        <div v-else class="message-content">
-          <template v-if="msg.role === 'ai'">
+        <template v-else-if="msg.role === 'ai'">
+          <div class="message-content">
             <template v-for="parsed in [parseAiMessage(msg.content, msg.toolEvents || [])]" :key="`parsed-${index}`">
-              <div v-if="parsed.aiText" class="message-text" v-html="renderMarkdown(parsed.aiText)"></div>
+              <div
+                v-if="parsed.aiText"
+                class="message-text"
+                v-html="renderMarkdown(parsed.aiText)"
+                @click="handleMessageTextClick"
+              ></div>
               <details v-if="parsed.toolEvents.length" class="tool-call-card">
                 <summary class="tool-call-summary">
                   <span class="tool-call-title">工具调用（{{ parsed.toolEvents.length }}）</span>
@@ -54,9 +59,38 @@
                 </div>
               </details>
             </template>
-          </template>
-          <div v-else class="message-text" v-html="renderMarkdown(msg.content)"></div>
-        </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-if="getImageAttachments(msg.attachments).length > 0" class="user-message-media attachments-preview attachments-preview-images">
+            <div class="user-message-media-stack">
+              <button
+                v-for="att in getImageAttachments(msg.attachments)"
+                :key="att.id"
+                type="button"
+                class="attachment-image-card"
+                @click="openImagePreview(att.url)"
+              >
+                <img :src="att.url" :alt="att.fileName" class="attachment-image-thumb" />
+              </button>
+            </div>
+          </div>
+          <div v-if="getFileAttachments(msg.attachments).length > 0" class="attachments-preview attachments-preview-files">
+            <div v-for="att in getFileAttachments(msg.attachments)" :key="att.id" class="attachment-chip">
+              <PaperClipOutlined />
+              <span class="attachment-label">{{ att.fileName }}</span>
+            </div>
+          </div>
+          <div
+            v-if="hasDisplayMessageContent(msg.content, msg.attachments)"
+            class="message-content user-message-bubble"
+          >
+            <div
+              class="message-text"
+              v-html="renderMarkdown(getDisplayMessageContent(msg.content, msg.attachments))"
+            ></div>
+          </div>
+        </template>
       </div>
     </div>
     <div v-if="generating" class="generating-indicator"><LoadingOutlined /> AI 正在思考并生成代码...</div>
@@ -87,10 +121,11 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { LoadingOutlined } from '@ant-design/icons-vue'
+import { LoadingOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
 import MarkdownIt from 'markdown-it'
 import PlanningForm from '@/components/PlanningForm.vue'
 import PlanConfirmationCard from '@/components/PlanConfirmationCard.vue'
+import { getDisplayMessageContent } from '@/utils/chatAttachmentDisplay'
 
 export interface ToolEvent {
   type: 'request' | 'executed' | 'status'
@@ -103,6 +138,17 @@ export interface ChatMessage {
   status?: string
   toolEvents?: ToolEvent[]
   planning?: PlanningQuestionSet
+  attachments?: AttachmentInfo[]
+}
+
+export interface AttachmentInfo {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  storageType: string
+  storagePath: string
+  url: string
 }
 
 export interface ElementInfo {
@@ -309,6 +355,18 @@ function stripToolEventLines(content: string) {
     .join('\n')
 }
 
+function getImageAttachments(attachments?: AttachmentInfo[]) {
+  return (attachments || []).filter((att) => att.mimeType.startsWith('image/'))
+}
+
+function getFileAttachments(attachments?: AttachmentInfo[]) {
+  return (attachments || []).filter((att) => !att.mimeType.startsWith('image/'))
+}
+
+function hasDisplayMessageContent(content: string, attachments?: AttachmentInfo[]) {
+  return getDisplayMessageContent(content, attachments).trim().length > 0
+}
+
 const md = new MarkdownIt({
   html: false,
   linkify: true,
@@ -334,6 +392,23 @@ const renderMarkdown = (text: string) => {
   return md.render(preprocessMarkdown(text))
 }
 
+/** 通过自定义事件打开图片预览（绕过 composable 模块隔离问题） */
+function openImagePreview(url: string) {
+  window.dispatchEvent(new CustomEvent('image-preview-open', { detail: url }))
+}
+
+/** 事件委托：点击 v-html 渲染的 <img> 时打开图片预览 */
+function handleMessageTextClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'IMG') {
+    const src = (target as HTMLImageElement).src
+    if (src) {
+      e.preventDefault()
+      openImagePreview(src)
+    }
+  }
+}
+
 const scrollToBottom = () => {
   nextTick(() => {
     if (listRef.value) {
@@ -356,6 +431,7 @@ defineExpose({ scrollToBottom, listRef })
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  background: var(--color-background);
 }
 
 .message-item {
@@ -368,8 +444,95 @@ defineExpose({ scrollToBottom, listRef })
   flex-direction: row-reverse;
 }
 
+.attachments-preview {
+  margin-bottom: 10px;
+}
+
+.attachments-preview-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.attachments-preview-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attachment-image-card {
+  display: block;
+  width: clamp(64px, 14vw, 112px);
+  overflow: hidden;
+  padding: 0;
+  border: none;
+  border-radius: 18px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.attachment-image-card:hover {
+  transform: translateY(-1px);
+}
+
+.attachment-image-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: default;
+}
+
+.attachment-label {
+  font-size: 12px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
 .message-item.user-msg .message-body {
   align-items: flex-end;
+}
+
+.message-item.user-msg .attachments-preview-images {
+  justify-content: flex-end;
+}
+
+.user-message-media {
+  width: 100%;
+}
+
+.user-message-media-stack {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.message-item.user-msg .attachment-image-card {
+  background: transparent;
+}
+
+.user-message-bubble {
+  align-self: flex-end;
+  max-width: min(420px, 100%);
 }
 
 .message-body {
@@ -381,33 +544,34 @@ defineExpose({ scrollToBottom, listRef })
 
 .message-content {
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: 6px;
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
 }
 
 .user-msg .message-content {
-  background: var(--color-primary);
-  color: #fff;
-  border-bottom-right-radius: 4px;
+  background: var(--color-secondary);
+  color: var(--color-text-on-cta);
+  border-bottom-right-radius: 2px;
 }
 
 .ai-msg .message-content {
-  background: var(--color-background);
+  background: var(--color-surface-hover);
   color: var(--color-text);
-  border-bottom-left-radius: 4px;
+  border-left: 3px solid var(--color-cta);
+  border-bottom-left-radius: 2px;
 }
 
 .message-text :deep(code) {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(28, 24, 21, 0.06);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 13px;
 }
 
 .message-text :deep(pre) {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(28, 24, 21, 0.04);
   padding: 8px 12px;
   border-radius: 6px;
   overflow-x: auto;
@@ -427,6 +591,7 @@ defineExpose({ scrollToBottom, listRef })
   margin: 12px 0 6px;
   font-weight: 600;
   line-height: 1.4;
+  font-family: var(--font-heading);
 }
 
 .message-text :deep(h1) { font-size: 18px; }
@@ -449,30 +614,48 @@ defineExpose({ scrollToBottom, listRef })
 }
 
 .message-text :deep(blockquote) {
-  border-left: 3px solid var(--color-border);
+  border-left: 3px solid var(--color-cta-light);
   padding-left: 10px;
   margin: 8px 0;
   color: var(--color-text-secondary);
 }
 
 .message-text :deep(a) {
-  color: var(--color-primary);
+  color: var(--color-cta);
   text-decoration: none;
 }
 
 .message-text :deep(a:hover) {
   text-decoration: underline;
+  color: var(--color-cta-hover);
+}
+
+.message-text :deep(img) {
+  max-width: 100%;
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.message-text :deep(img:hover) {
+  opacity: 0.85;
+  transform: translateY(-1px);
 }
 
 .user-msg .message-text :deep(code) {
   background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .tool-call-card {
   margin-top: 8px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
+  background: var(--color-surface);
 }
 
 .tool-call-summary {
@@ -482,7 +665,7 @@ defineExpose({ scrollToBottom, listRef })
   align-items: center;
   justify-content: space-between;
   font-size: 12px;
-  background: var(--color-background);
+  background: var(--color-surface-hover);
 }
 
 .tool-call-title {
@@ -491,7 +674,7 @@ defineExpose({ scrollToBottom, listRef })
 }
 
 .tool-call-hint {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-muted);
 }
 
 .tool-call-list {

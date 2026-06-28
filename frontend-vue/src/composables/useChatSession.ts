@@ -20,6 +20,17 @@ export interface ChatMessage {
   status?: string
   toolEvents?: ToolEvent[]
   planning?: any
+  attachments?: AttachmentInfo[]
+}
+
+export interface AttachmentInfo {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  storageType: string
+  storagePath: string
+  url: string
 }
 
 const normalizeToolEvents = (events?: API.ToolEventVO[]) => {
@@ -32,11 +43,24 @@ const normalizeToolEvents = (events?: API.ToolEventVO[]) => {
     }))
 }
 
+const parseAttachments = (extra?: string | null): AttachmentInfo[] | undefined => {
+  if (!extra) return undefined
+  try {
+    const parsed = JSON.parse(extra)
+    const atts = parsed.attachments
+    if (!atts || !Array.isArray(atts) || atts.length === 0) return undefined
+    return atts as AttachmentInfo[]
+  } catch {
+    return undefined
+  }
+}
+
 const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => ({
   role: item.messageType === 'user' ? 'user' : 'ai',
   content: item.message || '',
   status: item.status || '',
   toolEvents: normalizeToolEvents(item.toolEvents || []),
+  attachments: parseAttachments(item.extra),
 })
 
 export interface ActiveGenerationStatus {
