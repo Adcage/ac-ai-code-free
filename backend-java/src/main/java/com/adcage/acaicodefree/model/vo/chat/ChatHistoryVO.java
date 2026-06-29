@@ -31,10 +31,6 @@ public class ChatHistoryVO implements Serializable {
 
     private String modelName;
 
-    private Integer inputTokens;
-
-    private Integer outputTokens;
-
     private Integer latencyMs;
 
     private String requestId;

@@ -12,13 +12,6 @@
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-icon-wrap">
-              <Coins :size="22" />
-            </div>
-            <div class="stat-number">{{ formatNumber(stats.totalTokens) }}</div>
-            <div class="stat-label">tokens</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon-wrap">
               <MessageSquare :size="22" />
             </div>
             <div class="stat-number">{{ formatNumber(stats.totalMessages) }}</div>
@@ -44,7 +37,7 @@
           <h2 class="section-title">近 7 天用量趋势</h2>
           <div v-if="stats.recentDailyUsage && stats.recentDailyUsage.length > 0" class="bar-chart">
             <div v-for="(day, index) in stats.recentDailyUsage" :key="index" class="bar-item">
-              <div class="bar-value">{{ formatNumber((day.inputTokens || 0) + (day.outputTokens || 0)) }}</div>
+              <div class="bar-value">{{ formatNumber(day.messages || 0) }}</div>
               <div class="bar-wrapper">
                 <div class="bar-fill" :style="{ height: getBarHeight(day) + '%' }"></div>
               </div>
@@ -66,7 +59,7 @@
                 <div class="chat-time">{{ formatDateTime(chat.createTime || '') }}</div>
               </div>
               <div class="chat-tokens">
-                {{ formatNumber((chat.inputTokens || 0) + (chat.outputTokens || 0)) }} tokens
+                {{ formatNumber(chat.messages || 0) }} 条消息
               </div>
             </div>
           </div>
@@ -84,19 +77,14 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import request from '@/request'
-import { Coins, MessageSquare, AppWindow, Clock, BarChart3, Loader2 } from '@lucide/vue'
+import { MessageSquare, AppWindow, Clock, BarChart3, Loader2 } from '@lucide/vue'
 
 interface DailyUsage {
   date?: string
-  inputTokens?: number
-  outputTokens?: number
   messages?: number
 }
 
 interface UsageStats {
-  totalInputTokens: number
-  totalOutputTokens: number
-  totalTokens: number
   totalMessages: number
   totalApps: number
   totalSessions: number
@@ -108,15 +96,11 @@ interface ChatRecord {
   id: number
   appName?: string
   createTime?: string
-  inputTokens?: number
-  outputTokens?: number
+  messages?: number
 }
 
 const loading = ref(true)
 const stats = ref<UsageStats>({
-  totalInputTokens: 0,
-  totalOutputTokens: 0,
-  totalTokens: 0,
   totalMessages: 0,
   totalApps: 0,
   totalSessions: 0,
@@ -131,9 +115,6 @@ onMounted(async () => {
     if (res.data.code === 0 && res.data.data) {
       const data = res.data.data
       stats.value = {
-        totalInputTokens: data.totalInputTokens || 0,
-        totalOutputTokens: data.totalOutputTokens || 0,
-        totalTokens: (data.totalInputTokens || 0) + (data.totalOutputTokens || 0),
         totalMessages: data.totalMessages || 0,
         totalApps: data.totalApps || 0,
         totalSessions: data.totalSessions || 0,
@@ -147,8 +128,7 @@ onMounted(async () => {
             id: i,
             appName: '对话记录',
             createTime: d.date,
-            inputTokens: d.inputTokens,
-            outputTokens: d.outputTokens,
+            messages: d.messages,
           }))
       }
     }
@@ -160,12 +140,12 @@ onMounted(async () => {
 })
 
 const getBarHeight = (day: DailyUsage) => {
-  const maxTokens = Math.max(
-    ...stats.value.recentDailyUsage.map((d) => (d.inputTokens || 0) + (d.outputTokens || 0)),
+  const maxMessages = Math.max(
+    ...stats.value.recentDailyUsage.map((d) => d.messages || 0),
     1,
   )
-  const tokens = (day.inputTokens || 0) + (day.outputTokens || 0)
-  return Math.max((tokens / maxTokens) * 100, 2)
+  const messages = day.messages || 0
+  return Math.max((messages / maxMessages) * 100, 2)
 }
 
 const formatNumber = (num: number) => {
@@ -232,7 +212,7 @@ const formatDateTime = (dateStr: string) => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-md);
   margin-bottom: var(--space-xl);
 }

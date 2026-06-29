@@ -210,8 +210,6 @@ class AppServiceImplWorkflowTest {
                   appId BIGINT NOT NULL,
                   userId BIGINT NOT NULL,
                   modelName VARCHAR(128) NULL,
-                  inputTokens INT NOT NULL DEFAULT 0,
-                  outputTokens INT NOT NULL DEFAULT 0,
                   latencyMs INT NULL,
                   requestId VARCHAR(64) NULL,
                   extra JSON NULL,

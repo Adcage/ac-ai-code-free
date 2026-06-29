@@ -205,8 +205,6 @@ declare namespace API {
     appId?: number
     userId?: number
     modelName?: string
-    inputTokens?: number
-    outputTokens?: number
     latencyMs?: number
     requestId?: string
     extra?: string
@@ -243,8 +241,6 @@ declare namespace API {
 
   type DailyUsageVO = {
     date?: string
-    inputTokens?: number
-    outputTokens?: number
     messages?: number
   }
 

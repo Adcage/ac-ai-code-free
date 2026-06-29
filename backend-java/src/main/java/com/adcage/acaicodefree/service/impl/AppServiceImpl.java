@@ -800,8 +800,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .appId(appId)
                 .userId(userId)
                 .modelName(modelName)
-                .inputTokens(0)
-                .outputTokens(0)
                 .latencyMs(latencyMs)
                 .extra(extra)
                 .build();
