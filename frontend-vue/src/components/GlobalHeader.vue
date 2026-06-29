@@ -2,7 +2,7 @@
   <a-layout-header class="global-header">
     <div class="header-content">
       <router-link to="/" class="logo-link">
-        <img alt="原象 Morpha" class="logo" src="/logo.png" />
+        <img alt="原象 Morpha" class="logo" src="/brand/logo-light.svg" />
         <span class="site-title">原象</span>
       </router-link>
 

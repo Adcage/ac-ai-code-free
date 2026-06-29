@@ -12,7 +12,7 @@
     >
       <div class="sider-header">
         <router-link to="/" class="logo-link">
-          <img alt="原象 Morpha" class="logo" src="/logo.png" />
+          <img alt="原象 Morpha" class="logo" src="/brand/logo-light.svg" />
           <span v-if="!collapsed" class="site-title">原象</span>
         </router-link>
       </div>
