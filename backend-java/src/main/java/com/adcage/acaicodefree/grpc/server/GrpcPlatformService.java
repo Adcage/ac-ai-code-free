@@ -193,7 +193,11 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
                 agentRunService.completeAgentRun(
                         agentRunId,
                         request.getWorkspacePath(),
-                        request.getLatencyMs()
+                        request.getLatencyMs(),
+                        (int) request.getTotalInputTokens(),
+                        (int) request.getTotalOutputTokens(),
+                        (int) request.getTotalCacheReadTokens(),
+                        (int) request.getTotalCacheCreationTokens()
                 );
             } else {
                 agentRunService.failAgentRun(

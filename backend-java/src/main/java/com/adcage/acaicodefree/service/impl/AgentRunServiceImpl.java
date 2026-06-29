@@ -35,7 +35,9 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
     }
 
     @Override
-    public void completeAgentRun(Long id, String workspacePath, Integer latencyMs) {
+    public void completeAgentRun(Long id, String workspacePath, Integer latencyMs,
+                                  Integer inputTokens, Integer outputTokens,
+                                  Integer cacheReadTokens, Integer cacheCreationTokens) {
         ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "AgentRun ID 不能为空");
         AgentRun agentRun = this.getById(id);
         ThrowUtils.throwIf(agentRun == null, ErrorCode.NOT_FOUND_ERROR, "AgentRun 不存在");
@@ -45,6 +47,10 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .workspacePath(workspacePath)
                 .latencyMs(latencyMs)
                 .loopStateJson("")
+                .inputTokens(inputTokens != null ? inputTokens : 0)
+                .outputTokens(outputTokens != null ? outputTokens : 0)
+                .cacheReadTokens(cacheReadTokens != null ? cacheReadTokens : 0)
+                .cacheCreationTokens(cacheCreationTokens != null ? cacheCreationTokens : 0)
                 .build();
         boolean result = this.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新 AgentRun 状态失败");

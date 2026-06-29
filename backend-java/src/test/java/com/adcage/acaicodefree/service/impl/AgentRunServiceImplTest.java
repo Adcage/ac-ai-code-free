@@ -77,12 +77,27 @@ class AgentRunServiceImplTest {
     }
 
     @Test
-    void completeAgentRun_ClearsCheckpoint() {
-        agentRunService.completeAgentRun(1L, "/workspace", 10);
+    void completeAgentRun_ClearsCheckpoint_AndSavesTokens() {
+        agentRunService.completeAgentRun(1L, "/workspace", 10, 100, 200, 30, 20);
 
         assertNotNull(capturedUpdate);
         assertEquals("completed", capturedUpdate.getStatus());
         assertEquals("", capturedUpdate.getLoopStateJson());
+        assertEquals(100, capturedUpdate.getInputTokens());
+        assertEquals(200, capturedUpdate.getOutputTokens());
+        assertEquals(30, capturedUpdate.getCacheReadTokens());
+        assertEquals(20, capturedUpdate.getCacheCreationTokens());
+    }
+
+    @Test
+    void completeAgentRun_NullTokens_UsesZero() {
+        agentRunService.completeAgentRun(1L, "/workspace", 10, null, null, null, null);
+
+        assertNotNull(capturedUpdate);
+        assertEquals(0, capturedUpdate.getInputTokens());
+        assertEquals(0, capturedUpdate.getOutputTokens());
+        assertEquals(0, capturedUpdate.getCacheReadTokens());
+        assertEquals(0, capturedUpdate.getCacheCreationTokens());
     }
 
     @Test
@@ -102,7 +117,11 @@ class AgentRunServiceImplTest {
                 "userId", "userId",
                 "workspacePath", "workspacePath",
                 "errorMessage", "errorMessage",
-                "latencyMs", "latencyMs"
+                "latencyMs", "latencyMs",
+                "inputTokens", "inputTokens",
+                "outputTokens", "outputTokens",
+                "cacheReadTokens", "cacheReadTokens",
+                "cacheCreationTokens", "cacheCreationTokens"
         );
 
         for (Map.Entry<String, String> entry : expectedColumns.entrySet()) {

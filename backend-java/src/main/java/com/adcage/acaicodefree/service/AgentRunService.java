@@ -7,7 +7,9 @@ public interface AgentRunService extends IService<AgentRun> {
 
     Long createAgentRun(Long appId, Long sessionId, Long userId, String runtime);
 
-    void completeAgentRun(Long id, String workspacePath, Integer latencyMs);
+    void completeAgentRun(Long id, String workspacePath, Integer latencyMs,
+                           Integer inputTokens, Integer outputTokens,
+                           Integer cacheReadTokens, Integer cacheCreationTokens);
 
     void failAgentRun(Long id, String errorMessage);
 
