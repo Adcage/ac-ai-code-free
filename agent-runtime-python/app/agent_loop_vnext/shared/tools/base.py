@@ -12,6 +12,9 @@ class AgentTool(BaseTool):
     # 工具元信息，用于历史记录和事件映射
     tool_id: str = ""  # 默认取 name，可显式指定
 
+    # Agent 身份信息，由 Agent.run() 注入，用于事件透传
+    agent_name: str = ""
+
     def _run(self, *args, **kwargs) -> str:
         raise NotImplementedError("Use _arun (async) instead")
 

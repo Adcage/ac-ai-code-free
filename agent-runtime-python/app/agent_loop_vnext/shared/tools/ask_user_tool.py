@@ -122,6 +122,7 @@ class AskUserTool(AgentTool):
                         "questionSetId": question_set_id,
                         "protocolVersion": PROTOCOL_VERSION,
                         "questions": normalized_questions,
+                        "agent_name": self.agent_name or "",
                     },
                 )
             )

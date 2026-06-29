@@ -91,6 +91,10 @@ class ProtoEventMapper:
     def reset_question_set_dedupe(self) -> None:
         self._emitted_question_set_ids.clear()
 
+    def _get_agent_name(self, sequenced_event: SequencedRuntimeEvent) -> str:
+        """从事件 data 中提取 agent_name。"""
+        return sequenced_event.event.data.get("agent_name", "")
+
     def map_event(
         self, sequenced_event: SequencedRuntimeEvent
     ) -> list[code_generation_pb2.CodeGenerationEvent]:
@@ -125,6 +129,7 @@ class ProtoEventMapper:
             "agent_run_id": str(sequenced_event.agent_run_id),
             "seq": sequenced_event.seq,
             "event_type": event_type_proto,
+            "agent_name": self._get_agent_name(sequenced_event),
         }
 
         if event.event_type == RuntimeEventType.TEXT_DELTA:
@@ -194,6 +199,7 @@ class ProtoEventMapper:
             agent_run_id=str(sequenced_event.agent_run_id),
             seq=sequenced_event.seq,
             event_type=common_pb2.TOOL_REQUEST,
+            agent_name=self._get_agent_name(sequenced_event),
             tool_request=common_pb2.ToolRequestData(
                 id=question_set_id,
                 name="ask_user",

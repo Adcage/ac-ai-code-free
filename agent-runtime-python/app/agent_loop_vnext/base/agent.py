@@ -83,11 +83,12 @@ class Agent(ABC):
         workspace = Workspace(context.workspace_path)
         file_tools = FileTools(workspace)
 
-        # 2. 创建工具集 + 注入 event_bus
+        # 2. 创建工具集 + 注入 event_bus + agent_name
         tools = self.create_tools(file_tools, services)
         for tool in tools:
             if hasattr(tool, "event_bus") and tool.event_bus is None:
                 tool.event_bus = self._event_bus
+            tool.agent_name = self.name
 
         # 3. 解析模型配置
         await services.model_resolver.load_bundle(context)
@@ -182,11 +183,11 @@ class Agent(ABC):
             self._state.status = "failed"
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.RUNTIME_ERROR,
-                {"message": str(e), "code": int(e.code)},
+                {"message": str(e), "code": int(e.code), "agent_name": self.name},
             ))
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.DONE,
-                {"message": f"失败: {e}"},
+                {"message": f"失败: {e}", "agent_name": self.name},
             ))
             return AgentResult(
                 status="failed",
@@ -205,11 +206,11 @@ class Agent(ABC):
             self._state.status = "failed"
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.RUNTIME_ERROR,
-                {"message": str(e), "code": int(AgentErrorCode.INTERNAL_ERROR)},
+                {"message": str(e), "code": int(AgentErrorCode.INTERNAL_ERROR), "agent_name": self.name},
             ))
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.DONE,
-                {"message": f"异常: {e}"},
+                {"message": f"异常: {e}", "agent_name": self.name},
             ))
             return AgentResult(
                 status="failed",
@@ -251,7 +252,7 @@ class Agent(ABC):
                 logger.debug("TEXT_DELTA chunk | length=%d", len(text))
                 await self._event_bus.emit(RuntimeEvent(
                     RuntimeEventType.TEXT_DELTA,
-                    {"text": text},
+                    {"text": text, "agent_name": self.name},
                 ))
 
         if not collected_chunks:
@@ -323,7 +324,7 @@ class Agent(ABC):
             # 发射 TOOL_CALL 事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.TOOL_CALL,
-                {"id": tool_id, "name": tool_name, "arguments": tool_args},
+                {"id": tool_id, "name": tool_name, "arguments": tool_args, "agent_name": self.name},
             ))
 
             # 查找匹配的工具并执行
@@ -372,7 +373,7 @@ class Agent(ABC):
             # 发射 TOOL_RESULT 事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.TOOL_RESULT,
-                {"id": tool_id, "name": tool_name, "result": result},
+                {"id": tool_id, "name": tool_name, "result": result, "agent_name": self.name},
             ))
 
             # 追加 ToolMessage 到消息列表（让模型看到工具结果）
