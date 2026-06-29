@@ -35,9 +35,12 @@ _VISIBLE_TOOLS = frozenset({
     "Grep",
     "LoadSkill",
     "Bash",
-    "AskUser",
 })
 
+# TOOL_CALL 隐藏列表：这些工具的调用事件由其他路径映射（如 CLARIFICATION_REQUIRED）
+_HIDDEN_TOOLS_CALL = frozenset({"AskUser"})
+
+# TOOL_RESULT 隐藏列表（这些工具的执行结果不需要发到前端/存库）
 _HIDDEN_TOOLS_RESULT = frozenset({"AskUser"})
 
 
@@ -138,6 +141,10 @@ class VNextEventMapper(ProtoEventMapper):
     ) -> list[code_generation_pb2.CodeGenerationEvent]:
         data = sequenced_event.event.data
         tool_name = data.get("name", "")
+
+        # AskUser 的 TOOL_CALL 由 CLARIFICATION_REQUIRED 路径映射，跳过此处避免重复
+        if tool_name in _HIDDEN_TOOLS_CALL:
+            return []
 
         events: list[code_generation_pb2.CodeGenerationEvent] = []
 

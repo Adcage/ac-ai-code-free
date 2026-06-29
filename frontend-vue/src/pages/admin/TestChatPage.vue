@@ -147,7 +147,7 @@ import { parseChatHistoryAttachments } from '@/utils/chatAttachmentDisplay'
 import ImagePreviewer from '@/components/ImagePreviewer.vue'
 import type { AttachmentInfo } from '@/utils/chatStreamRequest'
 import type { ChatMessage } from '@/types/chat'
-import { buildMessageToolSummary, normalizeToolEvents, parseToolCallsFromHistory } from '@/utils/chatMessageTooling'
+import { buildMessageToolSummary, normalizeToolEvents, parsePlanningFromExtra, parseToolCallsFromHistory } from '@/utils/chatMessageTooling'
 
 const router = useRouter()
 const route = useRoute()
@@ -418,6 +418,7 @@ const loadRemoteHistory = async (sessionId: string) => {
           toolCalls,
         }),
         attachments: parseChatHistoryAttachments(item.extra),
+        planning: parsePlanningFromExtra(toolCalls),
       }
     })
     nextTick(() => {

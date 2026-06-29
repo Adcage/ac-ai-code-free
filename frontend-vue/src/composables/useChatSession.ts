@@ -13,6 +13,7 @@ import type { ChatMessage } from '@/types/chat'
 import {
   buildMessageToolSummary,
   normalizeToolEvents,
+  parsePlanningFromExtra,
   parseToolCallsFromHistory,
 } from '@/utils/chatMessageTooling'
 
@@ -40,6 +41,7 @@ const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => {
       status: item.status || '',
       toolCalls,
     }),
+    planning: parsePlanningFromExtra(toolCalls),
     attachments: parseAttachments(item.extra),
   }
 }

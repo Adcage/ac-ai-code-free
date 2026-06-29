@@ -1,4 +1,4 @@
-import type { ToolCallRecord, ToolEvent } from '../types/chat'
+import type { PlanningQuestionSet, ToolCallRecord, ToolEvent } from '../types/chat'
 
 type ToolEventLike = {
   type?: string
@@ -64,6 +64,25 @@ export function parseToolCallsFromHistory(extra?: string | null, fallbackEvents?
     status: eventItem.type === 'request' ? 'running' : eventItem.type === 'executed' ? 'completed' : 'running',
     timestamp: index,
   }))
+}
+
+export function parsePlanningFromExtra(toolCalls: ToolCallRecord[]): PlanningQuestionSet | undefined {
+  const askUserEntry = toolCalls.find((tc) => tc.name === 'ask_user' && tc.type === 'request')
+  if (!askUserEntry || !askUserEntry.arguments) return undefined
+  try {
+    const args = JSON.parse(askUserEntry.arguments)
+    if (args.questions && Array.isArray(args.questions) && args.questions.length > 0) {
+      return {
+        questionSetId: args.questionSetId || args.questions[0]?.id || '',
+        stage: args.stage,
+        protocolVersion: args.protocolVersion,
+        questions: args.questions,
+      }
+    }
+  } catch {
+    /* silent */
+  }
+  return undefined
 }
 
 export function buildMessageToolSummary(input: ToolSummaryInput): string {
