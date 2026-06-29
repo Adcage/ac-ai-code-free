@@ -115,12 +115,19 @@ class Agent(ABC):
         chat_model_with_tools = chat_model.bind_tools(tools)
 
         # 7. 迭代循环
+        # 积累每次模型调用的 token 用量
+        per_call_tokens: list[dict] = []
         try:
             while True:
-                # 流式调用模型：文本边收边发，收集完整响应后提取 tool_calls
-                text_content, tool_calls = await self._stream_model_call(
+                # 流式调用模型：文本边收边发，收集完整响应后提取 tool_calls 与 token_usage
+                text_content, tool_calls, token_usage = await self._stream_model_call(
                     chat_model_with_tools, messages,
                 )
+
+                # 积累本次调用的 token 数据
+                if token_usage:
+                    token_usage["iteration"] = self._state.iteration
+                    per_call_tokens.append(token_usage)
 
                 # 无 tool_calls → 模型纯文本收尾，退出循环
                 if not tool_calls:
@@ -162,12 +169,12 @@ class Agent(ABC):
             if self._state.status == "waiting_for_user":
                 await self._event_bus.emit(RuntimeEvent(
                     RuntimeEventType.DONE,
-                    {"message": "waiting_for_user"},
+                    {"message": "waiting_for_user", "agent_name": self.name},
                 ))
             else:
                 await self._event_bus.emit(RuntimeEvent(
                     RuntimeEventType.DONE,
-                    {"message": "对话完成"},
+                    {"message": "对话完成", "agent_name": self.name},
                 ))
 
         except AgentRuntimeError as e:
@@ -186,6 +193,7 @@ class Agent(ABC):
                 iteration=self._state.iteration,
                 error=str(e),
                 agent_name=self.name,
+                artifacts={"token_usage": per_call_tokens},
             )
         except Exception as e:
             logger.error(
@@ -208,6 +216,7 @@ class Agent(ABC):
                 iteration=self._state.iteration,
                 error=str(e),
                 agent_name=self.name,
+                artifacts={"token_usage": per_call_tokens},
             )
 
         return AgentResult(
@@ -215,15 +224,23 @@ class Agent(ABC):
             iteration=self._state.iteration,
             state=self._state if self._state.status == "waiting_for_user" else None,
             agent_name=self.name,
+            artifacts={"token_usage": per_call_tokens},
         )
 
     async def _stream_model_call(
         self,
         chat_model_with_tools: Any,
         messages: list,
-    ) -> tuple[str, list[dict]]:
-        """流式调用模型，文本实时发射，收集完整响应后提取 tool_calls。"""
+    ) -> tuple[str, list[dict], dict]:
+        """流式调用模型，文本实时发射，收集完整响应后提取 tool_calls 与 token usage。
+
+        Returns:
+            (text_content, tool_calls, token_usage)
+            token_usage 格式: {"input_tokens": int, "output_tokens": int,
+                                "cache_read_tokens": int, "cache_creation_tokens": int}
+        """
         collected_chunks = []
+        from langchain_core.messages.ai import UsageMetadata
 
         async for chunk in chat_model_with_tools.astream(messages):
             collected_chunks.append(chunk)
@@ -238,9 +255,9 @@ class Agent(ABC):
                 ))
 
         if not collected_chunks:
-            return "", []
+            return "", [], {}
 
-        # 合并所有 chunks 为完整响应
+        # 合并所有 chunks 为完整响应（合并后 usage_metadata 自动累积）
         full_response = collected_chunks[0]
         for c in collected_chunks[1:]:
             full_response = full_response + c
@@ -255,7 +272,26 @@ class Agent(ABC):
                 for tc in full_response.tool_calls
             ]
 
-        return text_content, tool_calls
+        # 提取 token usage
+        token_usage: dict = {}
+        usage: UsageMetadata | None = getattr(full_response, "usage_metadata", None)
+        if usage:
+            token_usage["input_tokens"] = usage.get("input_tokens", 0)
+            token_usage["output_tokens"] = usage.get("output_tokens", 0)
+            # 缓存 token 明细
+            input_details = usage.get("input_token_details")
+            if input_details:
+                token_usage["cache_read_tokens"] = input_details.get("cache_read", 0)
+                token_usage["cache_creation_tokens"] = input_details.get("cache_creation", 0)
+            logger.info(
+                "model token_usage | input=%d output=%d cache_read=%d cache_creation=%d",
+                token_usage.get("input_tokens", 0),
+                token_usage.get("output_tokens", 0),
+                token_usage.get("cache_read_tokens", 0),
+                token_usage.get("cache_creation_tokens", 0),
+            )
+
+        return text_content, tool_calls, token_usage
 
     async def _execute_tool_calls(
         self,

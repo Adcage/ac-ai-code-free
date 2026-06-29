@@ -439,6 +439,9 @@ class RuntimeOrchestrator:
                     # 最小非空 JSON 触发 Java pauseAgentRun 逻辑
                     loop_state_json = '{"status":"waiting_for_user"}'
 
+                # 提取 token 数据
+                token_usage = result.total_token_usage
+
                 await self._platform_client.complete_agent_run(
                     agent_run_id=agent_run_id,
                     success=success,
@@ -446,6 +449,10 @@ class RuntimeOrchestrator:
                     latency_ms=latency_ms,
                     error_message=result.error or "",
                     loop_state_json=loop_state_json,
+                    total_input_tokens=token_usage.get("input_tokens", 0),
+                    total_output_tokens=token_usage.get("output_tokens", 0),
+                    total_cache_read_tokens=token_usage.get("cache_read_tokens", 0),
+                    total_cache_creation_tokens=token_usage.get("cache_creation_tokens", 0),
                 )
             except AgentRuntimeError as e:
                 logger.error("vNext runner error | agentRunId=%s error=%s", agent_run_id, e)

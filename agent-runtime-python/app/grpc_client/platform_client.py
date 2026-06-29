@@ -46,6 +46,10 @@ class GrpcPlatformClient:
         latency_ms: int = 0,
         error_message: str = "",
         loop_state_json: str = "",
+        total_input_tokens: int = 0,
+        total_output_tokens: int = 0,
+        total_cache_read_tokens: int = 0,
+        total_cache_creation_tokens: int = 0,
     ) -> bool:
         stub = await self._get_stub()
         request = platform_service_pb2.CompleteAgentRunRequest(
@@ -55,6 +59,10 @@ class GrpcPlatformClient:
             latency_ms=latency_ms,
             error_message=error_message,
             loop_state_json=loop_state_json,
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            total_cache_read_tokens=total_cache_read_tokens,
+            total_cache_creation_tokens=total_cache_creation_tokens,
         )
         response = await stub.CompleteAgentRun(request, metadata=get_internal_metadata())
         return response.ok

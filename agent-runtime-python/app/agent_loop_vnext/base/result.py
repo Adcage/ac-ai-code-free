@@ -25,6 +25,25 @@ class AgentResult:
     agent_name: str = ""
     error: str | None = None
 
+    @property
+    def total_token_usage(self) -> dict:
+        """从 artifacts 中累加所有 token 数据，返回合计。"""
+        per_call = self.artifacts.get("token_usage", [])
+        if not per_call:
+            return {}
+        total = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+        }
+        for call in per_call:
+            total["input_tokens"] += call.get("input_tokens", 0)
+            total["output_tokens"] += call.get("output_tokens", 0)
+            total["cache_read_tokens"] += call.get("cache_read_tokens", 0)
+            total["cache_creation_tokens"] += call.get("cache_creation_tokens", 0)
+        return total
+
 
 @dataclass
 class PipelineResult:
