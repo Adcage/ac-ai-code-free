@@ -387,7 +387,8 @@ export function useSSEChat(options: SSEChatOptions) {
       const id = (messageObj.id as string) || ''
       const name = (messageObj.name as string) || ''
       const args = (messageObj.arguments as string) || ''
-      const description = formatToolCallDescription(name, args, 'request')
+      const agentName = (messageObj.agentName as string) || ''
+      const description = formatToolCallDescription(name, args, 'request', undefined)
       targetMessage.toolCalls.push({
         type: 'request',
         id,
@@ -396,8 +397,10 @@ export function useSSEChat(options: SSEChatOptions) {
         arguments: args,
         status: 'running',
         timestamp: Date.now(),
+        agentName,
       })
       targetMessage.toolStatus = description
+      if (agentName) targetMessage.agentName = agentName
       return true
     }
     if (type === 'tool_executed') {
@@ -408,6 +411,7 @@ export function useSSEChat(options: SSEChatOptions) {
       const name = (messageObj.name as string) || ''
       const args = (messageObj.arguments as string) || ''
       const result = (messageObj.result as string) || ''
+      const agentName = (messageObj.agentName as string) || ''
       const existing = targetMessage.toolCalls.find((tc) => tc.id === toolId)
       if (existing) {
         existing.type = 'executed'
@@ -423,6 +427,7 @@ export function useSSEChat(options: SSEChatOptions) {
           result,
           status: 'completed',
           timestamp: Date.now(),
+          agentName,
         })
       }
       // 工具执行完成 → 文件可能已变化，防抖触发预览检查

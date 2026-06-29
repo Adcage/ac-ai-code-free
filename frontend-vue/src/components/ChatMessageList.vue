@@ -24,6 +24,9 @@
               <span v-if="msg.toolCalls?.length" class="message-tool-summary-meta">
                 {{ msg.toolCalls.length }} 次工具调用
               </span>
+              <span v-if="getMessageAgentSummary(msg)" class="message-tool-summary-agent">
+                {{ getMessageAgentSummary(msg) }}
+              </span>
               <span v-if="hasToolLog(msg)" class="message-tool-summary-arrow">
                 {{ isToolLogExpanded(index, msg) ? '收起' : '展开' }}
               </span>
@@ -43,7 +46,10 @@
                   }"
                 ></span>
                 <div class="message-tool-log-copy">
-                  <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                  <div class="message-tool-log-heading">
+                    <span v-if="toolCall.agentName" class="message-tool-log-badge">{{ getAgentBadgeText(toolCall.agentName) }}</span>
+                    <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                  </div>
                   <span class="message-tool-log-desc">{{ toolCall.description }}</span>
                 </div>
                 <span class="message-tool-log-status">{{ formatToolCallStatus(toolCall.status) }}</span>
@@ -77,6 +83,9 @@
               <span v-if="msg.toolCalls?.length" class="message-tool-summary-meta">
                 {{ msg.toolCalls.length }} 次工具调用
               </span>
+              <span v-if="getMessageAgentSummary(msg)" class="message-tool-summary-agent">
+                {{ getMessageAgentSummary(msg) }}
+              </span>
               <span v-if="hasToolLog(msg)" class="message-tool-summary-arrow">
                 {{ isToolLogExpanded(index, msg) ? '收起' : '展开' }}
               </span>
@@ -96,7 +105,10 @@
                   }"
                 ></span>
                 <div class="message-tool-log-copy">
-                  <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                  <div class="message-tool-log-heading">
+                    <span v-if="toolCall.agentName" class="message-tool-log-badge">{{ getAgentBadgeText(toolCall.agentName) }}</span>
+                    <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                  </div>
                   <span class="message-tool-log-desc">{{ toolCall.description }}</span>
                 </div>
                 <span class="message-tool-log-status">{{ formatToolCallStatus(toolCall.status) }}</span>
@@ -179,7 +191,12 @@ import MarkdownIt from 'markdown-it'
 import PlanningForm from '@/components/PlanningForm.vue'
 import PlanConfirmationCard from '@/components/PlanConfirmationCard.vue'
 import { getDisplayMessageContent } from '@/utils/chatAttachmentDisplay'
-import { buildMessageToolSummary } from '@/utils/chatMessageTooling'
+import {
+  buildMessageAgentSummary,
+  buildMessageToolSummary,
+  getAgentBadgeText,
+  resolveToolLogExpanded,
+} from '@/utils/chatMessageTooling'
 import type { AttachmentInfo } from '@/utils/chatStreamRequest'
 import type { ChatMessage, PlanningQuestion, PlanningQuestionSet } from '@/types/chat'
 
@@ -245,7 +262,13 @@ const listRef = ref<HTMLElement>()
 const expandedToolLogs = ref<Record<number, boolean>>({})
 
 function closeAllToolLogs() {
-  expandedToolLogs.value = {}
+  const nextState: Record<number, boolean> = {}
+  props.messages.forEach((msg, index) => {
+    if (hasToolLog(msg)) {
+      nextState[index] = false
+    }
+  })
+  expandedToolLogs.value = nextState
 }
 
 function handleDocumentClick() {
@@ -355,6 +378,10 @@ function getMessageToolSummary(msg: ChatMessage) {
   })
 }
 
+function getMessageAgentSummary(msg: ChatMessage) {
+  return buildMessageAgentSummary(msg.toolCalls, msg.agentName)
+}
+
 function shouldShowTooling(msg: ChatMessage) {
   return msg.role === 'ai' && (getMessageToolSummary(msg).length > 0 || hasToolLog(msg))
 }
@@ -364,16 +391,13 @@ function hasToolLog(msg: ChatMessage) {
 }
 
 function isToolLogExpanded(index: number, msg: ChatMessage) {
-  if (expandedToolLogs.value[index] !== undefined) {
-    return expandedToolLogs.value[index]
-  }
-  return msg.status === 'running'
+  return resolveToolLogExpanded(expandedToolLogs.value[index], msg.status)
 }
 
 function toggleToolLog(index: number) {
   if (!props.messages[index] || !hasToolLog(props.messages[index])) return
   const nextExpanded = !isToolLogExpanded(index, props.messages[index])
-  expandedToolLogs.value = nextExpanded ? { [index]: true } : {}
+  expandedToolLogs.value = { [index]: nextExpanded }
 }
 
 function formatToolCallStatus(status: 'running' | 'completed' | 'failed') {
@@ -637,6 +661,17 @@ defineExpose({ scrollToBottom, listRef })
   white-space: nowrap;
 }
 
+.message-tool-summary-agent {
+  color: #8a7a6e;
+  white-space: nowrap;
+}
+
+.message-tool-summary-agent::before {
+  content: '·';
+  margin-right: 6px;
+  color: #b4a396;
+}
+
 .message-tool-log {
   position: absolute;
   top: calc(100% + 8px);
@@ -673,10 +708,34 @@ defineExpose({ scrollToBottom, listRef })
   flex: 1;
 }
 
+.message-tool-log-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .message-tool-log-name {
   font-size: 12px;
   font-weight: 600;
   color: #4e4036;
+}
+
+.message-tool-log-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #6366f1;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .message-tool-log-desc {

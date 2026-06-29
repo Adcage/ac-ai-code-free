@@ -34,6 +34,46 @@ const TOOL_REQUEST_TEXT: Record<string, string> = {
   run_command: '正在执行命令',
 }
 
+/** Agent 名称中文映射 */
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  implementor: '实现',
+  planner: '规划',
+  validator: '校验',
+  reviewer: '审查',
+  architect: '架构',
+}
+
+const AGENT_BADGE_TEXT: Record<string, string> = {
+  implementor: '执',
+  planner: '规',
+  validator: '校',
+  reviewer: '审',
+  architect: '构',
+}
+
+/** 获取 Agent 中文显示名 */
+export function getAgentDisplayName(agentName: string): string {
+  return AGENT_DISPLAY_NAMES[agentName] || agentName
+}
+
+export function getAgentBadgeText(agentName: string): string {
+  return AGENT_BADGE_TEXT[agentName] || getAgentDisplayName(agentName).slice(0, 1)
+}
+
+export function resolveMessageAgentName(toolCalls?: ToolCallRecord[], agentName?: string): string {
+  if (agentName?.trim()) {
+    return agentName.trim()
+  }
+  const resolved = [...(toolCalls || [])].reverse().find((item) => item.agentName?.trim())?.agentName
+  return resolved?.trim() || ''
+}
+
+export function buildMessageAgentSummary(toolCalls?: ToolCallRecord[], agentName?: string): string {
+  const resolvedAgentName = resolveMessageAgentName(toolCalls, agentName)
+  if (!resolvedAgentName) return ''
+  return `${getAgentDisplayName(resolvedAgentName)}智能体`
+}
+
 export function normalizeToolEvents(events?: ToolEventLike[]): ToolEvent[] {
   if (!events || events.length === 0) return []
   return events
@@ -108,6 +148,13 @@ export function buildMessageToolSummary(input: ToolSummaryInput): string {
   return input.toolStatus || ''
 }
 
+export function resolveToolLogExpanded(expandedState: boolean | undefined, status?: string): boolean {
+  if (expandedState !== undefined) {
+    return expandedState
+  }
+  return status === 'running'
+}
+
 export function formatToolCallDescription(
   toolName?: string,
   argumentsText?: string,
@@ -121,19 +168,25 @@ export function formatToolCallDescription(
   const path = parsePathFromArguments(argumentsText)
   const basename = path ? path.split('/').pop() || path : ''
 
+  let desc = ''
+
   if (basename) {
-    if (toolName === 'Read' || toolName === 'read_file' || toolName === 'readFile') return `正在查看 ${basename}`
-    if (toolName === 'Write' || toolName === 'write_file' || toolName === 'writeFile') return `正在写入 ${basename}`
-    if (toolName === 'Edit' || toolName === 'modify_file' || toolName === 'modifyFile') return `正在修改 ${basename}`
-    if (toolName === 'Insert' || toolName === 'insert') return `正在插入 ${basename}`
-    if (toolName === 'delete_file' || toolName === 'deleteFile') return `正在删除 ${basename}`
+    if (toolName === 'Read' || toolName === 'read_file' || toolName === 'readFile') desc = `正在查看 ${basename}`
+    else if (toolName === 'Write' || toolName === 'write_file' || toolName === 'writeFile') desc = `正在写入 ${basename}`
+    else if (toolName === 'Edit' || toolName === 'modify_file' || toolName === 'modifyFile') desc = `正在修改 ${basename}`
+    else if (toolName === 'Insert' || toolName === 'insert') desc = `正在插入 ${basename}`
+    else if (toolName === 'delete_file' || toolName === 'deleteFile') desc = `正在删除 ${basename}`
   }
 
-  if (stage === 'executed' && toolName) {
-    return TOOL_REQUEST_TEXT[toolName] || `已执行 ${toolName}`
+  if (!desc) {
+    if (stage === 'executed' && toolName) {
+      desc = TOOL_REQUEST_TEXT[toolName] || `已执行 ${toolName}`
+    } else {
+      desc = TOOL_REQUEST_TEXT[toolName || ''] || `正在执行 ${toolName || '工具'}`
+    }
   }
 
-  return TOOL_REQUEST_TEXT[toolName || ''] || `正在执行 ${toolName || '工具'}`
+  return desc
 }
 
 function parseStructuredToolCalls(extra?: string | null): ToolCallRecord[] {
@@ -155,17 +208,19 @@ function parseStructuredToolCalls(extra?: string | null): ToolCallRecord[] {
       const name = typeof item.name === 'string' ? item.name : ''
       const argumentsText = typeof item.arguments === 'string' ? item.arguments : ''
       const result = typeof item.result === 'string' ? item.result : ''
+      const agentName = typeof item.agentName === 'string' ? item.agentName : ''
 
       if (type === 'request' || !recordIndexById.has(id)) {
         const nextRecord: ToolCallRecord = {
           type,
           id,
           name,
-          description: formatToolCallDescription(name, argumentsText, 'request'),
+          description: formatToolCallDescription(name, argumentsText, 'request', undefined),
           arguments: argumentsText,
           result,
           status: type === 'executed' ? 'completed' : 'running',
           timestamp: index,
+          agentName,
         }
         records.push(nextRecord)
         recordIndexById.set(id, records.length - 1)
@@ -215,4 +270,3 @@ function parsePathFromArguments(argumentsText?: string) {
     return ''
   }
 }
-
