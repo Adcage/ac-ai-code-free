@@ -591,17 +591,13 @@ async function handlePlanningSubmit(answers: Record<string, string>) {
     }
   }
   const displayPrompt = buildPlanningResumeDisplay(displayAnswers)
-  const prompt = buildPlanningResumePrompt({
-    questionSetId: latest.questionSetId,
-    answers: resumeAnswers,
-  })
   const sessionId = currentSessionId.value
   if (!sessionId) return
   messages.value.push({ role: 'user', content: displayPrompt, status: 'success', toolEvents: [] })
   iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(prompt, sessionId, currentApp.value?.codeGenType, displayPrompt)
+  startSSE(displayPrompt, sessionId, currentApp.value?.codeGenType, displayPrompt)
 }
 
 async function handlePlanConfirm(index: number) {

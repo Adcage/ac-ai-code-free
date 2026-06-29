@@ -260,16 +260,12 @@ async function handlePlanningSubmit(answers: Record<string, string>) {
     }
   }
   const displayPrompt = buildPlanningResumeDisplay(displayAnswers)
-  const prompt = buildPlanningResumePrompt({
-    questionSetId: latest.questionSetId,
-    answers: resumeAnswers,
-  })
   const sessionId = currentSessionId.value
   if (!sessionId) return
   messages.value.push({ role: 'user', content: displayPrompt, status: 'success', toolEvents: [] })
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(prompt, sessionId, app.value?.codeGenType, displayPrompt)
+  startSSE(displayPrompt, sessionId, app.value?.codeGenType, displayPrompt)
 }
 
 async function handlePlanConfirm(index: number) {

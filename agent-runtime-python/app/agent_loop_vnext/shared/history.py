@@ -80,6 +80,11 @@ class HistoryBuilder:
         attachments: tuple[AttachmentInfo, ...],
     ) -> HumanMessage:
         """构造包含附件的多模态 HumanMessage。"""
+        # vNext resume 答案渲染（自包含，不依赖 legacy）
+        if text and "<<RESUME_ANSWERS>>" in text:
+            from app.agent_loop_vnext.shared.resume_answers import render_resume_answer_text
+            text = render_resume_answer_text(text)
+
         content_parts: list[dict] = []
         if text:
             content_parts.append({"type": "text", "text": text})

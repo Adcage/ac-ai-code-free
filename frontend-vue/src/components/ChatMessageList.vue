@@ -10,22 +10,8 @@
     >
       <a-avatar :src="msg.role === 'user' ? userAvatar : '/ai-avatar.png'" />
       <div class="message-body">
-        <template v-if="msg.role === 'ai' && getPlanningData(index)">
-          <PlanningForm
-            v-if="getPlanningData(index)!.planningType === 'clarification' && (getPlanningData(index) as Extract<PlanningData, { planningType: 'clarification' }>).questions"
-            :questions="(getPlanningData(index) as Extract<PlanningData, { planningType: 'clarification' }>).questions"
-            :readonly-answers="getPlanningAnswers(index)"
-            @submit="(answers: Record<string, string>) => $emit('planningSubmit', answers)"
-            @skip="$emit('planningSkip', index)"
-          />
-          <PlanConfirmationCard
-            v-else-if="getPlanningData(index)!.planningType === 'plan_confirmation' && (getPlanningData(index) as Extract<PlanningData, { planningType: 'plan_confirmation' }>).outline"
-            :outline="(getPlanningData(index) as Extract<PlanningData, { planningType: 'plan_confirmation' }>).outline"
-            @confirm="$emit('planConfirm', index)"
-            @cancel="$emit('planningSkip', index)"
-          />
-        </template>
-        <template v-else-if="msg.role === 'ai'">
+        <template v-if="msg.role === 'ai'">
+          <!-- 工具状态栏：在所有 AI 消息中始终显示 -->
           <div v-if="shouldShowTooling(msg)" class="message-tooling" @click.stop>
             <button
               type="button"
@@ -64,16 +50,34 @@
               </div>
             </div>
           </div>
-          <div class="message-content">
-            <template v-for="parsed in [parseAiMessage(msg.content)]" :key="`parsed-${index}`">
-              <div
-                v-if="parsed"
-                class="message-text"
-                v-html="renderMarkdown(parsed)"
-                @click="handleMessageTextClick"
-              ></div>
-            </template>
-          </div>
+          <!-- 提问表单 or 内容 -->
+          <template v-if="getPlanningData(index)">
+            <PlanningForm
+              v-if="getPlanningData(index)!.planningType === 'clarification' && (getPlanningData(index) as Extract<PlanningData, { planningType: 'clarification' }>).questions"
+              :questions="(getPlanningData(index) as Extract<PlanningData, { planningType: 'clarification' }>).questions"
+              :readonly-answers="getPlanningAnswers(index)"
+              @submit="(answers: Record<string, string>) => $emit('planningSubmit', answers)"
+              @skip="$emit('planningSkip', index)"
+            />
+            <PlanConfirmationCard
+              v-else-if="getPlanningData(index)!.planningType === 'plan_confirmation' && (getPlanningData(index) as Extract<PlanningData, { planningType: 'plan_confirmation' }>).outline"
+              :outline="(getPlanningData(index) as Extract<PlanningData, { planningType: 'plan_confirmation' }>).outline"
+              @confirm="$emit('planConfirm', index)"
+              @cancel="$emit('planningSkip', index)"
+            />
+          </template>
+          <template v-else>
+            <div class="message-content">
+              <template v-for="parsed in [parseAiMessage(msg.content)]" :key="`parsed-${index}`">
+                <div
+                  v-if="parsed"
+                  class="message-text"
+                  v-html="renderMarkdown(parsed)"
+                  @click="handleMessageTextClick"
+                ></div>
+              </template>
+            </div>
+          </template>
         </template>
         <template v-else>
           <div v-if="getImageAttachments(msg.attachments).length > 0" class="user-message-media attachments-preview attachments-preview-images">
