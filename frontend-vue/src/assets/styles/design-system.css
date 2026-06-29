@@ -70,4 +70,37 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
+
+  /* ═══════════════════════════════════════
+     页面级语义变量 · 对齐 fusion 设计稿
+     （像素级数值 + 变量统一管理，调一处全站联动）
+     ═══════════════════════════════════════ */
+
+  /* ── 容器宽度 ── */
+  --container-widescreen: 1440px;   /* 新页面统一容器宽度 */
+
+  /* ── 页面留白节奏 ── */
+  --space-page-x: 48px;             /* 页面左右 padding */
+  --space-page-x-sm: 24px;          /* 移动端页面左右 padding */
+  --space-section: 120px;           /* section 上下大留白 */
+  --space-section-tight: 80px;      /* 深色/趋势区等紧凑 section 留白 */
+  --space-block: 48px;              /* 标题块到内容、内容块之间 */
+  --space-field: 40px;              /* 表单字段间距 */
+  --space-guide-item: 48px;         /* 使用指南条目间距 */
+  --space-faq-item: 32px;           /* FAQ 条目间距 */
+
+  /* ── 标题/数值字号 ── */
+  --size-page-title: 48px;          /* 页面大标题 */
+  --size-price: 56px;               /* 价格数字 */
+  --size-metric: 48px;              /* 仪表盘指标数字 */
+  --size-section-title: 20px;       /* 区块小标题 */
+  --size-guide-title: 20px;         /* 使用指南条目标题 */
+
+  /* ── 圆角（设计稿偏直角风） ── */
+  --radius-card: 4px;               /* 卡片圆角 */
+  --radius-badge: 0;                /* 徽章圆角（直角） */
+
+  /* ── 页面标题块装饰 ── */
+  --accent-bar-width: 4px;          /* 橙竖线宽度 */
+  --accent-bar-height: 48px;        /* 橙竖线高度 */
 }

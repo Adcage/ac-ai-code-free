@@ -8,12 +8,11 @@
 
       <nav class="header-nav">
         <router-link
-          v-for="item in visibleMenuItems"
+          v-for="item in menuItems"
           :key="item.key"
           :to="item.key"
           class="nav-link"
-          :exact-active-class="item.key === '/' ? 'nav-link-active' : undefined"
-          :active-class="item.key !== '/' ? 'nav-link-active' : undefined"
+          :active-class="'nav-link-active'"
         >
           <component :is="item.icon" :size="18" />
           <span>{{ item.label }}</span>
@@ -21,6 +20,11 @@
       </nav>
 
       <div class="header-right">
+        <nav class="header-right-nav">
+          <router-link to="/pricing" class="nav-link-subtle">价格</router-link>
+          <router-link to="/docs" class="nav-link-subtle">文档</router-link>
+        </nav>
+
         <div v-if="loginUserStore.loginUser.id" class="user-area">
           <a-dropdown>
             <div class="user-trigger">
@@ -33,13 +37,17 @@
                   <Settings :size="16" style="margin-right: 8px" />
                   管理后台
                 </a-menu-item>
-                <a-menu-item key="profile" @click="router.push('/user/profile')">
-                  <User :size="16" style="margin-right: 8px" />
-                  个人中心
-                </a-menu-item>
-                <a-menu-item key="usage" @click="router.push('/user/usage')">
+                <a-menu-item key="dashboard" @click="router.push('/user/usage')">
                   <BarChart3 :size="16" style="margin-right: 8px" />
-                  用量统计
+                  仪表盘
+                </a-menu-item>
+                <a-menu-item key="myapps" @click="router.push('/app/my')">
+                  <FolderOpen :size="16" style="margin-right: 8px" />
+                  我的作品
+                </a-menu-item>
+                <a-menu-item key="settings" @click="router.push('/user/settings')">
+                  <UserCog :size="16" style="margin-right: 8px" />
+                  账号设置
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
@@ -60,7 +68,7 @@
 
     <div v-if="mobileMenuOpen" class="mobile-nav">
       <router-link
-        v-for="item in visibleMenuItems"
+        v-for="item in menuItems"
         :key="item.key"
         :to="item.key"
         class="mobile-nav-link"
@@ -69,15 +77,21 @@
         <component :is="item.icon" :size="18" />
         <span>{{ item.label }}</span>
       </router-link>
+      <router-link to="/pricing" class="mobile-nav-link" @click="mobileMenuOpen = false">
+        <span>价格</span>
+      </router-link>
+      <router-link to="/docs" class="mobile-nav-link" @click="mobileMenuOpen = false">
+        <span>文档</span>
+      </router-link>
     </div>
   </a-layout-header>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLoginUserStore } from '@/stores/LoginUser.ts'
-import { Home, FolderOpen, Settings, User, BarChart3, LogOut, Menu } from '@lucide/vue'
+import { Compass, FolderOpen, Settings, BarChart3, UserCog, LogOut, Menu } from '@lucide/vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 
 const router = useRouter()
@@ -87,11 +101,8 @@ const loginUserStore = useLoginUserStore()
 loginUserStore.fetchLoginUser()
 
 const menuItems = [
-  { key: '/', icon: Home, label: '主页' },
-  { key: '/app/my', icon: FolderOpen, label: '我的作品' },
+  { key: '/explore', icon: Compass, label: '探索广场' },
 ]
-
-const visibleMenuItems = computed(() => menuItems)
 
 const handleLogout = () => {
   loginUserStore.logout()
@@ -149,7 +160,6 @@ const handleLogout = () => {
   align-items: center;
   gap: 2px;
   margin-left: var(--space-xl);
-  flex: 1;
 }
 
 .nav-link {
@@ -200,6 +210,29 @@ const handleLogout = () => {
   align-items: center;
   flex-shrink: 0;
   margin-left: auto;
+  gap: var(--space-lg);
+}
+
+.header-right-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.nav-link-subtle {
+  color: var(--color-text-on-dark);
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.6;
+  text-decoration: none;
+  padding: 4px var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.nav-link-subtle:hover {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .user-area {
@@ -274,6 +307,10 @@ const handleLogout = () => {
 
 @media (max-width: 768px) {
   .header-nav {
+    display: none;
+  }
+
+  .header-right-nav {
     display: none;
   }
 

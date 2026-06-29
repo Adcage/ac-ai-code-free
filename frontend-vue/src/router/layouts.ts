@@ -50,7 +50,12 @@ export default {
     {
       path: 'user/usage',
       name: '用量统计',
-      component: () => import('@/pages/user/UsageStatsPage.vue'),
+      component: () => import('@/pages/user/TokenDashboardPage.vue'),
+    },
+    {
+      path: 'user/settings',
+      name: '账号设置',
+      component: () => import('@/pages/user/UserSettingsPage.vue'),
     },
   ],
 } as RouteRecordRaw
