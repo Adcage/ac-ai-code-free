@@ -43,10 +43,8 @@ class TestModelResolver:
                 model_name="gpt-4o-mini",
                 base_url="https://api.openai.com/v1",
                 api_key="key1",
-                model_config_id=1,
-                config_version=1,
-                source="USER",
-                billing_mode="USER_OWNED",
+                source="SYSTEM",
+                billing_mode="SYSTEM_FREE_FALLBACK",
             ),
             ModelRole.PRIMARY: ResolvedModelConfig(
                 role=ModelRole.PRIMARY,
@@ -54,10 +52,8 @@ class TestModelResolver:
                 model_name="gpt-4o",
                 base_url="https://api.openai.com/v1",
                 api_key="key1",
-                model_config_id=1,
-                config_version=1,
-                source="USER",
-                billing_mode="USER_OWNED",
+                source="SYSTEM",
+                billing_mode="SYSTEM_FREE_FALLBACK",
             ),
         }
         mock_client.resolve_runtime_model_bundle.return_value = bundle
@@ -68,7 +64,7 @@ class TestModelResolver:
 
         result = resolver.resolve(ModelRole.PRIMARY)
         assert result.model_name == "gpt-4o"
-        assert result.source == "USER"
+        assert result.source == "SYSTEM"
 
     @pytest.mark.asyncio
     async def test_resolve_falls_back_to_primary(self):
@@ -97,26 +93,7 @@ class TestModelResolver:
         mock_client.resolve_runtime_model_bundle.side_effect = RuntimeError("no bundle")
 
         resolver = ModelResolver(mock_client)
-        ctx = _make_context(runtime_options={"model_config_id": 0, "config_version": 0})
+        ctx = _make_context()
 
         with pytest.raises(Exception):
             await resolver.load_bundle(ctx)
-
-    @pytest.mark.asyncio
-    async def test_fallback_to_get_model_config(self):
-        mock_client = AsyncMock()
-        mock_client.resolve_runtime_model_bundle.side_effect = RuntimeError("bundle not available")
-        mock_client.get_model_config.return_value = {
-            "provider": "openai",
-            "modelName": "gpt-4o",
-            "baseUrl": "https://api.openai.com/v1",
-            "apiKey": "fallback-key",
-        }
-
-        resolver = ModelResolver(mock_client)
-        ctx = _make_context(runtime_options={"model_config_id": 42, "config_version": 1})
-        await resolver.load_bundle(ctx)
-
-        result = resolver.resolve(ModelRole.PRIMARY)
-        assert result.model_name == "gpt-4o"
-        assert result.source == "FALLBACK"

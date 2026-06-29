@@ -188,8 +188,6 @@ class RuntimeOrchestrator:
         if not generation_mode:
             generation_mode = _CODE_GEN_TYPE_TO_GENERATION_MODE.get(code_gen_type.value if hasattr(code_gen_type, "value") else str(code_gen_type), "application")
         original_content = getattr(request, "original_content", "")
-        model_config_id = getattr(request, "model_config_id", 0)
-        config_version = getattr(request, "config_version", 0)
 
         app: AppContext | None = None
         if request.app_id > 0:
@@ -249,10 +247,7 @@ class RuntimeOrchestrator:
             app=app,
             chat_history=chat_history,
             original_content=original_content,
-            runtime_options={
-                "model_config_id": model_config_id,
-                "config_version": config_version,
-            },
+            runtime_options={},
             is_test=getattr(request, "is_test", False),
             is_resume=is_resume,
             generation_mode=generation_mode,

@@ -151,14 +151,10 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
 
     async def EnhancePrompt(self, request, context):
         prompt = request.prompt
-        model_config_id = request.model_config_id
-        config_version = request.config_version
 
         logger.info(
-            "EnhancePrompt called, promptLength=%d, modelConfigId=%s, configVersion=%s",
+            "EnhancePrompt called, promptLength=%d",
             len(prompt) if prompt else 0,
-            model_config_id,
-            config_version,
         )
 
         if not prompt or not prompt.strip():
@@ -168,12 +164,26 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
 
         try:
             platform_client = GrpcPlatformClient()
-            model_config = await platform_client.get_model_config(model_config_id, config_version)
+            # 使用系统级模型配置解析 bundle
+            bundle = await platform_client.resolve_runtime_model_bundle(
+                user_id=0, app_id=0, agent_run_id=0, code_gen_type="single_file"
+            )
+            from app.modeling.roles import ModelRole
+            resolved = bundle.get(ModelRole.PRIMARY) or bundle.get(ModelRole.LIGHT)
+            if resolved is None:
+                return code_generation_pb2.EnhancePromptResponse(
+                    success=False, error_message="没有可用的模型配置"
+                )
+            model_config = {
+                "provider": resolved.provider,
+                "modelName": resolved.model_name,
+                "baseUrl": resolved.base_url,
+                "apiKey": resolved.api_key,
+            }
             logger.info(
-                "EnhancePrompt got model_config, provider=%s, modelName=%s, baseUrl=%s",
-                model_config.get("provider"),
-                model_config.get("modelName"),
-                model_config.get("baseUrl"),
+                "EnhancePrompt using system model, provider=%s, modelName=%s",
+                resolved.provider,
+                resolved.model_name,
             )
             chat_model_factory = ChatModelFactory()
             enhancer = PromptEnhancerService(chat_model_factory)

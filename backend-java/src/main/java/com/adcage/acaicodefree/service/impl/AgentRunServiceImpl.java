@@ -17,12 +17,6 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
 
     @Override
     public Long createAgentRun(Long appId, Long sessionId, Long userId, String runtime) {
-        return createAgentRun(appId, sessionId, userId, runtime, null, null, null);
-    }
-
-    @Override
-    public Long createAgentRun(Long appId, Long sessionId, Long userId, String runtime,
-                               Long modelConfigId, Integer configVersion, String workspacePath) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
         ThrowUtils.throwIf(userId == null || userId <= 0, ErrorCode.PARAMS_ERROR, "用户 ID 不能为空");
@@ -31,9 +25,6 @@ public class AgentRunServiceImpl extends ServiceImpl<AgentRunMapper, AgentRun> i
                 .sessionId(sessionId)
                 .userId(userId)
                 .runtime(runtime)
-                .modelConfigId(modelConfigId)
-                .configVersion(configVersion)
-                .workspacePath(workspacePath)
                 .status("running")
                 .latencyMs(0)
                 .createTime(LocalDateTime.now())

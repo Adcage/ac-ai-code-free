@@ -1,7 +1,9 @@
 package com.adcage.acaicodefree.grpc.server;
 
+import java.util.ArrayList;
 import java.util.List;
 
+import cn.hutool.core.util.StrUtil;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
@@ -10,15 +12,14 @@ import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
-import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelRole;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.AppVersionService;
-import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.ScreenshotService;
 import com.adcage.acaicodefree.service.UserService;
 
@@ -26,13 +27,21 @@ import io.grpc.stub.StreamObserver;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.beans.factory.annotation.Value;
 
 @Slf4j
 @GrpcService
 public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImplBase {
 
-    @Resource
-    private ModelConfigService modelConfigService;
+    @Value("${langchain4j.open-ai.chat-model.base-url:}")
+    private String defaultBaseUrl;
+
+    @Value("${langchain4j.open-ai.chat-model.api-key:}")
+    private String defaultApiKey;
+
+    @Value("${langchain4j.open-ai.chat-model.model-name:}")
+    private String defaultModelName;
+
     @Resource
     private AgentRunService agentRunService;
     @Resource
@@ -52,13 +61,38 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
                                           StreamObserver<ResolveRuntimeModelBundleResponse> responseObserver) {
         try {
-            String codeGenTypeStr = mapGrpcCodeGenTypeToString(request.getCodeGenType());
-            RuntimeModelBundle bundle = modelConfigService.resolveRuntimeModelBundle(
-                    request.getUserId(),
-                    request.getAppId(),
-                    request.getAgentRunId(),
-                    codeGenTypeStr
-            );
+            if (StrUtil.isBlank(defaultBaseUrl) || StrUtil.isBlank(defaultApiKey) || StrUtil.isBlank(defaultModelName)) {
+                log.warn("系统默认模型配置不完整，无法解析模型包");
+                responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
+                        .setSuccess(false)
+                        .setErrorMessage("系统模型配置未设置，请在 application.yml 中配置 langchain4j.open-ai.chat-model")
+                        .build());
+                responseObserver.onCompleted();
+                return;
+            }
+
+            List<RuntimeModelConfig> configs = new ArrayList<>();
+            for (RuntimeModelRole role : RuntimeModelRole.values()) {
+                configs.add(RuntimeModelConfig.builder()
+                        .role(role.getValue())
+                        .modelConfigId(0L)
+                        .configVersion(0)
+                        .provider("openai")
+                        .modelName(defaultModelName)
+                        .baseUrl(defaultBaseUrl)
+                        .apiKey(defaultApiKey)
+                        .source("SYSTEM")
+                        .billingMode("SYSTEM_FREE_FALLBACK")
+                        .build());
+            }
+
+            RuntimeModelBundle bundle = RuntimeModelBundle.builder()
+                    .success(true)
+                    .errorMessage("")
+                    .configs(configs)
+                    .policyVersion("v1")
+                    .billingContext("")
+                    .build();
 
             ResolveRuntimeModelBundleResponse.Builder builder = ResolveRuntimeModelBundleResponse.newBuilder()
                     .setSuccess(bundle.isSuccess())
@@ -92,64 +126,6 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
                     .setSuccess(false)
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "unknown error")
-                    .build());
-            responseObserver.onCompleted();
-        }
-    }
-
-    @Override
-    public void getModelConfig(GetModelConfigRequest request, StreamObserver<GetModelConfigResponse> responseObserver) {
-        try {
-            long configId = request.getModelConfigId();
-            ModelConfig modelConfig = configId > 0 ? modelConfigService.getById(configId) : null;
-            if (modelConfig == null) {
-                modelConfig = modelConfigService.getServerDefaultConfig();
-            }
-            if (modelConfig == null) {
-                responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                        .setProvider("")
-                        .setModelName("")
-                        .setBaseUrl("")
-                        .setApiKey("")
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-            if (modelConfig.getEnabled() == null || modelConfig.getEnabled() != 1) {
-                responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                        .setProvider("")
-                        .setModelName("")
-                        .setBaseUrl("")
-                        .setApiKey("")
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-            if (modelConfig.getConfigVersion() != null && request.getConfigVersion() > 0
-                    && !modelConfig.getConfigVersion().equals(request.getConfigVersion())) {
-                responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                        .setProvider("")
-                        .setModelName("")
-                        .setBaseUrl("")
-                        .setApiKey("")
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-            responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                    .setProvider(modelConfig.getProvider() != null ? modelConfig.getProvider() : "")
-                    .setModelName(modelConfig.getModelName() != null ? modelConfig.getModelName() : "")
-                    .setBaseUrl(modelConfig.getBaseUrl() != null ? modelConfig.getBaseUrl() : "")
-                    .setApiKey(modelConfig.getApiKeyCipher() != null ? modelConfig.getApiKeyCipher() : "")
-                    .build());
-            responseObserver.onCompleted();
-        } catch (Exception e) {
-            log.error("gRPC getModelConfig failed", e);
-            responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                    .setProvider("")
-                    .setModelName("")
-                    .setBaseUrl("")
-                    .setApiKey("")
                     .build());
             responseObserver.onCompleted();
         }

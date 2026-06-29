@@ -4,7 +4,7 @@ import router from '@/router'
 
 let firstFetchLoginUser = true
 
-const needLoginPaths = ['/app/my', '/app/generate', '/user/profile', '/user/usage', '/model/config']
+const needLoginPaths = ['/app/my', '/app/generate', '/user/profile', '/user/usage']
 
 router.beforeEach(async (to, from, next) => {
   const loginUserStore = useLoginUserStore()

@@ -132,18 +132,6 @@ declare namespace API {
     message?: string
   }
 
-  type BaseResponseModelConfigRuntimeVO = {
-    code?: number
-    data?: ModelConfigRuntimeVO
-    message?: string
-  }
-
-  type BaseResponseModelConfigVO = {
-    code?: number
-    data?: ModelConfigVO
-    message?: string
-  }
-
   type BaseResponsePageApp = {
     code?: number
     data?: PageApp
@@ -159,12 +147,6 @@ declare namespace API {
   type BaseResponsePageChatHistoryVO = {
     code?: number
     data?: PageChatHistoryVO
-    message?: string
-  }
-
-  type BaseResponsePageModelConfigVO = {
-    code?: number
-    data?: PageModelConfigVO
     message?: string
   }
 
@@ -291,15 +273,6 @@ declare namespace API {
     id: number
   }
 
-  type getModelConfigVOByIdParams = {
-    id: number
-  }
-
-  type getRuntimeConfigParams = {
-    id: number
-    configVersion: number
-  }
-
   type getUserByIdParams = {
     id: number
   }
@@ -328,59 +301,6 @@ declare namespace API {
     updateTime?: string
   }
 
-  type ModelConfigAddRequest = {
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    apiKeyCipher?: string
-    temperature?: number
-    maxTokens?: number
-  }
-
-  type ModelConfigEditRequest = {
-    id?: number
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    apiKeyCipher?: string
-    temperature?: number
-    maxTokens?: number
-    enabled?: number
-    isDefault?: number
-  }
-
-  type ModelConfigQueryRequest = {
-    pageNum?: number
-    pageSize?: number
-    sortField?: string
-    sortOrder?: string
-    provider?: string
-    modelName?: string
-    enabled?: number
-  }
-
-  type ModelConfigRuntimeVO = {
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    apiKey?: string
-  }
-
-  type ModelConfigVO = {
-    id?: number
-    userId?: number
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    temperature?: number
-    maxTokens?: number
-    configVersion?: number
-    enabled?: number
-    isDefault?: number
-    createTime?: string
-    updateTime?: string
-  }
-
   type PageApp = {
     records?: App[]
     pageNumber?: number
@@ -401,15 +321,6 @@ declare namespace API {
 
   type PageChatHistoryVO = {
     records?: ChatHistoryVO[]
-    pageNumber?: number
-    pageSize?: number
-    totalPage?: number
-    totalRow?: number
-    optimizeCountQuery?: boolean
-  }
-
-  type PageModelConfigVO = {
-    records?: ModelConfigVO[]
     pageNumber?: number
     pageSize?: number
     totalPage?: number

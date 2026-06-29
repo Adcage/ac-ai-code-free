@@ -16,7 +16,6 @@ import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.mapper.UserMapper;
 import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.service.AgentRunService;
-import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
@@ -79,9 +78,6 @@ class PythonAgentE2ETest {
     private AgentRunService agentRunService;
 
     @MockBean
-    private ModelConfigService modelConfigService;
-
-    @MockBean
     private UserService userService;
 
     @MockBean
@@ -96,8 +92,6 @@ class PythonAgentE2ETest {
         ensureChatSchema();
 
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
-        when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
-        when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
         when(grpcPythonAgentRuntime.getName()).thenReturn("python-agent");
         when(grpcPythonAgentRuntime.stream(any(CodeGenerationRequest.class))).thenReturn(Flux.just(
                 JSONUtil.toJsonStr(new AiResponseMessage("开始生成 Vue 工程")),

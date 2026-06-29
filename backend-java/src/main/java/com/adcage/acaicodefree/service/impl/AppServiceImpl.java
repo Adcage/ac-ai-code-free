@@ -40,10 +40,8 @@ import com.adcage.acaicodefree.model.vo.user.UserVO;
 import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
-import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.model.entity.AgentRun;
-import com.adcage.acaicodefree.service.ModelConfigService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.adcage.acaicodefree.service.ScreenshotService;
@@ -112,9 +110,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private AgentRunService agentRunService;
 
     @Resource
-    private ModelConfigService modelConfigService;
-
-    @Resource
     private WorkspaceProperties workspaceProperties;
 
     @Resource
@@ -125,6 +120,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Value("${server.servlet.context-path:/api}")
     private String contextPath;
+
+    @Value("${langchain4j.open-ai.chat-model.model-name:}")
+    private String defaultModelName;
 
     @Override
     public Long createApp(AppAddRequest appAddRequest, User loginUser) {
@@ -295,15 +293,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 appId, sessionId, loginUser.getId());
 
         Long agentRunId;
-        Long modelConfigId;
-        Integer configVersion;
         String loopStateJson;
         String workspacePath;
 
         if (resumedRun != null) {
             agentRunId = resumedRun.getId();
-            modelConfigId = resumedRun.getModelConfigId();
-            configVersion = resumedRun.getConfigVersion();
             loopStateJson = resumedRun.getLoopStateJson();
             workspacePath = StrUtil.blankToDefault(
                     resumedRun.getWorkspacePath(),
@@ -322,12 +316,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, ex);
                 }
             }
-            ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
-            modelConfigId = modelConfig == null ? null : modelConfig.getId();
-            configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
             agentRunId = agentRunService.createAgentRun(
-                    appId, sessionId, loginUser.getId(), runtime.getName(),
-                    modelConfigId, configVersion, null
+                    appId, sessionId, loginUser.getId(), runtime.getName()
             );
             loopStateJson = "";
             workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" +
@@ -353,8 +343,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .loginUser(loginUser)
                 .codeGenTypeEnum(codeGenTypeEnum)
                 .generationMode(app.getGenerationMode())
-                .modelConfigId(modelConfigId)
-                .configVersion(configVersion)
                 .workspacePath(workspacePath)
                 .loopStateJson(loopStateJson)
                 .isTest(UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole()))
@@ -507,7 +495,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .eq("appId", appId)
                 .eq("userId", loginUser.getId()));
         String sessionTitle = "新会话 " + (sessionCount + 1);
-        String resolvedModelName = resolveModelName(loginUser.getId());
+        String resolvedModelName = resolveModelName();
         ChatSession chatSession = ChatSession.builder()
                 .appId(appId)
                 .userId(loginUser.getId())
@@ -979,16 +967,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成部署标识失败，请重试");
     }
 
-    private String resolveModelName(Long userId) {
-        try {
-            ModelConfig config = modelConfigService.getDefaultEnabledModelConfig(userId);
-            if (config != null && StrUtil.isNotBlank(config.getModelName())) {
-                return config.getModelName();
-            }
-        } catch (Exception e) {
-            log.debug("获取默认模型名称失败, userId={}", userId, e);
-        }
-        return "";
+    private String resolveModelName() {
+        return StrUtil.blankToDefault(defaultModelName, "");
     }
 
     private String getCodeGenOutputPrefix(CodeGenTypeEnum codeGenType) {

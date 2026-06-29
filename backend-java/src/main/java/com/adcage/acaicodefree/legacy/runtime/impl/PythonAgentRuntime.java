@@ -99,8 +99,6 @@ public class PythonAgentRuntime implements CodeGenerationRuntime {
                 request.getWorkspacePath(),
                 resolveWorkspacePath(request.getAgentRunId())
         ));
-        body.put("modelConfigId", request.getModelConfigId());
-        body.put("configVersion", request.getConfigVersion());
         String jsonBody = objectMapper.writeValueAsString(body);
         return HttpRequest.newBuilder()
                 .uri(URI.create(pythonBaseUrl + "/agent/code-generation/stream"))

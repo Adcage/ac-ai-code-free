@@ -29,8 +29,6 @@ class ResolveModelNode(RuntimeNode):
                 "modelName": resolved.model_name,
                 "baseUrl": resolved.base_url,
                 "apiKey": resolved.api_key,
-                "modelConfigId": resolved.model_config_id,
-                "configVersion": resolved.config_version,
                 "source": resolved.source,
                 "billingMode": resolved.billing_mode,
             }

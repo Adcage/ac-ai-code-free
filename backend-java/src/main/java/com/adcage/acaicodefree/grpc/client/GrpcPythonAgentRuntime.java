@@ -157,9 +157,7 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
                 .setSessionId(request.getSessionId() != null ? request.getSessionId() : 0L)
                 .setUserId(request.getLoginUser() != null ? request.getLoginUser().getId() : 0L)
                 .setPrompt(request.getMessage() != null ? request.getMessage() : "")
-                .setWorkspacePath(request.getWorkspacePath() != null ? request.getWorkspacePath() : "")
-                .setModelConfigId(request.getModelConfigId() != null ? request.getModelConfigId() : 0L)
-                .setConfigVersion(request.getConfigVersion() != null ? request.getConfigVersion() : 0);
+                .setWorkspacePath(request.getWorkspacePath() != null ? request.getWorkspacePath() : "");
 
         if (request.getLoopStateJson() != null && !request.getLoopStateJson().isEmpty()) {
             builder.setLoopStateJson(request.getLoopStateJson());

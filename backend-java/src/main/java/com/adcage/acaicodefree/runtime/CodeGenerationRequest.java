@@ -20,8 +20,6 @@ public class CodeGenerationRequest {
     private User loginUser;
     private CodeGenTypeEnum codeGenTypeEnum;
     private String generationMode;
-    private Long modelConfigId;
-    private Integer configVersion;
     private String workspacePath;
     private String loopStateJson;
     private Boolean isTest;

@@ -39,13 +39,6 @@ public class AgentRun implements Serializable {
 
     private String runtime;
 
-    @Column("modelConfigId")
-    private Long modelConfigId;
-
-    @Column("configVersion")
-    @Builder.Default
-    private Integer configVersion = 1;
-
     private String status;
 
     @Column("workspacePath")

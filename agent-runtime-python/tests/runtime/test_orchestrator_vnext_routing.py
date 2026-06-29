@@ -63,8 +63,6 @@ def _make_request(**overrides) -> MagicMock:
         prompt="生成一个登录页面",
         code_gen_type=3,
         workspace_path="/tmp/test_workspace",
-        model_config_id=1,
-        config_version=1,
         loop_state_json="",
         is_test=False,
         generation_mode=None,

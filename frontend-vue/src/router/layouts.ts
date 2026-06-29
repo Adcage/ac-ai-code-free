@@ -46,13 +46,5 @@ export default {
       name: '用量统计',
       component: () => import('@/pages/user/UsageStatsPage.vue'),
     },
-    {
-      path: 'model/config',
-      name: 'model_config',
-      component: () => import('@/pages/model/ModelConfigPage.vue'),
-      meta: {
-        name: '模型配置',
-      },
-    },
   ],
 } as RouteRecordRaw

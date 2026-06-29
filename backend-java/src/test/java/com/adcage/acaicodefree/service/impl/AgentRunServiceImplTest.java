@@ -45,9 +45,8 @@ class AgentRunServiceImplTest {
     }
 
     @Test
-    void createAgentRun_WithNewParams_SavesAllFields() {
-        Long id = agentRunService.createAgentRun(100L, 200L, 300L, "python",
-                10L, 2, "/workspace/run-1");
+    void createAgentRun_SavesAllFields() {
+        Long id = agentRunService.createAgentRun(100L, 200L, 300L, "python");
 
         assertNotNull(id);
         assertNotNull(capturedAgentRun);
@@ -55,22 +54,6 @@ class AgentRunServiceImplTest {
         assertEquals(200L, capturedAgentRun.getSessionId());
         assertEquals(300L, capturedAgentRun.getUserId());
         assertEquals("python", capturedAgentRun.getRuntime());
-        assertEquals(10L, capturedAgentRun.getModelConfigId());
-        assertEquals(2, capturedAgentRun.getConfigVersion());
-        assertEquals("/workspace/run-1", capturedAgentRun.getWorkspacePath());
-        assertEquals("running", capturedAgentRun.getStatus());
-    }
-
-    @Test
-    void createAgentRun_OldMethod_DelegatesWithNullParams() {
-        Long id = agentRunService.createAgentRun(100L, 200L, 300L, "java");
-
-        assertNotNull(id);
-        assertNotNull(capturedAgentRun);
-        assertEquals(100L, capturedAgentRun.getAppId());
-        assertEquals("java", capturedAgentRun.getRuntime());
-        assertNull(capturedAgentRun.getModelConfigId());
-        assertNull(capturedAgentRun.getWorkspacePath());
         assertEquals("running", capturedAgentRun.getStatus());
     }
 
@@ -117,8 +100,6 @@ class AgentRunServiceImplTest {
                 "appId", "appId",
                 "sessionId", "sessionId",
                 "userId", "userId",
-                "modelConfigId", "modelConfigId",
-                "configVersion", "configVersion",
                 "workspacePath", "workspacePath",
                 "errorMessage", "errorMessage",
                 "latencyMs", "latencyMs"
