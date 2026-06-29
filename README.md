@@ -293,9 +293,8 @@ Validate 节点执行 8 项确定性检查，不依赖 LLM 评估，结果写入
 | user | userAccount, userPassword(加密), userRole, vipExpireTime, shareCode, inviteUser |
 | app | appName, codeGenType, generationMode, styleTemplate, deployKey(6位唯一), priority(99=精选), isTestApp |
 | chat_session | appId, userId, title, messageCount, modelName, lastMessageTime |
-| chat_history | sessionId, seqNo, message(MEDIUMTEXT), messageType, inputTokens, outputTokens, latencyMs |
-| model_config | provider, modelName, baseUrl, apiKeyCipher(加密), configVersion, enabled, isDefault |
-| agent_run | appId, sessionId, runtime, status, workspacePath, loopStateJson(TEXT), latencyMs |
+| chat_history | sessionId, seqNo, message(MEDIUMTEXT), messageType, latencyMs |
+| agent_run | appId, sessionId, runtime, status, workspacePath, loopStateJson(TEXT), latencyMs, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens |
 | app_version | appId, agentRunId, versionNo, sourcePath, buildPath |
 
 全部雪花算法主键 + 逻辑删除（isDelete）+ 统一时间审计。
