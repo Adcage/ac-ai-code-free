@@ -52,6 +52,11 @@ class SingleImplementLoopRunner:
             skill_registry = self._services.asset_manager.get_index().skill_registry
         tools = create_implementor_tools(file_tools, skill_registry=skill_registry, state=self._state)
 
+        # 将 event_bus 注入需要它的工具（如 AskUserTool）
+        for tool in tools:
+            if hasattr(tool, 'event_bus') and tool.event_bus is None:
+                tool.event_bus = self._event_bus
+
         # 3. 解析模型配置
         await self._services.model_resolver.load_bundle(self._context)
         from app.modeling.roles import ModelRole
@@ -102,11 +107,22 @@ class SingleImplementLoopRunner:
                 self._state.iteration += 1
                 logger.info("iteration completed | iteration=%d", self._state.iteration)
 
+                # AskUser 触发暂停
+                if self._state.status == "waiting_for_user":
+                    logger.info("ask_user triggered, pausing loop | iteration=%d", self._state.iteration)
+                    break
+
             # 发射完成事件
-            await self._event_bus.emit(RuntimeEvent(
-                RuntimeEventType.DONE,
-                {"message": "对话完成"},
-            ))
+            if self._state.status == "waiting_for_user":
+                await self._event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.DONE,
+                    {"message": "waiting_for_user"},
+                ))
+            else:
+                await self._event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.DONE,
+                    {"message": "对话完成"},
+                ))
 
         except AgentRuntimeError as e:
             logger.error("vNext runner error: %s", e)
