@@ -30,11 +30,17 @@ export default {
       path: 'user/register',
       name: '注册',
       component: () => import('@/pages/user/UserRegisterPage.vue'),
+      meta: {
+        hideGlobalChrome: true,
+      },
     },
     {
       path: 'user/login',
       name: '登录',
       component: () => import('@/pages/user/UserLoginPage.vue'),
+      meta: {
+        hideGlobalChrome: true,
+      },
     },
     {
       path: 'user/profile',
