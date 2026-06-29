@@ -412,7 +412,8 @@ class RuntimeOrchestrator:
 
     async def _run_single_implement_vnext(self, request, run_mode: RunMode):
         """vNext 单实现链路：模型流式对话 → SSE 传输。"""
-        from app.agent_loop_vnext.runner import SingleImplementLoopRunner
+        from app.agent_loop_vnext.runner import run_vnext_agent
+        from app.agent_loop_vnext.base.result import AgentResult
 
         agent_run_id = int(request.agent_run_id)
         event_bus = EventBus(agent_run_id=agent_run_id)
@@ -428,14 +429,13 @@ class RuntimeOrchestrator:
 
         async def _execute():
             try:
-                runner = SingleImplementLoopRunner(context, services)
-                await runner.run()
+                result: AgentResult = await run_vnext_agent(context, services)
 
                 latency_ms = int((time.monotonic() - start_time) * 1000)
-                # 根据 runner 状态决定完成还是暂停
+                # 根据 result 状态决定完成还是暂停
                 loop_state_json = ""
-                success = runner.state.status == "completed"
-                if runner.state.status == "waiting_for_user":
+                success = result.status == "completed"
+                if result.status == "waiting_for_user":
                     # 最小非空 JSON 触发 Java pauseAgentRun 逻辑
                     loop_state_json = '{"status":"waiting_for_user"}'
 
@@ -444,7 +444,7 @@ class RuntimeOrchestrator:
                     success=success,
                     workspace_path=context.workspace_path,
                     latency_ms=latency_ms,
-                    error_message="",
+                    error_message=result.error or "",
                     loop_state_json=loop_state_json,
                 )
             except AgentRuntimeError as e:
