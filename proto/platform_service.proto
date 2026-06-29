@@ -62,6 +62,10 @@ message CompleteAgentRunRequest {
   int32 latency_ms = 4;
   string error_message = 5;
   string loop_state_json = 6;
+  int64 total_input_tokens = 7;
+  int64 total_output_tokens = 8;
+  int64 total_cache_read_tokens = 9;
+  int64 total_cache_creation_tokens = 10;
 }
 
 message CompleteAgentRunResponse {
