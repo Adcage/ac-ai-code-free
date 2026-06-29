@@ -36,6 +36,30 @@ class TestRenderResumeAnswerText:
         result = render_resume_answer_text(prompt)
         assert result == prompt
 
+    def test_renders_json_format(self):
+        """JSON 格式：{"type":"planning_resume","answers":{...}}"""
+        prompt = '{"type":"planning_resume","questionSetId":"qs4","answers":{"q_theme":"dark"}}'
+        result = render_resume_answer_text(prompt)
+        assert "[q_theme]: dark" in result
+        assert "请继续生成。" in result
+
+    def test_json_format_multiple_answers(self):
+        prompt = '{"type":"planning_resume","answers":{"q1":"a1","q2":"a2"}}'
+        result = render_resume_answer_text(prompt)
+        assert "[q1]: a1" in result
+        assert "[q2]: a2" in result
+
+    def test_json_format_empty_answers(self):
+        prompt = '{"type":"planning_resume","answers":{}}'
+        result = render_resume_answer_text(prompt)
+        assert "跳过补充需求" in result
+
+    def test_plain_json_not_confused(self):
+        """普通 JSON（不是 planning_resume）应该原样返回。"""
+        prompt = '{"key": "value"}'
+        result = render_resume_answer_text(prompt)
+        assert result == prompt
+
 
 class TestParseResumeAnswerPayload:
     def test_parses_valid_payload(self):

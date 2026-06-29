@@ -1,6 +1,9 @@
-"""vNext resume 答案渲染 — 将 <<RESUME_ANSWERS>> 编码的答案转为 LLM 可读文本。
+"""vNext resume 答案渲染 — 将 <<RESUME_ANSWERS>> 或 JSON 编码的答案转为 LLM 可读文本。
 
 vNext 完全自包含，不依赖 legacy 引擎（app.agent_loop.resume_answers）。
+支持两种格式：
+1. <<RESUME_ANSWERS>>{JSON}<<RESUME_ANSWERS>> — 旧格式
+2. {"type":"planning_resume","answers":{...}} — JSON 格式
 """
 
 import json
@@ -10,24 +13,39 @@ import re
 logger = logging.getLogger("app.agent_loop_vnext.resume_answers")
 
 RESUME_MARKER = "<<RESUME_ANSWERS>>"
+PLANNING_RESUME_TYPE = "planning_resume"
 
 
 def render_resume_answer_text(prompt: str) -> str:
-    """将 <<RESUME_ANSWERS>>{JSON}<<RESUME_ANSWERS>> 转为 LLM 可读文本。
+    """将编码的 resume 答案转为 LLM 可读文本。
 
-    输入:  <<RESUME_ANSWERS>>{"questionSetId":"qs1","answers":{"q_device":"desktop"}}<<RESUME_ANSWERS>>
-    输出:  需求补充：
-           [q_device]: desktop
-
-           请继续生成。
+    支持两种格式：
+    - <<RESUME_ANSWERS>>{JSON}<<RESUME_ANSWERS>>（旧格式）
+    - {"type":"planning_resume","answers":{...}}（JSON 格式）
     """
-    if RESUME_MARKER not in prompt:
+    if not prompt:
         return prompt
 
-    data = parse_resume_answer_payload(prompt)
-    if data is None:
-        return prompt
+    # 检测 JSON 格式（新格式）
+    if prompt.strip().startswith("{") and '"type":"planning_resume"' in prompt:
+        try:
+            data = json.loads(prompt.strip())
+        except json.JSONDecodeError:
+            return prompt
+        return _render_answers(data)
 
+    # 检测 <<RESUME_ANSWERS>> 格式（旧格式）
+    if RESUME_MARKER in prompt:
+        data = parse_resume_answer_payload(prompt)
+        if data is None:
+            return prompt
+        return _render_answers(data)
+
+    return prompt
+
+
+def _render_answers(data: dict) -> str:
+    """将解析后的答案数据渲染为 LLM 可读文本。"""
     answers = data.get("answers", {}) if isinstance(data, dict) else {}
     if not answers or not isinstance(answers, dict):
         return "跳过补充需求，请继续生成。"
@@ -69,6 +87,7 @@ def parse_resume_answer_payload(prompt: str) -> dict | None:
 
 __all__ = [
     "RESUME_MARKER",
+    "PLANNING_RESUME_TYPE",
     "parse_resume_answer_payload",
     "render_resume_answer_text",
 ]
