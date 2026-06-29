@@ -432,13 +432,20 @@ class RuntimeOrchestrator:
                 await runner.run()
 
                 latency_ms = int((time.monotonic() - start_time) * 1000)
+                # 根据 runner 状态决定完成还是暂停
+                loop_state_json = ""
+                success = runner.state.status == "completed"
+                if runner.state.status == "waiting_for_user":
+                    # 最小非空 JSON 触发 Java pauseAgentRun 逻辑
+                    loop_state_json = '{"status":"waiting_for_user"}'
+
                 await self._platform_client.complete_agent_run(
                     agent_run_id=agent_run_id,
-                    success=True,
+                    success=success,
                     workspace_path=context.workspace_path,
                     latency_ms=latency_ms,
                     error_message="",
-                    loop_state_json="",
+                    loop_state_json=loop_state_json,
                 )
             except AgentRuntimeError as e:
                 logger.error("vNext runner error | agentRunId=%s error=%s", agent_run_id, e)
