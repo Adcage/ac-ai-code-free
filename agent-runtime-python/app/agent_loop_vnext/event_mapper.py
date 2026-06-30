@@ -157,7 +157,6 @@ class VNextEventMapper(ProtoEventMapper):
             agent_run_id=str(sequenced_event.agent_run_id),
             seq=sequenced_event.seq,
             event_type=common_pb2.TOOL_REQUEST,
-            agent_name=data.get("agent_name", ""),
             tool_request=common_pb2.ToolRequestData(
                 id=data.get("id", ""),
                 name=tool_name,
@@ -180,7 +179,6 @@ class VNextEventMapper(ProtoEventMapper):
                 agent_run_id=str(sequenced_event.agent_run_id),
                 seq=sequenced_event.seq,
                 event_type=common_pb2.STATUS,
-                agent_name=data.get("agent_name", ""),
                 status=common_pb2.StatusData(
                     message=description,
                 ),
@@ -204,7 +202,6 @@ class VNextEventMapper(ProtoEventMapper):
             agent_run_id=str(sequenced_event.agent_run_id),
             seq=sequenced_event.seq,
             event_type=common_pb2.TOOL_EXECUTED,
-            agent_name=data.get("agent_name", ""),
             tool_executed=common_pb2.ToolExecutedData(
                 id=data.get("id", ""),
                 name=tool_name,

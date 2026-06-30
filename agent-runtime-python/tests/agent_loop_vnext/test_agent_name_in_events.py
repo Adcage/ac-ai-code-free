@@ -5,7 +5,8 @@ import pytest
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.event_bus import EventBus, SequencedRuntimeEvent
 from app.agent_loop_vnext.event_mapper import VNextEventMapper
-from app.grpc import common_pb2
+from app.grpc import common_pb2, code_generation_pb2
+from app.runtime.event_mapper import ProtoEventMapper
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,35 @@ def test_clarification_required_passes_agent_name():
     assert len(events) == 1
     assert events[0].agent_name == "implementor"
     assert events[0].event_type == common_pb2.TOOL_REQUEST
+
+
+# ---------------------------------------------------------------------------
+# AGENT_START 事件测试
+# ---------------------------------------------------------------------------
+
+
+def test_agent_start_maps_to_correct_proto_type():
+    """AGENT_START RuntimeEvent 映射为 gRPC AGENT_START 事件。"""
+    mapper = VNextEventMapper(is_test=True)
+    seq_event = _make_seq_event(
+        RuntimeEventType.AGENT_START,
+        {"agent_name": "planner"},
+    )
+    events = mapper.map_event(seq_event)
+    assert len(events) == 1
+    assert events[0].event_type == common_pb2.AGENT_START
+
+
+def test_agent_start_passes_agent_name():
+    """AGENT_START 事件的 agent_name 正确传递。"""
+    mapper = VNextEventMapper(is_test=True)
+    seq_event = _make_seq_event(
+        RuntimeEventType.AGENT_START,
+        {"agent_name": "implementor"},
+    )
+    events = mapper.map_event(seq_event)
+    assert len(events) == 1
+    assert events[0].agent_name == "implementor"
 
 
 # ---------------------------------------------------------------------------

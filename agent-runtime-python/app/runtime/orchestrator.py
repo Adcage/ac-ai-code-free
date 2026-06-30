@@ -412,8 +412,7 @@ class RuntimeOrchestrator:
 
     async def _run_single_implement_vnext(self, request, run_mode: RunMode):
         """vNext 单实现链路：模型流式对话 → SSE 传输。"""
-        from app.agent_loop_vnext.runner import run_vnext_agent
-        from app.agent_loop_vnext.base.result import AgentResult
+        from app.agent_loop_vnext.runner import SingleImplementLoopRunner
 
         agent_run_id = int(request.agent_run_id)
         event_bus = EventBus(agent_run_id=agent_run_id)
@@ -429,30 +428,24 @@ class RuntimeOrchestrator:
 
         async def _execute():
             try:
-                result: AgentResult = await run_vnext_agent(context, services)
+                runner = SingleImplementLoopRunner(context, services)
+                await runner.run()
 
                 latency_ms = int((time.monotonic() - start_time) * 1000)
-                # 根据 result 状态决定完成还是暂停
+                # 根据 runner 状态决定完成还是暂停
                 loop_state_json = ""
-                success = result.status == "completed"
-                if result.status == "waiting_for_user":
+                success = runner.state.status == "completed"
+                if runner.state.status == "waiting_for_user":
                     # 最小非空 JSON 触发 Java pauseAgentRun 逻辑
                     loop_state_json = '{"status":"waiting_for_user"}'
-
-                # 提取 token 数据
-                token_usage = result.total_token_usage
 
                 await self._platform_client.complete_agent_run(
                     agent_run_id=agent_run_id,
                     success=success,
                     workspace_path=context.workspace_path,
                     latency_ms=latency_ms,
-                    error_message=result.error or "",
+                    error_message="",
                     loop_state_json=loop_state_json,
-                    total_input_tokens=token_usage.get("input_tokens", 0),
-                    total_output_tokens=token_usage.get("output_tokens", 0),
-                    total_cache_read_tokens=token_usage.get("cache_read_tokens", 0),
-                    total_cache_creation_tokens=token_usage.get("cache_creation_tokens", 0),
                 )
             except AgentRuntimeError as e:
                 logger.error("vNext runner error | agentRunId=%s error=%s", agent_run_id, e)

@@ -45,3 +45,10 @@ class AgentRegistry:
     def has(cls, name: str) -> bool:
         """检查 Agent 是否已注册。"""
         return name in cls._agents
+
+
+# Auto-import: 确保所有 Agent 包在引用 AgentRegistry 时自动注册
+import app.agent_loop_vnext.agents.implementor  # noqa: F401, E402
+import app.agent_loop_vnext.agents.conductor  # noqa: F401, E402
+import app.agent_loop_vnext.agents.planner  # noqa: F401, E402
+import app.agent_loop_vnext.agents.validator  # noqa: F401, E402

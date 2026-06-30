@@ -70,6 +70,7 @@ _EVENT_TYPE_MAP: dict[RuntimeEventType, int] = {
     RuntimeEventType.RUNTIME_ERROR: common_pb2.ERROR,
     RuntimeEventType.DONE: common_pb2.DONE,
     RuntimeEventType.STATUS: common_pb2.STATUS,
+    RuntimeEventType.AGENT_START: common_pb2.AGENT_START,
 }
 
 
@@ -125,11 +126,22 @@ class ProtoEventMapper:
             return []
 
         data = event.data
+        agent_name = self._get_agent_name(sequenced_event)
+
+        # AGENT_START 是特殊事件：只带 event_type 和 agent_name，无 payload
+        if event.event_type == RuntimeEventType.AGENT_START:
+            return [code_generation_pb2.CodeGenerationEvent(
+                agent_run_id=str(sequenced_event.agent_run_id),
+                seq=sequenced_event.seq,
+                event_type=event_type_proto,
+                agent_name=agent_name or data.get("agent_name", ""),
+            )]
+
         kwargs: dict = {
             "agent_run_id": str(sequenced_event.agent_run_id),
             "seq": sequenced_event.seq,
             "event_type": event_type_proto,
-            "agent_name": self._get_agent_name(sequenced_event),
+            "agent_name": agent_name,
         }
 
         if event.event_type == RuntimeEventType.TEXT_DELTA:

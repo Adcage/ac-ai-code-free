@@ -14,6 +14,23 @@ class LoadedSkill:
 
 
 @dataclass
+class ConductorState:
+    """Conductor（指挥家）的运行状态。
+
+    phase: 当前阶段
+        - requirements: 需求分析阶段（AskUser 对话，需求确认后进入调度）
+        - needs_clarification: Planner 反馈需求不清楚，等待重新澄清
+        - scheduling: 调度阶段（派遣子 Agent 工作）
+        - completed: 任务完成
+
+    needs_revision: Planner 反馈的需求缺失说明，由 Conductor 转述给用户
+    """
+
+    phase: str = "requirements"
+    needs_revision: str | None = None
+
+
+@dataclass
 class AgentRunState:
     """通用 Agent 运行状态。
 

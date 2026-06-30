@@ -192,11 +192,20 @@ class ReadTool(AgentTool):
 
 class WriteTool(AgentTool):
     name: str = "Write"
-    description: str = "创建新文件。如果文件已存在则报错。"
+    description: str = "创建新文件。如果文件已存在则报错。路径限制参见 allowed_prefix 参数。"
     args_schema: Type[BaseModel] = WriteInput
     file_tools: FileTools | None = None
+    allowed_prefix: str = ""  # 空串=不限制；非空时只能写入此前缀目录下
 
     async def _arun(self, path: str, content: str) -> str:
+        if self.allowed_prefix and not path.startswith(self.allowed_prefix):
+            from app.core.error_codes import AgentErrorCode
+            from app.core.exceptions import AgentRuntimeError
+
+            raise AgentRuntimeError(
+                f"只能写入 {self.allowed_prefix} 目录下的文件（尝试写入: {path}）",
+                code=AgentErrorCode.TOOL_CALL_FAILED,
+            )
         abs_path = self.file_tools._workspace.resolve(path)
         if os.path.exists(abs_path):
             from app.core.error_codes import AgentErrorCode
