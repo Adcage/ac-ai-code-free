@@ -35,6 +35,7 @@ const TOOL_REQUEST_TEXT: Record<string, string> = {
 }
 
 const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  conductor: '总控',
   implementor: '实现',
   planner: '规划',
   validator: '校验',
@@ -43,6 +44,7 @@ const AGENT_DISPLAY_NAMES: Record<string, string> = {
 }
 
 const AGENT_BADGE_TEXT: Record<string, string> = {
+  conductor: '总',
   implementor: '执',
   planner: '规',
   validator: '校',
@@ -56,6 +58,20 @@ export function getAgentDisplayName(agentName: string): string {
 
 export function getAgentBadgeText(agentName: string): string {
   return AGENT_BADGE_TEXT[agentName] || getAgentDisplayName(agentName).slice(0, 1)
+}
+
+export function getToolDisplayName(toolName?: string, argumentsText?: string): string {
+  if (!toolName) return '工具'
+
+  if (toolName === 'delegate_to_agent') {
+    const targetAgent = parseAgentNameFromArguments(argumentsText)
+    if (targetAgent) {
+      return `派遣子智能体：${getAgentDisplayName(targetAgent)}智能体`
+    }
+    return '派遣子智能体'
+  }
+
+  return toolName
 }
 
 export function resolveMessageAgentName(toolCalls?: ToolCallRecord[], agentName?: string): string {
@@ -89,7 +105,14 @@ export function normalizeToolEvents(events?: ToolEventLike[]): ToolEvent[] {
 }
 
 export function parseToolCallsFromHistory(extra?: string | null, fallbackEvents?: ToolEventLike[]): ToolCallRecord[] {
+  // [DEBUG] 调试日志
+  if (extra && extra.includes('ask_user')) {
+    console.log('[DEBUG] parseToolCallsFromHistory | extra_len=', extra.length, 'extra_preview=', extra.slice(0, 300))
+  }
   const structured = parseStructuredToolCalls(extra)
+  if (extra && extra.includes('ask_user')) {
+    console.log('[DEBUG] parseToolCallsFromHistory | structured_count=', structured.length, 'names=', structured.map(s => s.name))
+  }
   if (structured.length > 0) {
     return structured
   }
@@ -105,7 +128,12 @@ export function parseToolCallsFromHistory(extra?: string | null, fallbackEvents?
 }
 
 export function parsePlanningFromExtra(toolCalls: ToolCallRecord[]): PlanningQuestionSet | undefined {
-  const askUserEntry = toolCalls.find((tc) => tc.name === 'ask_user' && tc.type === 'request')
+  // [DEBUG] 调试日志
+  console.log('[DEBUG] parsePlanningFromExtra | toolCalls_count=', toolCalls.length, 'names=', toolCalls.map(tc => tc.name + ':' + tc.type))
+  // AskUser 在 extra 中可能被合并为 executed（同 id 的 request+executed 合并后 type 变为 executed），
+  // 但 arguments 仍保留 request 的完整提问数据，所以匹配时不应限制 type
+  const askUserEntry = toolCalls.find((tc) => tc.name === 'ask_user' && tc.arguments)
+  console.log('[DEBUG] parsePlanningFromExtra | askUserEntry=', !!askUserEntry, 'has_arguments=', !!askUserEntry?.arguments)
   if (!askUserEntry || !askUserEntry.arguments) return undefined
   try {
     const args = JSON.parse(askUserEntry.arguments)
@@ -161,6 +189,14 @@ export function formatToolCallDescription(
 ): string {
   if (fallbackText?.trim()) {
     return fallbackText.trim()
+  }
+
+  if (toolName === 'delegate_to_agent') {
+    const targetAgent = parseAgentNameFromArguments(argumentsText)
+    if (targetAgent) {
+      return `正在派遣${getAgentDisplayName(targetAgent)}智能体`
+    }
+    return '正在派遣子智能体'
   }
 
   const path = parsePathFromArguments(argumentsText)
@@ -258,6 +294,17 @@ function parsePathFromArguments(argumentsText?: string) {
       argsObj.relativeDirPath ||
       ''
     )
+  } catch {
+    return ''
+  }
+}
+
+function parseAgentNameFromArguments(argumentsText?: string) {
+  if (!argumentsText) return ''
+
+  try {
+    const argsObj = JSON.parse(argumentsText)
+    return typeof argsObj.agent_name === 'string' ? argsObj.agent_name : ''
   } catch {
     return ''
   }

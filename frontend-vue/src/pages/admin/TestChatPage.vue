@@ -549,7 +549,6 @@ const doChatWithMessage = async (rawMessage: string, attachments?: AttachmentInf
     return
   }
   messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [], attachments })
-  iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
   startSSE(rawMessage, sessionId, currentApp.value?.codeGenType, undefined, attachments)
@@ -619,7 +618,6 @@ async function handlePlanningSubmit(answers: Record<string, string>) {
   // 不生成用户消息气泡，将答案注入 AI 消息的 planning.answers
   const aiMsg = messages.value.findLast(m => m.role === 'ai' && m.planning)
   if (aiMsg) aiMsg.planning!.answers = resumeAnswers
-  iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
   startSSE(jsonPrompt, sessionId, currentApp.value?.codeGenType, jsonPrompt)
@@ -638,7 +636,6 @@ async function handlePlanConfirm(index: number) {
   const sessionId = currentSessionId.value
   if (!sessionId) return
   messages.value.push({ role: 'user', content: prompt, status: 'success', toolEvents: [] })
-  iframeUrl.value = ''
   previewWarning.value = ''
   previewStatus.value = 'generating'
   startSSE(prompt, sessionId, currentApp.value?.codeGenType)

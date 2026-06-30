@@ -31,7 +31,14 @@ const parseAttachments = (extra?: string | null): AttachmentInfo[] | undefined =
 }
 
 const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => {
+  // [DEBUG] 调试日志：检查 extra 字段是否包含 ask_user 提问数据
+  if (item.messageType === 'ai' && item.status === 'waiting_for_user') {
+    console.log('[DEBUG] toChatMessage | waiting_for_user message | extra_len=', item.extra?.length, 'extra_preview=', item.extra?.slice(0, 200))
+  }
   const toolCalls = parseToolCallsFromHistory(item.extra, item.toolEvents || [])
+  if (item.messageType === 'ai' && item.status === 'waiting_for_user') {
+    console.log('[DEBUG] toChatMessage | parsed toolCalls=', toolCalls.length, 'planning=', parsePlanningFromExtra(toolCalls))
+  }
   return {
     role: item.messageType === 'user' ? 'user' : 'ai',
     content: item.message || '',
