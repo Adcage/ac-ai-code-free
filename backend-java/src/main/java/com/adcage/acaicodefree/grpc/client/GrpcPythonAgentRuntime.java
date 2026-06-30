@@ -5,6 +5,7 @@ import com.adcage.acaicodefree.core.generation.ActiveGenerationManager;
 import com.adcage.acaicodefree.grpc.codegen.*;
 import com.adcage.acaicodefree.grpc.common.*;
 import com.adcage.acaicodefree.grpc.common.GenerationMode;
+import com.adcage.acaicodefree.ai.model.message.AgentStartMessage;
 import com.adcage.acaicodefree.ai.model.message.AiResponseMessage;
 import com.adcage.acaicodefree.ai.model.message.StreamMessage;
 import com.adcage.acaicodefree.ai.model.message.ToolRequestMessage;
@@ -244,7 +245,7 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
             case STATUS:
                 return JSONUtil.toJsonStr(new StatusMessage(event.getStatus().getMessage(), agentName));
             case AGENT_START:
-                return null;
+                return JSONUtil.toJsonStr(new AgentStartMessage(event.getAgentName()));
             default:
                 return null;
         }

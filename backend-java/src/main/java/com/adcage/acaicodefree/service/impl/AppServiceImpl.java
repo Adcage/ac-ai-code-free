@@ -47,9 +47,11 @@ import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
 import com.adcage.acaicodefree.service.AgentRunService;
+import com.adcage.acaicodefree.service.PythonTitleGenerationService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.adcage.acaicodefree.service.ScreenshotService;
+import com.adcage.acaicodefree.utils.AiTitleUtils;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.adcage.acaicodefree.model.entity.App;
@@ -136,6 +138,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private AgentRunMapper agentRunMapper;
 
+    @Resource
+    private PythonTitleGenerationService pythonTitleGenerationService;
+
     @Value("${server.port:8700}")
     private String serverPort;
 
@@ -153,7 +158,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
         CodeGenTypeEnum codeGenTypeEnum = resolveCodeGenType(appAddRequest.getCodeGenType(), initPrompt);
         App app = new App();
-        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));//TODO 后续优化成AI生成应用名称
+        app.setAppName(resolveAppName(initPrompt, loginUser.getId()));
         app.setInitPrompt(initPrompt);
         app.setCodeGenType(codeGenTypeEnum.getValue());
         app.setGenerationMode(StrUtil.blankToDefault(appAddRequest.getGenerationMode(), "application"));
@@ -354,6 +359,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         saveHistoryMessage(sessionId, appId, loginUser.getId(), persistedUserMessage, "user", "success",
                 app.getCodeGenType(), 0, userMessageExtra);
         updateSessionSummary(sessionId);
+        tryAutoRenameSessionTitle(sessionId, app, persistedUserMessage, loginUser.getId());
 
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
@@ -412,6 +418,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                         App updateApp = new App();
                         updateApp.setId(appId);
                         updateApp.setCodeGenType(actualCodeGenTypeStr);
+                        updateApp.setIsPublic(app.getIsPublic()); // 保持原有的 isPublic
+                        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount
                         boolean updated = updateById(updateApp);
                         if (updated) {
                             app.setCodeGenType(actualCodeGenTypeStr);
@@ -515,7 +523,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         long sessionCount = chatSessionMapper.selectCountByQuery(QueryWrapper.create()
                 .eq("appId", appId)
                 .eq("userId", loginUser.getId()));
-        String sessionTitle = "新会话 " + (sessionCount + 1);
+        String sessionTitle = AiTitleUtils.buildDefaultSessionTitle(sessionCount + 1);
         String resolvedModelName = resolveModelName();
         ChatSession chatSession = ChatSession.builder()
                 .appId(appId)
@@ -690,6 +698,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
+        updateApp.setIsPublic(app.getIsPublic()); // 保持原有的 isPublic 不被 @Builder.Default 覆盖
+        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount 不被 @Builder.Default 覆盖
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
         screenshotService.triggerCoverGenerationIfNeeded(appId, null);
@@ -723,6 +733,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setIsPublic(1);
+        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount 不被 @Builder.Default 覆盖
         boolean updated = this.updateById(updateApp);
         ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "发布应用失败");
         // 处理分类：先删除旧分类，再批量插入新分类
@@ -751,6 +762,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setIsPublic(0);
+        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount 不被 @Builder.Default 覆盖
         boolean updated = this.updateById(updateApp);
         ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "取消发布应用失败");
         // 清理分类
@@ -852,7 +864,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 4. 创建新 App 记录
         App newApp = new App();
         newApp.setAppName(sourceApp.getAppName() + " [副本]");
-        newApp.setInitPrompt(sourceApp.getInitPrompt());
+        // Fork 副本已有完整工作区，不再自动触发 initPrompt 生成
+        newApp.setInitPrompt(null);
+        newApp.setCover(sourceApp.getCover());
         newApp.setCodeGenType(sourceApp.getCodeGenType());
         newApp.setGenerationMode(sourceApp.getGenerationMode());
         newApp.setStyleTemplate(sourceApp.getStyleTemplate());
@@ -874,9 +888,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Fork 工作区复制失败：" + e.getMessage());
         }
         // 6. 更新源 App forkCount
+        // 注意：不能用 new App() + updateById，因为 @Builder.Default 会让 isPublic=0 被一起写入
+        long newForkCount = (sourceApp.getForkCount() != null ? sourceApp.getForkCount() : 0) + 1;
         App updateSourceApp = new App();
         updateSourceApp.setId(appId);
-        updateSourceApp.setForkCount((sourceApp.getForkCount() != null ? sourceApp.getForkCount() : 0) + 1);
+        updateSourceApp.setForkCount((int) newForkCount);
+        updateSourceApp.setIsPublic(sourceApp.getIsPublic()); // 保持原有的 isPublic 不被覆盖
         this.updateById(updateSourceApp);
         // 7. 返回新应用 ID
         return newApp.getId();
@@ -1061,6 +1078,59 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         chatSession.setMessageCount((int) count);
         chatSession.setLastMessageTime(LocalDateTime.now());
         chatSessionMapper.update(chatSession);
+    }
+
+    private String resolveAppName(String initPrompt, Long userId) {
+        String fallbackTitle = AiTitleUtils.fallbackAppTitle(initPrompt);
+        if (pythonTitleGenerationService == null) {
+            return fallbackTitle;
+        }
+        try {
+            String generatedTitle = pythonTitleGenerationService.generateAppTitle(initPrompt, userId);
+            String sanitizedTitle = AiTitleUtils.sanitizeAppTitle(generatedTitle);
+            return StrUtil.blankToDefault(sanitizedTitle, fallbackTitle);
+        } catch (Exception e) {
+            log.warn("应用自动命名失败，使用兜底标题, userId={}", userId, e);
+            return fallbackTitle;
+        }
+    }
+
+    private void tryAutoRenameSessionTitle(Long sessionId, App app, String userMessage, Long userId) {
+        if (app == null || userId == null || userId <= 0) {
+            return;
+        }
+        String trimmedMessage = StrUtil.trim(userMessage);
+        if (StrUtil.isBlank(trimmedMessage)
+                || "[附件消息]".equals(trimmedMessage)
+                || pythonTitleGenerationService == null) {
+            return;
+        }
+        try {
+            ChatSession chatSession = chatSessionMapper.selectOneByQuery(QueryWrapper.create().eq("id", sessionId));
+            if (chatSession == null) {
+                return;
+            }
+            if (!AiTitleUtils.isDefaultSessionTitle(chatSession.getTitle())) {
+                return;
+            }
+            if (!ObjUtil.equal(chatSession.getMessageCount(), 1)) {
+                return;
+            }
+            String generatedTitle = pythonTitleGenerationService.generateSessionTitle(
+                    app.getAppName(),
+                    app.getInitPrompt(),
+                    trimmedMessage,
+                    userId
+            );
+            String sanitizedTitle = AiTitleUtils.sanitizeSessionTitle(generatedTitle);
+            if (StrUtil.isBlank(sanitizedTitle) || StrUtil.equals(sanitizedTitle, chatSession.getTitle())) {
+                return;
+            }
+            chatSession.setTitle(sanitizedTitle);
+            chatSessionMapper.update(chatSession);
+        } catch (Exception e) {
+            log.warn("会话自动命名失败，保留默认标题, sessionId={}, userId={}", sessionId, userId, e);
+        }
     }
 
     private List<ToolEventVO> extractToolEvents(ChatHistory history) {
