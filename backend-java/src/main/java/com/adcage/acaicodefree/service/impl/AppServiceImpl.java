@@ -13,7 +13,6 @@ import com.adcage.acaicodefree.common.ErrorCode;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.constant.AppConstant;
 import com.adcage.acaicodefree.constant.UserConstant;
-import com.adcage.acaicodefree.core.artifact.ArtifactManifestReader;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService.BuildResult;
 import com.adcage.acaicodefree.core.generation.ActiveGeneration;
@@ -37,7 +36,6 @@ import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
-import com.adcage.acaicodefree.model.vo.app.ArtifactManifestVO;
 import com.adcage.acaicodefree.model.vo.app.MarketplaceAppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
@@ -128,9 +126,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private WorkspaceProperties workspaceProperties;
-
-    @Resource
-    private ArtifactManifestReader artifactManifestReader;
 
     @Resource
     private AppCategoryMapper appCategoryMapper;
@@ -270,7 +265,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             appVO.setCoverRetryCount((Integer) coverState.getOrDefault("retryCount", 0));
             appVO.setCoverErrorMessage((String) coverState.getOrDefault("errorMessage", ""));
         }
-        enrichFromManifest(appVO, app);
+        enrichArtifactFormat(appVO, app);
         return appVO;
     }
 
@@ -383,22 +378,13 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         long startTime = System.currentTimeMillis();
 
         // 7a. 注册活跃生成状态 + 完成回调
-        // 内部订阅者（GrpcPythonAgentRuntime 中的 sink.asFlux().subscribe()）
-        // 会在 gRPC onComplete/onError → sink.tryEmitComplete() 后触发此回调，
-        // 确保 SSE 断开后 AI 回复仍能入库。
+        // AI 回复保存已改为由 Python 端 complete_agent_run 统一处理（单路径），
+        // SSE 流只负责实时展示，不再入库。
         ActiveGeneration activeGen = activeGenerationManager.register(sessionId, agentRunId);
         activeGen.setOnGenerationCompleted(finalText -> {
-            log.info("[Handler] onGenerationCompleted fired, sessionId={}, agentRunId={}, historySaved={}, textLen={}",
-                    sessionId, agentRunId, historySaved.get(), finalText != null ? finalText.length() : 0);
-            if (historySaved.compareAndSet(false, true)) {
-                int latencyMs = (int) (System.currentTimeMillis() - startTime);
-                String msg = StrUtil.blankToDefault(finalText, "");
-                saveHistoryMessage(sessionId, appId, loginUser.getId(), msg, "ai", "success", codeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, "{\"completed_by\": \"handler\"}"));
-                updateSessionSummary(sessionId);
-                log.info("[Handler] Saved to DB, sessionId={}, length={}", sessionId, msg.length());
-            } else {
-                log.info("[Handler] CAS skipped (doOnComplete already saved), sessionId={}", sessionId);
-            }
+            log.info("[Handler] onGenerationCompleted fired, sessionId={}, agentRunId={}, textLen={}",
+                    sessionId, agentRunId, finalText != null ? finalText.length() : 0);
+            // AI 回复由 complete_agent_run 保存，此处不再保存
             activeGenerationManager.remove(sessionId);
             log.info("[Handler] Removed ActiveGeneration, sessionId={}", sessionId);
         });
@@ -471,16 +457,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             }
                         }
                     }
-                    // doOnComplete 正常保存（SSE 连接状态下）。
-                    // 若 handler 已通过内部订阅者保存（SSE 断开后 gRPC 完成），CAS 跳过。
-                    if (historySaved.compareAndSet(false, true)) {
-                        log.info("[doOnComplete] Saving to DB, sessionId={}, status={}, textLen={}",
-                                sessionId, status, aiMessage != null ? aiMessage.length() : 0);
-                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, extra));
-                        updateSessionSummary(sessionId);
-                    } else {
-                        log.info("[doOnComplete] CAS skipped (handler already saved), sessionId={}", sessionId);
-                    }
+                    // AI 回复保存已改为由 Python 端 complete_agent_run 统一处理（单路径），
+                    // SSE 流只负责实时展示，不再入库。
+                    log.info("[doOnComplete] AI chat_history saved by complete_agent_run, sessionId={}", sessionId);
                     // Agent 运行结束后触发封面截图（无论谁保存、何种方式完成）
                     try {
                         screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
@@ -507,12 +486,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     }
                 })
                 .doFinally(signalType -> {
-                    log.info("[doFinally] signalType={}, historySaved={}, sessionId={}",
-                            signalType, historySaved.get(), sessionId);
-                    if (historySaved.get()) {
-                        activeGenerationManager.remove(sessionId);
-                        log.info("[doFinally] Removed ActiveGeneration, sessionId={}", sessionId);
-                    }
+                    log.info("[doFinally] signalType={}, sessionId={}", signalType, sessionId);
+                    activeGenerationManager.remove(sessionId);
                 });
     }
 
@@ -607,6 +582,13 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             BeanUtil.copyProperties(history, chatHistoryVO);
             chatHistoryVO.setToolEvents(extractToolEvents(history));
             chatHistoryVO.setAttachments(extractAttachments(history));
+            // [DEBUG] 调试日志：检查 waiting_for_user 的 AI 消息 extra 是否完整
+            if ("waiting_for_user".equals(history.getStatus()) && "ai".equals(history.getMessageType())) {
+                log.info("[DEBUG] listChatHistory | id={} status={} extra_len={} extra_preview={}",
+                        history.getId(), history.getStatus(),
+                        history.getExtra() == null ? -1 : history.getExtra().length(),
+                        history.getExtra() == null ? "null" : history.getExtra().substring(0, Math.min(200, history.getExtra().length())));
+            }
             return chatHistoryVO;
         }).collect(Collectors.toList());
         Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, chatHistoryPage.getTotalRow());
@@ -899,38 +881,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return newApp.getId();
     }
 
-    private void enrichFromManifest(AppVO appVO, App app) {
-        if (app.getId() == null || app.getCodeGenType() == null) {
-            return;
-        }
-        try {
-            Path workspaceRoot = resolveAppWorkspaceRoot(app);
-            if (workspaceRoot != null) {
-                ArtifactManifestVO manifest = artifactManifestReader.readManifest(workspaceRoot);
-                if (manifest != null) {
-                    appVO.setArtifactFormat(manifest.getArtifactFormat());
-                } else {
-                    appVO.setArtifactFormat(mapCodeGenTypeToArtifactFormat(app.getCodeGenType()));
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Manifest读取失败，跳过, appId={}", app.getId(), e);
+    private void enrichArtifactFormat(AppVO appVO, App app) {
+        if (app.getCodeGenType() != null) {
+            appVO.setArtifactFormat(mapCodeGenTypeToArtifactFormat(app.getCodeGenType()));
         }
         appVO.setPreviewUrl(screenshotService.computePreviewUrl(app));
-    }
-
-    private Path resolveAppWorkspaceRoot(App app) {
-        String codeGenType = app.getCodeGenType();
-        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
-        if (codeGenTypeEnum == null) {
-            return null;
-        }
-        Path workspaceDir = Path.of(workspaceProperties.getAgentWorkspaceDir()).toAbsolutePath().normalize();
-        Path appDir = workspaceDir.resolve(getCodeGenOutputPrefix(codeGenTypeEnum)).resolve(String.valueOf(app.getId()));
-        if (!Files.exists(appDir)) {
-            return null;
-        }
-        return appDir;
     }
 
     private CodeGenTypeEnum resolveCodeGenType(String requestCodeGenType, String initPrompt) {

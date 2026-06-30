@@ -119,8 +119,9 @@ public class GrpcPythonAgentRuntime implements CodeGenerationRuntime {
                 String json = mapEventToStreamMessageJson(event);
                 if (json != null) {
                     EmitResult result = sink.tryEmitNext(json);
-                    if (log.isDebugEnabled()) {
-                        log.debug("[Stream] tryEmitNext result={}, sessionId={}", result, request.getSessionId());
+                    if (result != EmitResult.OK) {
+                        log.warn("[Stream] tryEmitNext failed: result={}, sessionId={}, jsonLen={}",
+                                result, request.getSessionId(), json.length());
                     }
                 }
             }
