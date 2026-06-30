@@ -32,9 +32,10 @@
             v-for="item in dataList"
             :key="item.id"
             :app="item"
-            :actions="['view', 'chat', 'edit', 'delete']"
+            :actions="['view', 'chat', 'edit', 'delete', 'publish']"
             @delete="handleDeleteApp"
             @edit="handleEditApp"
+            @publish="handlePublishApp"
           />
         </div>
 
@@ -54,7 +55,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { Plus, FolderOpen } from '@lucide/vue'
-import { listMyAppVoByPage, deleteApp } from '@/api/appController'
+import { listMyAppVoByPage, deleteApp, publishApp, unpublishApp } from '@/api/appController'
 import AppCard from '@/components/AppCard.vue'
 import AppEditModal from '@/components/AppEditModal.vue'
 
@@ -70,6 +71,8 @@ const hasMore = computed(() => dataList.value.length < total.value)
 const searchParams = ref<API.AppQueryRequest>({
   pageNum: 1,
   pageSize: 20,
+  sortField: 'createTime',
+  sortOrder: 'descend',
 })
 
 const loadData = async (append = false) => {
@@ -146,6 +149,29 @@ const handleDeleteApp = async (id: number) => {
 
 const handleEditApp = (app: API.AppVO) => {
   editModalRef.value?.open(app)
+}
+
+const handlePublishApp = async (app: API.AppVO) => {
+  if (!app.id) return
+  const isPublic = app.isPublic === 1
+  const hide = message.loading(isPublic ? '正在取消公开...' : '正在公开...', 0)
+  try {
+    const res = isPublic
+      ? await unpublishApp({ appId: app.id })
+      : await publishApp({ appId: app.id, categories: [] })
+    if (res.data?.code === 0) {
+      message.success(isPublic ? '已取消公开' : '已公开到探索广场')
+      // 本地更新状态，避免重新请求
+      const target = dataList.value.find((item) => item.id === app.id)
+      if (target) target.isPublic = isPublic ? 0 : 1
+    } else {
+      message.error(res.data?.message || '操作失败')
+    }
+  } catch {
+    message.error('操作失败，请稍后重试')
+  } finally {
+    hide()
+  }
 }
 
 onMounted(() => {

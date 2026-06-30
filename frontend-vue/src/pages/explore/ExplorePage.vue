@@ -81,9 +81,12 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import request from '@/request'
 import { Compass, Loader2 } from '@lucide/vue'
+
+const router = useRouter()
 
 const categories = ['全部', '工具', '游戏', '社交', '教育', '商业', '创意']
 const selectedCategory = ref('全部')
@@ -144,7 +147,8 @@ const handleFork = async (appId: number) => {
   try {
     const res = await request.post('/app/fork', { appId })
     if (res.data.code === 0 && res.data.data) {
-      message.success('Fork 成功！已添加到我的作品')
+      message.success('Fork 成功！正在跳转...')
+      router.push(`/app/generate/${res.data.data}`)
     } else {
       message.error(res.data.message || 'Fork 失败')
     }

@@ -192,6 +192,8 @@ const loadApp = async () => {
           messages.value.push({ role: 'user', content: app.value.initPrompt, status: 'success', toolEvents: [] })
           startSSE(app.value.initPrompt, currentSessionId.value)
         }
+        // Fork 副本无 initPrompt 但有工作区文件，需要立即显示预览
+        await updatePreview()
       }
     } else {
       message.error('加载应用失败，' + (res.data?.message || '请稍后重试'))

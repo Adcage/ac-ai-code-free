@@ -56,6 +56,20 @@
                   删除
                 </a-button>
               </a-popconfirm>
+
+              <!-- 公开/取消公开 -->
+              <a-popconfirm
+                v-if="action === 'publish' && canEdit"
+                :title="app.isPublic === 1 ? '确定取消公开？取消后将无法在探索广场被找到' : '确定公开到探索广场？'"
+                ok-text="确定"
+                cancel-text="取消"
+                @confirm="handlePublish"
+              >
+                <a-button shape="round" class="action-btn" @click.stop>
+                  <template #icon><GlobalOutlined /></template>
+                  {{ app.isPublic === 1 ? '取消公开' : '公开作品' }}
+                </a-button>
+              </a-popconfirm>
             </template>
           </a-space>
         </div>
@@ -81,6 +95,7 @@
           }}</a-tag>
           <slot name="tags" v-if="tagPosition === 'bottom-left'">
             <a-tag color="success" v-if="app.deployKey" size="small">已部署</a-tag>
+            <a-tag color="purple" v-if="app.isPublic === 1" size="small">已公开</a-tag>
           </slot>
         </div>
       </div>
@@ -91,7 +106,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { EyeOutlined, MessageOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { EyeOutlined, MessageOutlined, EditOutlined, DeleteOutlined, GlobalOutlined } from '@ant-design/icons-vue'
 import { useLoginUserStore } from '@/stores/LoginUser'
 import UserAvatar from '@/components/UserAvatar.vue'
 import dayjs from 'dayjs'
@@ -102,7 +117,7 @@ dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
 type CardSize = 'small' | 'default' | 'large'
-type ActionType = 'view' | 'chat' | 'edit' | 'delete'
+type ActionType = 'view' | 'chat' | 'edit' | 'delete' | 'publish'
 
 interface Props {
   app: API.AppVO
@@ -125,7 +140,7 @@ const props = withDefaults(defineProps<Props>(), {
   navigateOnChat: true,
 })
 
-const emit = defineEmits(['delete', 'edit', 'cardClick'])
+const emit = defineEmits(['delete', 'edit', 'cardClick', 'publish'])
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 const defaultCover = 'https://gw.alipayobjects.com/zos/rmsportal/JiqGstEfoWAOHiTxclqi.png'
@@ -174,6 +189,7 @@ const handleChat = () => {
   if (props.navigateOnChat) goToApp()
 }
 const handleDelete = () => emit('delete', props.app.id)
+const handlePublish = () => emit('publish', props.app)
 
 const formatDate = (date: any) => {
   if (!date) return ''
