@@ -13,6 +13,10 @@ public class AiResponseMessage extends StreamMessage {
 
     private String agentName;
 
+    public AiResponseMessage(String data) {
+        this(data, null);
+    }
+
     public AiResponseMessage(String data, String agentName) {
         super(StreamMessageTypeEnum.AI_RESPONSE.getValue());
         this.data = data;

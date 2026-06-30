@@ -17,6 +17,10 @@ public class ToolRequestMessage extends StreamMessage {
 
     private String agentName;
 
+    public ToolRequestMessage(String id, String name, String arguments) {
+        this(id, name, arguments, null);
+    }
+
     public ToolRequestMessage(String id, String name, String arguments, String agentName) {
         super(StreamMessageTypeEnum.TOOL_REQUEST.getValue());
         this.id = id;
