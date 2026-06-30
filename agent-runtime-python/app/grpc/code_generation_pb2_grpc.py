@@ -54,6 +54,16 @@ class CodeGenerationServiceStub:
                 request_serializer=code__generation__pb2.EnhancePromptRequest.SerializeToString,
                 response_deserializer=code__generation__pb2.EnhancePromptResponse.FromString,
                 _registered_method=True)
+        self.GenerateAppTitle = channel.unary_unary(
+                '/com.adcage.acaicodefree.CodeGenerationService/GenerateAppTitle',
+                request_serializer=code__generation__pb2.GenerateAppTitleRequest.SerializeToString,
+                response_deserializer=code__generation__pb2.GenerateTitleResponse.FromString,
+                _registered_method=True)
+        self.GenerateSessionTitle = channel.unary_unary(
+                '/com.adcage.acaicodefree.CodeGenerationService/GenerateSessionTitle',
+                request_serializer=code__generation__pb2.GenerateSessionTitleRequest.SerializeToString,
+                response_deserializer=code__generation__pb2.GenerateTitleResponse.FromString,
+                _registered_method=True)
 
 
 class CodeGenerationServiceServicer:
@@ -83,6 +93,18 @@ class CodeGenerationServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GenerateAppTitle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GenerateSessionTitle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_CodeGenerationServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +127,16 @@ def add_CodeGenerationServiceServicer_to_server(servicer, server):
                     servicer.EnhancePrompt,
                     request_deserializer=code__generation__pb2.EnhancePromptRequest.FromString,
                     response_serializer=code__generation__pb2.EnhancePromptResponse.SerializeToString,
+            ),
+            'GenerateAppTitle': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateAppTitle,
+                    request_deserializer=code__generation__pb2.GenerateAppTitleRequest.FromString,
+                    response_serializer=code__generation__pb2.GenerateTitleResponse.SerializeToString,
+            ),
+            'GenerateSessionTitle': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateSessionTitle,
+                    request_deserializer=code__generation__pb2.GenerateSessionTitleRequest.FromString,
+                    response_serializer=code__generation__pb2.GenerateTitleResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +247,60 @@ class CodeGenerationService:
             '/com.adcage.acaicodefree.CodeGenerationService/EnhancePrompt',
             code__generation__pb2.EnhancePromptRequest.SerializeToString,
             code__generation__pb2.EnhancePromptResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GenerateAppTitle(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.adcage.acaicodefree.CodeGenerationService/GenerateAppTitle',
+            code__generation__pb2.GenerateAppTitleRequest.SerializeToString,
+            code__generation__pb2.GenerateTitleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GenerateSessionTitle(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.adcage.acaicodefree.CodeGenerationService/GenerateSessionTitle',
+            code__generation__pb2.GenerateSessionTitleRequest.SerializeToString,
+            code__generation__pb2.GenerateTitleResponse.FromString,
             options,
             channel_credentials,
             insecure,
