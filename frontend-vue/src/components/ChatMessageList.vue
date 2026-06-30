@@ -48,7 +48,7 @@
                 <div class="message-tool-log-copy">
                   <div class="message-tool-log-heading">
                     <span v-if="toolCall.agentName" class="message-tool-log-badge">{{ getAgentBadgeText(toolCall.agentName) }}</span>
-                    <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                    <span class="message-tool-log-name">{{ getToolCallName(toolCall) }}</span>
                   </div>
                   <span class="message-tool-log-desc">{{ toolCall.description }}</span>
                 </div>
@@ -107,7 +107,7 @@
                 <div class="message-tool-log-copy">
                   <div class="message-tool-log-heading">
                     <span v-if="toolCall.agentName" class="message-tool-log-badge">{{ getAgentBadgeText(toolCall.agentName) }}</span>
-                    <span class="message-tool-log-name">{{ toolCall.name || '工具' }}</span>
+                    <span class="message-tool-log-name">{{ getToolCallName(toolCall) }}</span>
                   </div>
                   <span class="message-tool-log-desc">{{ toolCall.description }}</span>
                 </div>
@@ -195,6 +195,7 @@ import {
   buildMessageAgentSummary,
   buildMessageToolSummary,
   getAgentBadgeText,
+  getToolDisplayName,
   resolveToolLogExpanded,
 } from '@/utils/chatMessageTooling'
 import type { AttachmentInfo } from '@/utils/chatStreamRequest'
@@ -406,6 +407,10 @@ function formatToolCallStatus(status: 'running' | 'completed' | 'failed') {
   return '进行中'
 }
 
+function getToolCallName(toolCall: { name?: string; arguments?: string }) {
+  return getToolDisplayName(toolCall.name, toolCall.arguments)
+}
+
 function getSummaryDotClass(msg: ChatMessage) {
   if (msg.status === 'failed') return 'is-failed'
   if (msg.status === 'running') return 'is-running'
@@ -434,7 +439,10 @@ const preprocessMarkdown = (text: string): string => {
 }
 
 const renderMarkdown = (text: string) => {
-  return md.render(preprocessMarkdown(text))
+  return md
+    .render(preprocessMarkdown(text))
+    // 仅恢复被 markdown-it 安全转义的 <br> 标签，其他 HTML 继续保持转义态
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br />')
 }
 
 /** 通过自定义事件打开图片预览（绕过 composable 模块隔离问题） */
@@ -825,6 +833,31 @@ defineExpose({ scrollToBottom, listRef })
 
 .message-text :deep(p) {
   margin: 4px 0;
+}
+
+.message-text :deep(table) {
+  width: 100%;
+  margin: 10px 0;
+  border-collapse: collapse;
+  overflow: hidden;
+  border: 1px solid rgba(220, 207, 196, 0.85);
+  border-radius: 10px;
+  font-size: 13px;
+  background: rgba(255, 252, 249, 0.72);
+}
+
+.message-text :deep(th),
+.message-text :deep(td) {
+  padding: 8px 10px;
+  border: 1px solid rgba(220, 207, 196, 0.85);
+  vertical-align: top;
+  text-align: left;
+  word-break: break-word;
+}
+
+.message-text :deep(th) {
+  background: rgba(245, 236, 228, 0.9);
+  font-weight: 600;
 }
 
 .message-text :deep(blockquote) {

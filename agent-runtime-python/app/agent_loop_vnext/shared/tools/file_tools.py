@@ -13,6 +13,7 @@ from typing import Type
 
 from pydantic import BaseModel, Field
 
+from app.agent_loop_vnext.base.state import AgentRunState
 from app.agent_loop_vnext.shared.tools.base import AgentTool
 from app.agent_loop_vnext.state import SingleImplementState
 from app.tools.file_tools import FileTools
@@ -85,7 +86,7 @@ class ReadTool(AgentTool):
     description: str = "查看文件内容或列出目录结构。读取技能参考文件时使用 skill/{技能ID}/ 路径前缀。"
     args_schema: Type[BaseModel] = ReadInput
     file_tools: FileTools | None = None
-    state: SingleImplementState | None = None
+    state: SingleImplementState | AgentRunState | None = None
 
     async def _arun(self, path: str, view_range: list[int] | None = None) -> str:
         from app.core.error_codes import AgentErrorCode

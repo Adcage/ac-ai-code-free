@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import time
 
+from app.agent_loop_vnext.agents.conductor.agent import ConductorAgent
 from app.capabilities.common.asset_index import create_default_asset_manager
 from app.core.config import settings
 from app.core.error_codes import AgentErrorCode
@@ -257,7 +259,7 @@ class RuntimeOrchestrator:
     async def stream_generate(self, request):
         engine = settings.agent_loop_engine
         if engine == "vnext":
-            async for event in self._run_single_implement_vnext(request, RunMode.GENERATE):
+            async for event in self._run_conductor_vnext(request, RunMode.GENERATE):
                 yield event
         elif engine == "legacy":
             async for event in self._run_agent_loop(request, RunMode.GENERATE):
@@ -435,9 +437,24 @@ class RuntimeOrchestrator:
                 # 根据 runner 状态决定完成还是暂停
                 loop_state_json = ""
                 success = runner.state.status == "completed"
+                ai_status = "success"
+                ai_extra = self._build_ai_extra_from_event_bus(event_bus)
                 if runner.state.status == "waiting_for_user":
                     # 最小非空 JSON 触发 Java pauseAgentRun 逻辑
                     loop_state_json = '{"status":"waiting_for_user"}'
+                    ai_status = "waiting_for_user"
+
+                # [DEBUG] 调试日志：打印 complete_agent_run 的关键参数
+                logger.info(
+                    "[DEBUG] complete_agent_run | agentRunId=%s success=%s ai_status=%s "
+                    "ai_message_len=%d ai_extra_len=%d loop_state_json=%s",
+                    agent_run_id,
+                    success,
+                    ai_status,
+                    len(runner._accumulated_text or ""),
+                    len(ai_extra or ""),
+                    loop_state_json[:80] if loop_state_json else "",
+                )
 
                 await self._platform_client.complete_agent_run(
                     agent_run_id=agent_run_id,
@@ -446,6 +463,9 @@ class RuntimeOrchestrator:
                     latency_ms=latency_ms,
                     error_message="",
                     loop_state_json=loop_state_json,
+                    ai_message=runner._accumulated_text,
+                    ai_status=ai_status,
+                    ai_extra=ai_extra,
                 )
             except AgentRuntimeError as e:
                 logger.error("vNext runner error | agentRunId=%s error=%s", agent_run_id, e)
@@ -460,6 +480,7 @@ class RuntimeOrchestrator:
                         success=False,
                         error_message=str(e),
                         latency_ms=int((time.monotonic() - start_time) * 1000),
+                        ai_status="failed",
                     )
                 except Exception:
                     pass
@@ -479,6 +500,7 @@ class RuntimeOrchestrator:
                         success=False,
                         error_message=str(e),
                         latency_ms=int((time.monotonic() - start_time) * 1000),
+                        ai_status="failed",
                     )
                 except Exception:
                     pass
@@ -492,3 +514,210 @@ class RuntimeOrchestrator:
                 yield proto_event
 
         await workflow_task
+
+    async def _run_conductor_vnext(self, request, run_mode: RunMode):
+        """vNext 多智能体链路：Conductor 调度 planner / implementor / validator。"""
+        agent_run_id = int(request.agent_run_id)
+        event_bus = EventBus(agent_run_id=agent_run_id)
+        services = self._build_services(event_bus)
+        start_time = time.monotonic()
+
+        context = await self._build_context(request, run_mode)
+
+        mapper = self._get_mapper()
+        if hasattr(mapper, "set_is_test"):
+            mapper.set_is_test(context.is_test)
+
+        async def _execute():
+            try:
+                conductor = ConductorAgent()
+                result = await conductor.run(context, services)
+
+                latency_ms = int((time.monotonic() - start_time) * 1000)
+                loop_state_json = ""
+                ai_status = result.status
+                success = result.status == "completed"
+                if result.status == "waiting_for_user":
+                    loop_state_json = json.dumps({"status": "waiting_for_user"}, ensure_ascii=False)
+                    ai_status = "waiting_for_user"
+                elif result.status == "completed":
+                    ai_status = "success"
+                ai_extra = self._build_ai_extra_from_event_bus(event_bus)
+
+                token_usage = result.total_token_usage
+
+                # [DEBUG] 调试日志：打印 complete_agent_run 的关键参数
+                logger.info(
+                    "[DEBUG] complete_agent_run | agentRunId=%s success=%s ai_status=%s "
+                    "ai_message_len=%d ai_extra_len=%d loop_state_json=%s",
+                    agent_run_id,
+                    success,
+                    ai_status,
+                    len(result.message or ""),
+                    len(ai_extra or ""),
+                    loop_state_json[:80] if loop_state_json else "",
+                )
+
+                await self._platform_client.complete_agent_run(
+                    agent_run_id=agent_run_id,
+                    success=success,
+                    workspace_path=context.workspace_path,
+                    latency_ms=latency_ms,
+                    error_message=result.error or "",
+                    loop_state_json=loop_state_json,
+                    total_input_tokens=token_usage.get("input_tokens", 0),
+                    total_output_tokens=token_usage.get("output_tokens", 0),
+                    total_cache_read_tokens=token_usage.get("cache_read_tokens", 0),
+                    total_cache_creation_tokens=token_usage.get("cache_creation_tokens", 0),
+                    ai_message=result.message,
+                    ai_status=ai_status,
+                    ai_extra=ai_extra,
+                )
+            except AgentRuntimeError as e:
+                logger.error("vNext conductor error | agentRunId=%s error=%s", agent_run_id, e)
+                await event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.RUNTIME_ERROR,
+                    {"message": str(e), "code": int(e.code)},
+                ))
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"失败: {e}"}))
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                        ai_status="failed",
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(
+                    "vNext conductor unexpected error | agentRunId=%s error=%s",
+                    agent_run_id, e, exc_info=True,
+                )
+                await event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.RUNTIME_ERROR,
+                    {"message": str(e), "code": AgentErrorCode.INTERNAL_ERROR},
+                ))
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"异常: {e}"}))
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                        ai_status="failed",
+                    )
+                except Exception:
+                    pass
+            finally:
+                await event_bus.close()
+
+        workflow_task = asyncio.create_task(_execute())
+
+        async for seq_event in self._drain_events(event_bus):
+            for proto_event in self._get_mapper().map_event(seq_event):
+                yield proto_event
+
+        await workflow_task
+
+    # 工具名归一化映射：event_bus 中记录的是 Python 类名（PascalCase），
+    # 但 SSE 实时流和前端还原逻辑使用 snake_case（如 ask_user），
+    # 存入 extra 时必须与前端保持一致，否则还原时匹配不上。
+    _TOOL_NAME_NORMALIZE = {
+        "AskUser": "ask_user",
+    }
+
+    def _build_ai_extra_from_event_bus(self, event_bus: EventBus) -> str:
+        tool_calls: list[dict[str, object]] = []
+
+        # 预收集 CLARIFICATION_REQUIRED 事件，用于替换 AskUser 的原始 TOOL_CALL
+        # 原始 TOOL_CALL 的 arguments 缺少 questionSetId / protocolVersion，
+        # 而 CLARIFICATION_REQUIRED 包含完整的提问结构，与 SSE 实时流一致。
+        clarification_by_qsid: dict[str, dict] = {}
+        for sequenced in event_bus.snapshot():
+            event = sequenced.event
+            if event.event_type.value == "clarification_required":
+                qsid = (event.data or {}).get("questionSetId", "")
+                if qsid:
+                    clarification_by_qsid[qsid] = event.data or {}
+
+        for sequenced in event_bus.snapshot():
+            event = sequenced.event
+            if event.event_type.value == "tool_call":
+                raw_name = str(event.data.get("name", ""))
+                normalized_name = self._TOOL_NAME_NORMALIZE.get(raw_name, raw_name)
+
+                # AskUser：用 CLARIFICATION_REQUIRED 的完整数据替代原始参数
+                if raw_name == "AskUser":
+                    # 原始 arguments 是 LLM 传入的 {questions: [...]}，
+                    # 缺少 questionSetId / protocolVersion。
+                    # 从 state.pending_question 或 clarification 事件中补充。
+                    raw_args = event.data.get("arguments", {})
+                    if isinstance(raw_args, str):
+                        try:
+                            import json as _json
+                            raw_args = _json.loads(raw_args)
+                        except (json.JSONDecodeError, TypeError, ValueError):
+                            raw_args = {}
+
+                    # 找到匹配的 CLARIFICATION_REQUIRED 事件
+                    merged_args = dict(raw_args) if isinstance(raw_args, dict) else {}
+                    for _qsid, clar_data in clarification_by_qsid.items():
+                        # 如果 arguments 中有 questions，匹配第一个有相同 questions 的
+                        if "questions" in clar_data:
+                            merged_args = {
+                                "protocolVersion": clar_data.get("protocolVersion", 1),
+                                "questionSetId": clar_data.get("questionSetId", _qsid),
+                                "stage": clar_data.get("stage", ""),
+                                "questions": clar_data.get("questions", []),
+                            }
+                            break
+
+                    tool_calls.append(
+                        {
+                            "type": "request",
+                            "id": str(event.data.get("id", "")),
+                            "name": normalized_name,
+                            "arguments": self._serialize_tool_payload(merged_args),
+                            "agentName": str(event.data.get("agent_name", "")),
+                        }
+                    )
+                else:
+                    tool_calls.append(
+                        {
+                            "type": "request",
+                            "id": str(event.data.get("id", "")),
+                            "name": normalized_name,
+                            "arguments": self._serialize_tool_payload(event.data.get("arguments")),
+                            "agentName": str(event.data.get("agent_name", "")),
+                        }
+                    )
+            elif event.event_type.value == "tool_result":
+                raw_name = str(event.data.get("name", ""))
+                tool_calls.append(
+                    {
+                        "type": "executed",
+                        "id": str(event.data.get("id", "")),
+                        "name": self._TOOL_NAME_NORMALIZE.get(raw_name, raw_name),
+                        "arguments": self._serialize_tool_payload(event.data.get("arguments")),
+                        "result": str(event.data.get("result", "")),
+                        "agentName": str(event.data.get("agent_name", "")),
+                    }
+                )
+
+        if not tool_calls:
+            return ""
+
+        return json.dumps({"toolCalls": tool_calls}, ensure_ascii=False)
+
+    @staticmethod
+    def _serialize_tool_payload(payload) -> str:
+        if payload is None:
+            return ""
+        if isinstance(payload, str):
+            return payload
+        try:
+            return json.dumps(payload, ensure_ascii=False)
+        except TypeError:
+            return str(payload)

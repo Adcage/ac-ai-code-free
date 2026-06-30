@@ -50,6 +50,9 @@ class GrpcPlatformClient:
         total_output_tokens: int = 0,
         total_cache_read_tokens: int = 0,
         total_cache_creation_tokens: int = 0,
+        ai_message: str = "",
+        ai_status: str = "",
+        ai_extra: str = "",
     ) -> bool:
         stub = await self._get_stub()
         request = platform_service_pb2.CompleteAgentRunRequest(
@@ -63,6 +66,9 @@ class GrpcPlatformClient:
             total_output_tokens=total_output_tokens,
             total_cache_read_tokens=total_cache_read_tokens,
             total_cache_creation_tokens=total_cache_creation_tokens,
+            ai_message=ai_message,
+            ai_status=ai_status,
+            ai_extra=ai_extra,
         )
         response = await stub.CompleteAgentRun(request, metadata=get_internal_metadata())
         return response.ok

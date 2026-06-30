@@ -140,6 +140,7 @@ class VNextEventMapper(ProtoEventMapper):
         self, sequenced_event: SequencedRuntimeEvent
     ) -> list[code_generation_pb2.CodeGenerationEvent]:
         data = sequenced_event.event.data
+        agent_name = self._get_agent_name(sequenced_event)
         tool_name = data.get("name", "")
 
         # AskUser 的 TOOL_CALL 由 CLARIFICATION_REQUIRED 路径映射，跳过此处避免重复
@@ -157,6 +158,7 @@ class VNextEventMapper(ProtoEventMapper):
             agent_run_id=str(sequenced_event.agent_run_id),
             seq=sequenced_event.seq,
             event_type=common_pb2.TOOL_REQUEST,
+            agent_name=agent_name,
             tool_request=common_pb2.ToolRequestData(
                 id=data.get("id", ""),
                 name=tool_name,
@@ -179,6 +181,7 @@ class VNextEventMapper(ProtoEventMapper):
                 agent_run_id=str(sequenced_event.agent_run_id),
                 seq=sequenced_event.seq,
                 event_type=common_pb2.STATUS,
+                agent_name=agent_name,
                 status=common_pb2.StatusData(
                     message=description,
                 ),
@@ -190,6 +193,7 @@ class VNextEventMapper(ProtoEventMapper):
         self, sequenced_event: SequencedRuntimeEvent
     ) -> list[code_generation_pb2.CodeGenerationEvent]:
         data = sequenced_event.event.data
+        agent_name = self._get_agent_name(sequenced_event)
         tool_name = data.get("name", "")
 
         if tool_name in _HIDDEN_TOOLS_RESULT:
@@ -202,6 +206,7 @@ class VNextEventMapper(ProtoEventMapper):
             agent_run_id=str(sequenced_event.agent_run_id),
             seq=sequenced_event.seq,
             event_type=common_pb2.TOOL_EXECUTED,
+            agent_name=agent_name,
             tool_executed=common_pb2.ToolExecutedData(
                 id=data.get("id", ""),
                 name=tool_name,

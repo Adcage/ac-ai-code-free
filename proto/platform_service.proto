@@ -66,6 +66,9 @@ message CompleteAgentRunRequest {
   int64 total_output_tokens = 8;
   int64 total_cache_read_tokens = 9;
   int64 total_cache_creation_tokens = 10;
+  string ai_message = 11;   // AI 回复全文（保存到 chat_history 用）
+  string ai_status = 12;    // success / failed / waiting_for_user
+  string ai_extra = 13;     // extra JSON（含 toolCalls 等结构化数据）
 }
 
 message CompleteAgentRunResponse {

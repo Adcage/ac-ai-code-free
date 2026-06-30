@@ -4,6 +4,7 @@
 """
 
 from app.agent_loop_vnext.shared.tools.base import AgentTool
+from app.agent_loop_vnext.base.state import AgentRunState
 from app.agent_loop_vnext.shared.tools.ask_user_tool import AskUserTool
 from app.agent_loop_vnext.shared.tools.bash_tool import BashTool
 from app.agent_loop_vnext.shared.tools.file_tools import (
@@ -23,7 +24,7 @@ from app.tools.file_tools import FileTools
 def create_implementor_tools(
     file_tools: FileTools,
     skill_registry: SkillRegistry | None = None,
-    state: SingleImplementState | None = None,
+    state: SingleImplementState | AgentRunState | None = None,
 ) -> list[AgentTool]:
     """创建 implementor Agent 的工具集。"""
     return [

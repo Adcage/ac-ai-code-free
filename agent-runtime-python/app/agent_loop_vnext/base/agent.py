@@ -116,8 +116,9 @@ class Agent(ABC):
         chat_model_with_tools = chat_model.bind_tools(tools)
 
         # 7. 迭代循环
-        # 积累每次模型调用的 token 用量
+        # 积累每次模型调用的 token 用量 + AI 回复文本
         per_call_tokens: list[dict] = []
+        accumulated_text: str = ""
         try:
             while True:
                 # 流式调用模型：文本边收边发，收集完整响应后提取 tool_calls 与 token_usage
@@ -129,6 +130,10 @@ class Agent(ABC):
                 if token_usage:
                     token_usage["iteration"] = self._state.iteration
                     per_call_tokens.append(token_usage)
+
+                # 累积 AI 回复文本（仅收尾的纯文本）
+                if not tool_calls and text_content:
+                    accumulated_text += text_content
 
                 # 无 tool_calls → 模型纯文本收尾，退出循环
                 if not tool_calls:
@@ -223,6 +228,7 @@ class Agent(ABC):
         return AgentResult(
             status=self._state.status,
             iteration=self._state.iteration,
+            message=accumulated_text,
             state=self._state if self._state.status == "waiting_for_user" else None,
             agent_name=self.name,
             artifacts={"token_usage": per_call_tokens},

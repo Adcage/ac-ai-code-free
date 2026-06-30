@@ -12,6 +12,15 @@ from typing import Any
 
 logger = logging.getLogger("app.agent_loop_vnext.status_strategies")
 
+_AGENT_DISPLAY_NAMES: dict[str, str] = {
+    "conductor": "总控",
+    "implementor": "实现",
+    "planner": "规划",
+    "validator": "校验",
+    "reviewer": "审查",
+    "architect": "架构",
+}
+
 
 # ---------------------------------------------------------------------------
 # 策略接口
@@ -266,6 +275,19 @@ class AskUserStrategy(ToolStatusStrategy):
         return "正在向用户提问"
 
 
+class DelegateStrategy(ToolStatusStrategy):
+    """Conductor 子智能体派遣。"""
+
+    def match(self, tool_name: str) -> bool:
+        return tool_name == "delegate_to_agent"
+
+    def get_description(self, tool_name: str, args: dict[str, Any], is_test: bool = False) -> str:
+        agent_name = args.get("agent_name", "")
+        if isinstance(agent_name, str) and agent_name:
+            return f"正在派遣{_AGENT_DISPLAY_NAMES.get(agent_name, agent_name)}智能体"
+        return "正在派遣子智能体"
+
+
 # ---------------------------------------------------------------------------
 # 注册中心
 # ---------------------------------------------------------------------------
@@ -275,6 +297,7 @@ _registry: list[ToolStatusStrategy] = [
     SearchStrategy(),
     SkillStrategy(),
     AskUserStrategy(),
+    DelegateStrategy(),
     BashStrategy(),
 ]
 

@@ -362,8 +362,13 @@ export function useSSEChat(options: SSEChatOptions) {
     const type = messageObj.type
     if (type === 'ai_response') {
       const data = (messageObj.data as string) || ''
+      const agentName = (messageObj.agentName as string) || ''
       if (data !== 'waiting_for_user') {
         messages.value[aiMsgIndex].content += data
+      }
+      if (agentName && messages.value[aiMsgIndex]) {
+        messages.value[aiMsgIndex].currentAgent = agentName
+        messages.value[aiMsgIndex].agentName = messages.value[aiMsgIndex].agentName || agentName
       }
       return true
     }
@@ -417,6 +422,7 @@ export function useSSEChat(options: SSEChatOptions) {
         existing.type = 'executed'
         existing.result = result
         existing.status = 'completed'
+        existing.agentName = agentName || existing.agentName
       } else {
         targetMessage.toolCalls.push({
           type: 'executed',
@@ -430,6 +436,10 @@ export function useSSEChat(options: SSEChatOptions) {
           agentName,
         })
       }
+      if (agentName) {
+        targetMessage.agentName = agentName
+        targetMessage.currentAgent = agentName
+      }
       // 工具执行完成 → 文件可能已变化，防抖触发预览检查
       if (previewUpdateTimer) clearTimeout(previewUpdateTimer)
       previewUpdateTimer = setTimeout(() => {
@@ -440,10 +450,15 @@ export function useSSEChat(options: SSEChatOptions) {
     }
     if (type === 'status') {
       const statusText = (messageObj.message as string) || ''
+      const agentName = (messageObj.agentName as string) || ''
       if (statusText) {
         const targetMessage = ensureToolState(aiMsgIndex)
         if (targetMessage) {
           targetMessage.toolStatus = statusText
+          if (agentName) {
+            targetMessage.agentName = agentName
+            targetMessage.currentAgent = agentName
+          }
         }
       }
       return true

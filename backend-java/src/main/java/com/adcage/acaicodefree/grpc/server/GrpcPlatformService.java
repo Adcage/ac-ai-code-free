@@ -205,8 +205,72 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
                 );
             }
 
-            // 获取 appId 用于触发封面截图
+            // 获取 AgentRun 实体（含 sessionId、appId、userId）
             AgentRun agentRun = agentRunService.getById(agentRunId);
+
+            // 保存 AI 回复到 chat_history（单路径：由 Python 端在 complete_agent_run 中传入）
+            // waiting_for_user 是暂停而非失败，AI 消息（含 AskUser 提问表单）仍需保存
+            // 注意：AskUser 触发时 ai_message 可能为空（模型只返回了 tool_calls），
+            // 但提问表单数据在 ai_extra.toolCalls 中，仍需落库供前端还原
+            String aiMessage = request.getAiMessage();
+            String aiStatus = StrUtil.blankToDefault(request.getAiStatus(), "success");
+            String aiExtra = normalizeChatHistoryExtra(request.getAiExtra());
+            boolean hasContent = StrUtil.isNotBlank(aiMessage) || StrUtil.isNotBlank(aiExtra);
+            boolean shouldSaveChatHistory = agentRun != null
+                    && hasContent
+                    && (request.getSuccess() || "waiting_for_user".equals(aiStatus));
+            // [DEBUG] 调试日志：打印 completeAgentRun 的关键参数和判断结果
+            log.info("[DEBUG] completeAgentRun | agentRunId={} success={} aiStatus={} "
+                    + "aiMessage_len={} aiExtra_len={} hasContent={} shouldSaveChatHistory={} "
+                    + "loopStateJson_len={}",
+                    agentRunId, request.getSuccess(), aiStatus,
+                    aiMessage == null ? -1 : aiMessage.length(),
+                    aiExtra == null ? -1 : aiExtra.length(),
+                    hasContent, shouldSaveChatHistory,
+                    loopStateJson.length());
+            if (shouldSaveChatHistory) {
+                try {
+                    Long sessionId = agentRun.getSessionId();
+                    appId = agentRun.getAppId();
+                    Long userId = agentRun.getUserId();
+                    int latencyMs = request.getLatencyMs();
+
+                    // 获取 seqNo
+                    com.mybatisflex.core.query.QueryWrapper maxQuery = com.mybatisflex.core.query.QueryWrapper.create()
+                            .eq("sessionId", sessionId)
+                            .select("MAX(seqNo) as seqNo");
+                    ChatHistory maxRecord = chatHistoryMapper.selectOneByQuery(maxQuery);
+                    int seqNo = (maxRecord == null || maxRecord.getSeqNo() == null) ? 1 : maxRecord.getSeqNo() + 1;
+
+                    // 查询应用获取 codeGenType 作为 modelName 字段
+                    String modelName = "";
+                    if (appId != null) {
+                        App app = appService.getById(appId);
+                        if (app != null) {
+                            modelName = StrUtil.blankToDefault(app.getCodeGenType(), "");
+                        }
+                    }
+
+                    ChatHistory chatHistory = ChatHistory.builder()
+                            .sessionId(sessionId)
+                            .seqNo(seqNo)
+                            .message(StrUtil.blankToDefault(aiMessage, ""))
+                            .messageType("ai")
+                            .status(aiStatus)
+                            .appId(appId)
+                            .userId(userId)
+                            .modelName(modelName)
+                            .latencyMs(latencyMs)
+                            .extra(aiExtra)
+                            .build();
+                    chatHistoryMapper.insert(chatHistory);
+                    log.info("[completeAgentRun] Saved AI chat_history, sessionId={}, agentRunId={}, textLen={}",
+                            sessionId, agentRunId, aiMessage.length());
+                } catch (Exception e) {
+                    log.error("[completeAgentRun] Failed to save AI chat_history, agentRunId={}", agentRunId, e);
+                }
+            }
+
             if (agentRun != null) {
                 appId = agentRun.getAppId();
             }
@@ -518,5 +582,19 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             }
         }
         return "";
+    }
+
+    private String normalizeChatHistoryExtra(String extra) {
+        if (StrUtil.isBlank(extra)) {
+            return null;
+        }
+        String trimmed = extra.trim();
+        try {
+            JSONUtil.parse(trimmed);
+            return trimmed;
+        } catch (Exception e) {
+            log.warn("chat_history.extra 不是合法 JSON，已忽略该字段, extra={}", trimmed, e);
+            return null;
+        }
     }
 }
