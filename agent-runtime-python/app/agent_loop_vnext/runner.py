@@ -27,11 +27,14 @@ logger = logging.getLogger("app.agent_loop_vnext.runner")
 class SingleImplementLoopRunner:
     """vNext 单实现链路运行器。"""
 
+    AGENT_NAME = "implementor"
+
     def __init__(self, context: ExecutionContext, services: RuntimeServices) -> None:
         self._context = context
         self._services = services
         self._state = SingleImplementState()
         self._event_bus = services.event_bus
+        self._accumulated_text: str = ""  # 累积 AI 回复文本（供 complete_agent_run 兜底保存）
 
     @property
     def state(self) -> SingleImplementState:
@@ -40,6 +43,11 @@ class SingleImplementLoopRunner:
     async def run(self) -> None:
         """执行 vNext 迭代循环。"""
         from app.tools.file_tools import FileTools, Workspace
+
+        await self._event_bus.emit(RuntimeEvent(
+            RuntimeEventType.AGENT_START,
+            {"agent_name": self.AGENT_NAME},
+        ))
 
         # 1. 创建 Workspace（从 context.workspace_path，Java 传入）
         workspace = Workspace(self._context.workspace_path)
@@ -88,6 +96,10 @@ class SingleImplementLoopRunner:
                 # 流式调用模型：文本边收边发，收集完整响应后提取 tool_calls
                 text_content, tool_calls = await self._stream_model_call(chat_model_with_tools, messages)
 
+                # 累积 AI 回复文本（仅收尾的纯文本，工具调用中间的文本不累积）
+                if not tool_calls and text_content:
+                    self._accumulated_text += text_content
+
                 # 无 tool_calls → 模型纯文本收尾，退出循环
                 if not tool_calls:
                     logger.info("model finished without tool_calls | iteration=%d", self._state.iteration)
@@ -116,12 +128,12 @@ class SingleImplementLoopRunner:
             if self._state.status == "waiting_for_user":
                 await self._event_bus.emit(RuntimeEvent(
                     RuntimeEventType.DONE,
-                    {"message": "waiting_for_user"},
+                    {"message": "waiting_for_user", "agent_name": self.AGENT_NAME},
                 ))
             else:
                 await self._event_bus.emit(RuntimeEvent(
                     RuntimeEventType.DONE,
-                    {"message": "对话完成"},
+                    {"message": "对话完成", "agent_name": self.AGENT_NAME},
                 ))
 
         except AgentRuntimeError as e:
@@ -129,20 +141,26 @@ class SingleImplementLoopRunner:
             self._state.status = "failed"
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.RUNTIME_ERROR,
-                {"message": str(e), "code": int(e.code)},
+                {"message": str(e), "code": int(e.code), "agent_name": self.AGENT_NAME},
             ))
             await self._event_bus.emit(RuntimeEvent(
-                RuntimeEventType.DONE, {"message": f"失败: {e}"},
+                RuntimeEventType.DONE,
+                {"message": f"失败: {e}", "agent_name": self.AGENT_NAME},
             ))
         except Exception as e:
             logger.error("vNext runner unexpected error: %s", e, exc_info=True)
             self._state.status = "failed"
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.RUNTIME_ERROR,
-                {"message": str(e), "code": int(AgentErrorCode.INTERNAL_ERROR)},
+                {
+                    "message": str(e),
+                    "code": int(AgentErrorCode.INTERNAL_ERROR),
+                    "agent_name": self.AGENT_NAME,
+                },
             ))
             await self._event_bus.emit(RuntimeEvent(
-                RuntimeEventType.DONE, {"message": f"异常: {e}"},
+                RuntimeEventType.DONE,
+                {"message": f"异常: {e}", "agent_name": self.AGENT_NAME},
             ))
 
     async def _stream_model_call(self, chat_model_with_tools, messages: list) -> tuple[str, list[dict]]:
@@ -162,7 +180,7 @@ class SingleImplementLoopRunner:
                 logger.debug("TEXT_DELTA chunk | length=%d", len(text))
                 await self._event_bus.emit(RuntimeEvent(
                     RuntimeEventType.TEXT_DELTA,
-                    {"text": text},
+                    {"text": text, "agent_name": self.AGENT_NAME},
                 ))
 
         if not collected_chunks:
@@ -201,7 +219,12 @@ class SingleImplementLoopRunner:
             # 发射 TOOL_CALL 事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.TOOL_CALL,
-                {"id": tool_id, "name": tool_name, "arguments": tool_args},
+                {
+                    "id": tool_id,
+                    "name": tool_name,
+                    "arguments": tool_args,
+                    "agent_name": self.AGENT_NAME,
+                },
             ))
 
             # 查找匹配的工具并执行
@@ -243,7 +266,12 @@ class SingleImplementLoopRunner:
             # 发射 TOOL_RESULT 事件
             await self._event_bus.emit(RuntimeEvent(
                 RuntimeEventType.TOOL_RESULT,
-                {"id": tool_id, "name": tool_name, "result": result},
+                {
+                    "id": tool_id,
+                    "name": tool_name,
+                    "result": result,
+                    "agent_name": self.AGENT_NAME,
+                },
             ))
 
             # 追加 ToolMessage 到消息列表（让模型看到工具结果）

@@ -4,8 +4,9 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from app.agent_loop_vnext.base.state import AgentRunState, LoadedSkill
 from app.agent_loop_vnext.shared.tools.base import AgentTool
-from app.agent_loop_vnext.state import LoadedSkill, SingleImplementState
+from app.agent_loop_vnext.state import SingleImplementState
 from app.capabilities.skills.registry import SkillRegistry
 
 logger = logging.getLogger("app.agent_loop_vnext.shared.tools.skill_tools")
@@ -20,7 +21,7 @@ class LoadSkillTool(AgentTool):
     description: str = "加载指定技能的规则和参考文件列表。加载后可通过 Read 工具使用 skill/{skill_id}/ 路径前缀读取参考文件。"
     args_schema: type = LoadSkillInput
     skill_registry: SkillRegistry | None = None
-    state: SingleImplementState | None = None
+    state: SingleImplementState | AgentRunState | None = None
 
     async def _arun(self, skill_id: str) -> str:
         from app.core.error_codes import AgentErrorCode

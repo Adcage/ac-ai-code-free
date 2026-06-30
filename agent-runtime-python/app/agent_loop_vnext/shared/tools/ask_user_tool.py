@@ -16,7 +16,6 @@ from typing import Any, Type
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent_loop_vnext.shared.tools.base import AgentTool
-from app.agent_loop_vnext.state import SingleImplementState
 
 logger = logging.getLogger("app.agent_loop_vnext.shared.tools.ask_user_tool")
 
@@ -44,7 +43,7 @@ class AskUserTool(AgentTool):
     )
     args_schema: Type[BaseModel] = AskUserInput
 
-    state: SingleImplementState | None = None
+    state: Any | None = None
     event_bus: Any | None = None
 
     async def _arun(self, questions: list[dict] | None = None) -> str:
@@ -52,7 +51,7 @@ class AskUserTool(AgentTool):
             return "错误：questions 不能为空；至少要包含一个结构化问题"
 
         if self.state is None:
-            return "错误：未绑定 SingleImplementState"
+            return "错误：未绑定运行状态"
 
         # 1. 归一化 inputType
         for q in questions:
