@@ -16,13 +16,13 @@ Phase 0 Task 0-3: RuntimeOrchestrator vNext 分流目标测试
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.runtime.orchestrator import RuntimeOrchestrator
 
 # ---------------------------------------------------------------------------
 # 导入未来 vNext 模块和配置 — Phase 0 阶段这些导入可能失败
 # ---------------------------------------------------------------------------
 
 try:
-    from app.agent_loop_vnext.runner import SingleImplementLoopRunner
     from app.core.config import Settings
 
     _VNEXT_MODULES_AVAILABLE = True
@@ -44,9 +44,6 @@ try:
 except ImportError:
     AgentRuntimeError = None
     AgentErrorCode = None
-
-from app.runtime.orchestrator import RuntimeOrchestrator
-from app.runtime.context import RunMode
 
 
 # ---------------------------------------------------------------------------
@@ -80,15 +77,15 @@ def _make_request(**overrides) -> MagicMock:
     reason="vNext 模块或 agent_loop_engine 配置尚未实现 (Phase 3)",
 )
 class TestStreamGenerateDefaultsToVNext:
-    """验证 stream_generate() 默认调用 vNext runner。"""
+    """验证 stream_generate() 默认调用 vNext Conductor 链路。"""
 
     @pytest.mark.asyncio
     async def test_stream_generate_defaults_to_vnext(self):
         """
         默认配置 (agent_loop_engine="vnext") 下，
-        stream_generate() 应调用 vNext runner 而非旧 _run_agent_loop。
+        stream_generate() 应调用 vNext Conductor 链路而非旧 _run_agent_loop。
 
-        防止：默认仍走旧链路，vNext 替换未生效。
+        防止：默认仍走单 implementor 或旧链路，Conductor 多智能体入口未生效。
         """
         orchestrator = RuntimeOrchestrator()
         request = _make_request()
@@ -102,22 +99,22 @@ class TestStreamGenerateDefaultsToVNext:
             ) as mock_legacy,
             patch.object(
                 orchestrator,
-                "_run_single_implement_vnext",
-            ) as mock_vnext,
+                "_run_conductor_vnext",
+            ) as mock_vnext_conductor,
             patch(
                 "app.runtime.orchestrator.settings",
                 agent_loop_engine="vnext",
             ),
         ):
-            mock_vnext.side_effect = _async_empty_gen
+            mock_vnext_conductor.side_effect = _async_empty_gen
 
             # 消费生成器
             events = []
             async for event in orchestrator.stream_generate(request):
                 events.append(event)
 
-            # 断言：调用了 vNext runner
-            mock_vnext.assert_called_once()
+            # 断言：调用了 vNext Conductor 链路
+            mock_vnext_conductor.assert_called_once()
             # 断言：未调用旧链路
             mock_legacy.assert_not_called()
 
@@ -150,7 +147,7 @@ class TestStreamGenerateCanUseLegacyWhenConfigured:
             ) as mock_legacy,
             patch.object(
                 orchestrator,
-                "_run_single_implement_vnext",
+                "_run_conductor_vnext",
                 new_callable=AsyncMock,
             ) as mock_vnext,
             patch(

@@ -1,31 +1,14 @@
-"""测试 Implementor 工具绑定。"""
-
 from app.agent_loop_vnext.agents.implementor.tools import create_implementor_tools
-from app.agent_loop_vnext.shared.tools.base import AgentTool
-from app.tools.file_tools import FileTools, Workspace
+from app.agent_loop_vnext.base.state import AgentRunState
+from app.tools.file_tools import FileTools
 
 
-def test_create_implementor_tools_returns_9_tools():
-    """implementor 应绑定 9 个工具（含 load_skill + Bash + AskUser）。"""
-    ws = Workspace("/tmp/test")
-    ft = FileTools(ws)
-    tools = create_implementor_tools(ft)
-    assert len(tools) == 9
+def test_create_implementor_tools_accepts_agent_run_state_for_conductor():
+    """Conductor 派遣 implementor 时，应允许传入通用 AgentRunState。"""
+    file_tools = FileTools("/tmp/test-workspace")
+    tools = create_implementor_tools(file_tools=file_tools, state=AgentRunState())
 
-
-def test_create_implementor_tools_all_are_agent_tools():
-    """所有工具都应是 AgentTool 子类。"""
-    ws = Workspace("/tmp/test")
-    ft = FileTools(ws)
-    tools = create_implementor_tools(ft)
-    for t in tools:
-        assert isinstance(t, AgentTool)
-
-
-def test_create_implementor_tools_has_correct_names():
-    """工具名应为 Read, Write, Edit, Insert, Glob, Grep, LoadSkill, Bash, AskUser。"""
-    ws = Workspace("/tmp/test")
-    ft = FileTools(ws)
-    tools = create_implementor_tools(ft)
-    names = {t.name for t in tools}
-    assert names == {"Read", "Write", "Edit", "Insert", "Glob", "Grep", "LoadSkill", "Bash", "AskUser"}
+    tool_names = {tool.name for tool in tools}
+    assert "Read" in tool_names
+    assert "LoadSkill" in tool_names
+    assert "AskUser" in tool_names

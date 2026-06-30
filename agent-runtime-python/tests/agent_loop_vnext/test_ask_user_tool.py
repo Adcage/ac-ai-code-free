@@ -2,7 +2,8 @@
 
 import pytest
 
-from app.agent_loop_vnext.shared.tools.ask_user_tool import AskUserTool, AskUserInput
+from app.agent_loop_vnext.shared.tools.ask_user_tool import AskUserTool
+from app.agent_loop_vnext.base.state import AgentRunState
 from app.agent_loop_vnext.state import SingleImplementState
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 
@@ -37,7 +38,7 @@ class TestAskUserInputTypeNormalization:
         state = SingleImplementState()
         bus = _StubEventBus()
         tool = AskUserTool(state=state, event_bus=bus)
-        result = await tool._arun(questions=[
+        await tool._arun(questions=[
             {"id": "q1", "prompt": "功能？", "inputType": "multi",
              "options": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]}
         ])
@@ -129,6 +130,18 @@ class TestAskUserEventEmission:
              "options": [{"id": "dark", "label": "深色"}, {"id": "light", "label": "浅色"}]}
         ])
         assert state.pending_question["questions"][0]["inputType"] == "single_select"
+
+    @pytest.mark.asyncio
+    async def test_accepts_base_agent_run_state_for_conductor(self):
+        state = AgentRunState()
+        bus = _StubEventBus()
+        tool = AskUserTool(state=state, event_bus=bus)
+        await tool._arun(questions=[
+            {"id": "q1", "prompt": "配色？", "inputType": "single_select",
+             "options": [{"id": "dark", "label": "深色"}, {"id": "light", "label": "浅色"}]}
+        ])
+        assert state.status == "waiting_for_user"
+        assert state.pending_question is not None
 
 
 class TestAskUserOptionNormalization:

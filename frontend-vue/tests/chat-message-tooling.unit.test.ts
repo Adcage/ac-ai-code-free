@@ -5,7 +5,9 @@ import { readFileSync } from 'node:fs'
 import {
   buildMessageAgentSummary,
   buildMessageToolSummary,
+  formatToolCallDescription,
   getAgentBadgeText,
+  getToolDisplayName,
   parseToolCallsFromHistory,
   resolveToolLogExpanded,
 } from '../src/utils/chatMessageTooling.ts'
@@ -125,6 +127,18 @@ test('buildMessageAgentSummary/getAgentBadgeText: 顶部使用完整身份，明
 
   assert.equal(getAgentBadgeText('implementor'), '执')
   assert.equal(getAgentBadgeText('planner'), '规')
+  assert.equal(getAgentBadgeText('conductor'), '总')
+  assert.equal(buildMessageAgentSummary([], 'conductor'), '总控智能体')
+})
+
+test('delegate_to_agent: 应显示派遣目标而不是原始工具名', () => {
+  const args = JSON.stringify({ agent_name: 'implementor', task: '实现登录页' })
+
+  assert.equal(getToolDisplayName('delegate_to_agent', args), '派遣子智能体：实现智能体')
+  assert.equal(
+    formatToolCallDescription('delegate_to_agent', args, 'request'),
+    '正在派遣实现智能体',
+  )
 })
 
 test('resolveToolLogExpanded: 运行中默认展开，但用户显式收起后不应自动反弹', () => {
@@ -149,10 +163,31 @@ test('ChatMessageList: 工具详情应使用浮层定位而不是继续参与消
   assert.match(source, /document\.addEventListener\('click',\s*handleDocumentClick\)/, '应支持点击外部关闭浮层')
 })
 
+test('ChatMessageList: Markdown 中的 <br> 应恢复为安全换行，表格应有专门样式', () => {
+  const source = readFileSync(new URL('../src/components/ChatMessageList.vue', import.meta.url), 'utf8')
+
+  assert.match(
+    source,
+    /replace\(\/&lt;br\\s\*\\\/\?&gt;\/gi,\s*'<br\s*\/>'\)/,
+    '应显式处理 markdown 渲染后被转义的 <br> 标签',
+  )
+  assert.match(source, /:deep\(table\)/, '消息中的 markdown 表格应提供专门样式')
+  assert.match(source, /:deep\(th\)/, '表头单元格应提供样式')
+  assert.match(source, /:deep\(td\)/, '表格单元格应提供样式')
+})
+
 test('ChatMessageList: 智能体标签应与工具名同排显示，避免单独占一行', () => {
   const source = readFileSync(new URL('../src/components/ChatMessageList.vue', import.meta.url), 'utf8')
 
   assert.match(source, /message-tool-log-heading/, '工具明细应提供标题行容器，把智能体标签与工具名放在同一行')
   assert.match(source, /message-tool-summary-agent/, '顶部摘要应提供智能体身份文案容器')
   assert.match(source, /message-tool-log-badge/, '明细中应使用弱化单字徽标，而不是完整智能体标签')
+})
+
+test('useSSEChat: tool_executed 和 status 事件也应回填当前智能体身份', () => {
+  const source = readFileSync(new URL('../src/composables/useSSEChat.ts', import.meta.url), 'utf8')
+
+  assert.match(source, /existing\.agentName\s*=\s*agentName\s*\|\|\s*existing\.agentName/, '已存在工具记录在 tool_executed 时也应补写 agentName')
+  assert.match(source, /targetMessage\.agentName\s*=\s*agentName/, 'tool_executed 或 status 应把消息级 agentName 回填到当前消息')
+  assert.match(source, /targetMessage\.currentAgent\s*=\s*agentName/, 'status 或 agent_start 事件应维护当前智能体身份')
 })

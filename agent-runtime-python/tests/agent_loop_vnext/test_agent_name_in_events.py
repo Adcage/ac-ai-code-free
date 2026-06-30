@@ -1,12 +1,9 @@
 """agent_name 在事件链路中正确传递的单元测试。"""
 
-import pytest
-
 from app.runtime.events import RuntimeEvent, RuntimeEventType
-from app.runtime.event_bus import EventBus, SequencedRuntimeEvent
+from app.runtime.event_bus import SequencedRuntimeEvent
 from app.agent_loop_vnext.event_mapper import VNextEventMapper
-from app.grpc import common_pb2, code_generation_pb2
-from app.runtime.event_mapper import ProtoEventMapper
+from app.grpc import common_pb2
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +33,27 @@ def test_tool_call_event_mapper_passes_agent_name():
     # 两个事件都应该有 agent_name
     for ev in events:
         assert ev.agent_name == "implementor"
+
+
+def test_delegate_tool_call_emits_status_with_target_agent_label():
+    """delegate_to_agent 应产生可读状态，而不是只显示原始工具名。"""
+    mapper = VNextEventMapper(is_test=True)
+    seq_event = _make_seq_event(
+        RuntimeEventType.TOOL_CALL,
+        {
+            "id": "tc-delegate-1",
+            "name": "delegate_to_agent",
+            "arguments": {"agent_name": "implementor", "task": "实现登录页"},
+            "agent_name": "conductor",
+        },
+    )
+    events = mapper.map_event(seq_event)
+    assert len(events) == 2
+    assert events[0].agent_name == "conductor"
+    assert events[0].event_type == common_pb2.TOOL_REQUEST
+    assert events[1].agent_name == "conductor"
+    assert events[1].event_type == common_pb2.STATUS
+    assert events[1].status.message == "正在派遣实现智能体"
 
 
 def test_tool_result_event_mapper_passes_agent_name():
