@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cn.hutool.core.util.StrUtil;
+import com.adcage.acaicodefree.config.properties.RuntimeModelProperties;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
@@ -17,6 +18,7 @@ import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelRole;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelUrlNormalizer;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.AppVersionService;
@@ -43,6 +45,9 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     private String defaultModelName;
 
     @Resource
+    private RuntimeModelProperties runtimeModelProperties;
+
+    @Resource
     private AgentRunService agentRunService;
     @Resource
     private AppVersionService appVersionService;
@@ -61,11 +66,12 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
                                           StreamObserver<ResolveRuntimeModelBundleResponse> responseObserver) {
         try {
-            if (StrUtil.isBlank(defaultBaseUrl) || StrUtil.isBlank(defaultApiKey) || StrUtil.isBlank(defaultModelName)) {
-                log.warn("系统默认模型配置不完整，无法解析模型包");
+            RuntimeModelConfig primaryConfig = resolvePrimaryRuntimeModelConfig();
+            if (primaryConfig == null) {
+                log.warn("系统运行时模型配置不完整，无法解析模型包");
                 responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
                         .setSuccess(false)
-                        .setErrorMessage("系统模型配置未设置，请在 application.yml 中配置 langchain4j.open-ai.chat-model")
+                        .setErrorMessage("系统模型配置未设置，请在 application-local.yml 或 application.yml 中配置 app.ai.runtime-models.primary 或 langchain4j.open-ai.chat-model")
                         .build());
                 responseObserver.onCompleted();
                 return;
@@ -73,17 +79,10 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
 
             List<RuntimeModelConfig> configs = new ArrayList<>();
             for (RuntimeModelRole role : RuntimeModelRole.values()) {
-                configs.add(RuntimeModelConfig.builder()
-                        .role(role.getValue())
-                        .modelConfigId(0L)
-                        .configVersion(0)
-                        .provider("openai")
-                        .modelName(defaultModelName)
-                        .baseUrl(defaultBaseUrl)
-                        .apiKey(defaultApiKey)
-                        .source("SYSTEM")
-                        .billingMode("SYSTEM_FREE_FALLBACK")
-                        .build());
+                RuntimeModelConfig resolved = resolveRuntimeModelConfig(role, primaryConfig);
+                if (resolved != null) {
+                    configs.add(resolved);
+                }
             }
 
             RuntimeModelBundle bundle = RuntimeModelBundle.builder()
@@ -422,5 +421,102 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             case MULTI_FILE -> CodeGenType.MULTI_FILE;
             case VUE_PROJECT -> CodeGenType.VUE_PROJECT;
         };
+    }
+
+    private RuntimeModelConfig resolvePrimaryRuntimeModelConfig() {
+        RuntimeModelProperties.ModelConfig primary = runtimeModelProperties.getPrimary();
+        String resolvedBaseUrl = pickBaseUrl(primary.getBaseUrl(), defaultBaseUrl, RuntimeModelRole.PRIMARY);
+        return buildRuntimeModelConfig(
+                RuntimeModelRole.PRIMARY,
+                firstNonBlank(primary.getProvider(), "openai"),
+                resolvedBaseUrl,
+                firstNonBlank(primary.getApiKey(), defaultApiKey),
+                firstNonBlank(primary.getModelName(), defaultModelName),
+                hasConfiguredValue(primary) ? "APP_AI_RUNTIME_MODELS" : "LANGCHAIN4J_DEFAULT",
+                "SYSTEM_FREE_FALLBACK"
+        );
+    }
+
+    private RuntimeModelConfig resolveRuntimeModelConfig(RuntimeModelRole role, RuntimeModelConfig primaryConfig) {
+        return switch (role) {
+            case LIGHT -> resolveRoleWithFallback(role, runtimeModelProperties.getLight(), primaryConfig);
+            case PRIMARY -> primaryConfig;
+            case CRITIC -> resolveRoleWithFallback(role, runtimeModelProperties.getCritic(), primaryConfig);
+            case REPAIR -> resolveRoleWithFallback(role, runtimeModelProperties.getRepair(), primaryConfig);
+        };
+    }
+
+    private RuntimeModelConfig resolveRoleWithFallback(RuntimeModelRole role,
+                                                       RuntimeModelProperties.ModelConfig roleConfig,
+                                                       RuntimeModelConfig fallbackConfig) {
+        if (fallbackConfig == null) {
+            return null;
+        }
+        String resolvedBaseUrl = pickBaseUrl(roleConfig.getBaseUrl(), fallbackConfig.getBaseUrl(), role);
+        return buildRuntimeModelConfig(
+                role,
+                firstNonBlank(roleConfig.getProvider(), fallbackConfig.getProvider(), "openai"),
+                resolvedBaseUrl,
+                firstNonBlank(roleConfig.getApiKey(), fallbackConfig.getApiKey()),
+                firstNonBlank(roleConfig.getModelName(), fallbackConfig.getModelName()),
+                hasConfiguredValue(roleConfig) ? "APP_AI_RUNTIME_MODELS" : fallbackConfig.getSource(),
+                fallbackConfig.getBillingMode()
+        );
+    }
+
+    private RuntimeModelConfig buildRuntimeModelConfig(RuntimeModelRole role,
+                                                       String provider,
+                                                       String baseUrl,
+                                                       String apiKey,
+                                                       String modelName,
+                                                       String source,
+                                                       String billingMode) {
+        if (StrUtil.hasBlank(baseUrl, apiKey, modelName)) {
+            return null;
+        }
+        if (!RuntimeModelUrlNormalizer.isSupportedHttpUrl(baseUrl)) {
+            log.warn("运行时模型 baseUrl 非法，已跳过该角色配置, role={}, baseUrl={}", role.getValue(), baseUrl);
+            return null;
+        }
+        String normalizedBaseUrl = RuntimeModelUrlNormalizer.normalize(baseUrl);
+        return RuntimeModelConfig.builder()
+                .role(role.getValue())
+                .modelConfigId(0L)
+                .configVersion(0)
+                .provider(StrUtil.blankToDefault(provider, "openai"))
+                .modelName(modelName)
+                .baseUrl(normalizedBaseUrl)
+                .apiKey(apiKey)
+                .source(StrUtil.blankToDefault(source, "SYSTEM"))
+                .billingMode(StrUtil.blankToDefault(billingMode, "SYSTEM_FREE_FALLBACK"))
+                .build();
+    }
+
+    private boolean hasConfiguredValue(RuntimeModelProperties.ModelConfig modelConfig) {
+        return modelConfig != null && StrUtil.isNotBlank(
+                firstNonBlank(modelConfig.getProvider(), modelConfig.getBaseUrl(), modelConfig.getApiKey(), modelConfig.getModelName())
+        );
+    }
+
+    private String pickBaseUrl(String preferredBaseUrl, String fallbackBaseUrl, RuntimeModelRole role) {
+        if (StrUtil.isNotBlank(preferredBaseUrl)) {
+            if (RuntimeModelUrlNormalizer.isSupportedHttpUrl(preferredBaseUrl)) {
+                return preferredBaseUrl;
+            }
+            log.warn("运行时模型 baseUrl 非法，已回退到备用配置, role={}, baseUrl={}", role.getValue(), preferredBaseUrl);
+        }
+        return fallbackBaseUrl;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 }
