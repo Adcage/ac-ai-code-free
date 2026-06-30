@@ -74,7 +74,11 @@
 
     <div class="planning-actions">
       <template v-if="isReadonly">
-        <span class="readonly-hint">此追问已回答，继续对话即可</span>
+        <div class="readonly-nav">
+          <a-button size="small" :disabled="currentStep <= 0" @click="goPrevReadonly">上一题</a-button>
+          <span class="readonly-step">{{ currentStep + 1 }} / {{ questions.length }}</span>
+          <a-button size="small" :disabled="currentStep >= questions.length - 1" @click="goNextReadonly">下一题</a-button>
+        </div>
       </template>
       <template v-else>
         <a-button @click="handleSkip">
@@ -146,6 +150,21 @@ const isReadonly = computed(() => {
   return props.readonlyAnswers !== null && props.readonlyAnswers !== undefined && Object.keys(props.readonlyAnswers).length > 0
 })
 
+const currentQuestion = computed(() => props.questions[currentStep.value])
+
+const currentAnswer = computed({
+  get: () => {
+    if (currentQuestion.value.inputType === 'multi_select') return multiSelected.value.join(',')
+    if (showCustomInput.value && customAnswer.value) return customAnswer.value
+    return singleAnswers.value[currentQuestion.value.id] || ''
+  },
+  set: (val: string) => {
+    if (currentQuestion.value.inputType === 'single_select') {
+      singleAnswers.value[currentQuestion.value.id] = val
+    }
+  },
+})
+
 watch(
   () => props.readonlyAnswers,
   (answers) => {
@@ -156,8 +175,6 @@ watch(
   },
   { immediate: true },
 )
-
-const currentQuestion = computed(() => props.questions[currentStep.value])
 
 function optionKey(opt: PlanningOption): string {
   return opt.id || opt.value || opt.label
@@ -178,19 +195,6 @@ function isSelectedMulti(opt: PlanningOption): boolean {
 function selectOption(opt: PlanningOption): void {
   currentAnswer.value = getOptionId(opt)
 }
-
-const currentAnswer = computed({
-  get: () => {
-    if (currentQuestion.value.inputType === 'multi_select') return multiSelected.value.join(',')
-    if (showCustomInput.value && customAnswer.value) return customAnswer.value
-    return singleAnswers.value[currentQuestion.value.id] || ''
-  },
-  set: (val: string) => {
-    if (currentQuestion.value.inputType === 'single_select') {
-      singleAnswers.value[currentQuestion.value.id] = val
-    }
-  },
-})
 
 const hasCurrentAnswer = computed(() => {
   if (!currentQuestion.value.required) return true
@@ -276,6 +280,22 @@ function handleSubmit() {
 function handleSkip() {
   saveCurrentAnswer()
   emit('skip')
+}
+
+function goNextReadonly() {
+  if (currentStep.value < props.questions.length - 1) {
+    showQuestions.value = false
+    currentStep.value++
+    setTimeout(() => { showQuestions.value = true }, 50)
+  }
+}
+
+function goPrevReadonly() {
+  if (currentStep.value > 0) {
+    showQuestions.value = false
+    currentStep.value--
+    setTimeout(() => { showQuestions.value = true }, 50)
+  }
 }
 </script>
 
@@ -465,6 +485,21 @@ function handleSkip() {
   font-size: 13px;
   color: var(--color-text-muted);
   width: 100%;
+  text-align: center;
+}
+
+.readonly-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.readonly-step {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  min-width: 48px;
   text-align: center;
 }
 

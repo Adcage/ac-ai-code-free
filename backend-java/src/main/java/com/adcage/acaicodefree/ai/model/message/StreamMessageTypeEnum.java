@@ -4,7 +4,8 @@ public enum StreamMessageTypeEnum {
     AI_RESPONSE("ai_response"),
     TOOL_REQUEST("tool_request"),
     TOOL_EXECUTED("tool_executed"),
-    STATUS("status");
+    STATUS("status"),
+    AGENT_START("agent_start");
 
     private final String value;
 

@@ -19,8 +19,6 @@ class TestRuntimeOrchestrator:
             code_gen_type=3,
             workspace_path="C:/tmp/workspace",
             original_content="",
-            model_config_id=1,
-            config_version=1,
             is_test=False,
         )
         history = [
@@ -57,8 +55,6 @@ class TestRuntimeOrchestrator:
         mock_request.prompt = "生成一个简单的 HTML 页面"
         mock_request.code_gen_type = 1
         mock_request.workspace_path = "/tmp/test_workspace"
-        mock_request.model_config_id = 0
-        mock_request.config_version = 0
 
         with (
             patch.object(

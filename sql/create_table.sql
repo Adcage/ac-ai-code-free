@@ -31,25 +31,40 @@ CREATE TABLE IF NOT EXISTS user
 -- 应用表
 CREATE TABLE app
 (
-    id           BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
-    appName      VARCHAR(256)                       NULL COMMENT '应用名称',
-    cover        VARCHAR(512)                       NULL COMMENT '应用封面',
-    initPrompt   TEXT                               NULL COMMENT '应用初始化的 prompt',
-    codeGenType   VARCHAR(64)                        NULL COMMENT '代码生成类型（枚举）',
-    styleTemplate VARCHAR(64)                        NULL COMMENT '风格模板',
-    deployKey     VARCHAR(64)                        NULL COMMENT '部署标识',
-    deployedTime DATETIME                           NULL COMMENT '部署时间',
+    id             BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appName        VARCHAR(256)                       NULL COMMENT '应用名称',
+    cover          VARCHAR(512)                       NULL COMMENT '应用封面',
+    initPrompt     TEXT                               NULL COMMENT '应用初始化的 prompt',
+    codeGenType    VARCHAR(64)                        NULL COMMENT '代码生成类型（枚举）',
+    styleTemplate  VARCHAR(64)                        NULL COMMENT '风格模板',
+    deployKey      VARCHAR(64)                        NULL COMMENT '部署标识',
+    deployedTime   DATETIME                           NULL COMMENT '部署时间',
     -- 99为精选应用，用于主页展示高质量的应用，使用整型而不是用枚举利于拓展
-    priority     INT      DEFAULT 0                 NOT NULL COMMENT '优先级',
-    userId       BIGINT                             NOT NULL COMMENT '创建用户id',
-    editTime     DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '编辑时间',
-    createTime   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
-    updateTime   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    isDelete     TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否删除',
+    priority       INT      DEFAULT 0                 NOT NULL COMMENT '优先级',
+    userId         BIGINT                             NOT NULL COMMENT '创建用户id',
+    editTime       DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '编辑时间',
+    createTime     DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime     DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete       TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否删除',
+    isTestApp      TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否测试应用',
+    generationMode VARCHAR(64)                        NULL COMMENT '生成模式',
+    isPublic       TINYINT  DEFAULT 0                 NOT NULL COMMENT '是否公开（探索广场）',
+    forkCount      INT      DEFAULT 0                 NOT NULL COMMENT 'Fork 数',
+    sourceAppId    BIGINT                             NULL COMMENT 'Fork 来源应用 ID',
     UNIQUE KEY uk_deployKey (deployKey), -- 确保部署标识唯一
     INDEX idx_appName (appName),         -- 提升基于应用名称的查询性能
     INDEX idx_userId (userId)            -- 提升基于用户 ID 的查询性能
 ) COMMENT '应用' COLLATE = utf8mb4_unicode_ci;
+
+-- 应用分类关联表
+CREATE TABLE IF NOT EXISTS app_category
+(
+    id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    appId    BIGINT       NOT NULL,
+    category VARCHAR(32)  NOT NULL,
+    INDEX idx_appId (appId),
+    INDEX idx_category (category)
+) COMMENT '应用分类关联' COLLATE = utf8mb4_unicode_ci;
 
 -- 对话会话表
 CREATE TABLE IF NOT EXISTS chat_session
@@ -80,8 +95,6 @@ CREATE TABLE IF NOT EXISTS chat_history
     appId        BIGINT                               NOT NULL COMMENT '应用id',
     userId       BIGINT                               NOT NULL COMMENT '创建用户id',
     modelName    VARCHAR(128)                         NULL COMMENT '模型名称',
-    inputTokens  INT        DEFAULT 0                 NOT NULL COMMENT '输入 token 数',
-    outputTokens INT        DEFAULT 0                 NOT NULL COMMENT '输出 token 数',
     latencyMs    INT                                  NULL COMMENT '响应耗时（毫秒）',
     requestId    VARCHAR(64)                          NULL COMMENT '请求追踪id',
     extra        JSON                                 NULL COMMENT '扩展字段（错误信息、工具调用等）',
@@ -94,47 +107,31 @@ CREATE TABLE IF NOT EXISTS chat_history
     INDEX idx_appId_createTime (appId, createTime)
 ) COMMENT '对话历史' COLLATE = utf8mb4_unicode_ci;
 
--- 模型配置表
-CREATE TABLE IF NOT EXISTS model_config
-(
-    id            BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
-    userId        BIGINT       NOT NULL COMMENT '用户id',
-    provider      VARCHAR(64)  NOT NULL COMMENT '模型提供商',
-    modelName     VARCHAR(128) NOT NULL COMMENT '模型名称',
-    baseUrl       VARCHAR(512) NOT NULL COMMENT 'API 基础地址',
-    apiKeyCipher  TEXT         NOT NULL COMMENT 'API 密钥（加密存储）',
-    temperature   DOUBLE       DEFAULT 0.7 COMMENT '温度参数',
-    maxTokens     INT          DEFAULT 8192 COMMENT '最大 token 数',
-    configVersion INT          DEFAULT 1     NOT NULL COMMENT '配置版本号',
-    enabled       TINYINT      DEFAULT 1     NOT NULL COMMENT '是否启用',
-    isDefault     TINYINT      DEFAULT 0     NOT NULL COMMENT '是否为默认配置',
-    createTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
-    updateTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    isDelete      TINYINT      DEFAULT 0     NOT NULL COMMENT '是否删除',
-    INDEX idx_user_default (userId, isDefault),
-    INDEX idx_user_enabled (userId, enabled)
-) COMMENT '模型配置' COLLATE = utf8mb4_unicode_ci;
-
 -- Agent 运行记录表
 CREATE TABLE IF NOT EXISTS agent_run
 (
-    id            BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
-    appId         BIGINT       NOT NULL COMMENT '应用id',
-    sessionId     BIGINT       NOT NULL COMMENT '会话id',
-    userId        BIGINT       NOT NULL COMMENT '用户id',
-    runtime       VARCHAR(64)  NOT NULL COMMENT '运行时类型',
-    modelConfigId BIGINT       NULL COMMENT '模型配置id',
-    configVersion INT          NULL COMMENT '配置版本号',
-    status        VARCHAR(32)  NOT NULL COMMENT '运行状态',
-    workspacePath VARCHAR(1024) NULL COMMENT '工作区路径',
-    errorMessage  TEXT         NULL COMMENT '错误信息',
-    latencyMs     INT          DEFAULT 0 COMMENT '耗时（毫秒）',
-    loopStateJson TEXT         NULL COMMENT 'Agent Loop 暂停状态JSON',
-    createTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
-    updateTime    DATETIME     DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    isDelete      TINYINT      DEFAULT 0     NOT NULL COMMENT '是否删除',
+    id                   BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appId                BIGINT        NOT NULL COMMENT '应用id',
+    sessionId            BIGINT        NOT NULL COMMENT '会话id',
+    userId               BIGINT        NOT NULL COMMENT '用户id',
+    runtime              VARCHAR(64)   NOT NULL COMMENT '运行时类型',
+    modelConfigId        BIGINT        NULL COMMENT '模型配置id',
+    configVersion        INT           NULL COMMENT '配置版本号',
+    status               VARCHAR(32)   NOT NULL COMMENT '运行状态',
+    workspacePath        VARCHAR(1024) NULL COMMENT '工作区路径',
+    errorMessage         TEXT          NULL COMMENT '错误信息',
+    latencyMs            INT           DEFAULT 0 COMMENT '耗时（毫秒）',
+    loopStateJson        TEXT          NULL COMMENT 'Agent Loop 暂停状态JSON',
+    inputTokens          INT           DEFAULT 0 NOT NULL COMMENT '本次运行输入 token 总数',
+    outputTokens         INT           DEFAULT 0 NOT NULL COMMENT '本次运行输出 token 总数',
+    cacheReadTokens      INT           DEFAULT 0 NOT NULL COMMENT '命中缓存的输入 token 数',
+    cacheCreationTokens  INT           DEFAULT 0 NOT NULL COMMENT '写入缓存的 token 数',
+    createTime           DATETIME      DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
+    updateTime           DATETIME      DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    isDelete             TINYINT       DEFAULT 0     NOT NULL COMMENT '是否删除',
     INDEX idx_app_status (appId, status),
-    INDEX idx_session_time (sessionId, createTime)
+    INDEX idx_session_time (sessionId, createTime),
+    INDEX idx_user_time (userId, createTime)
 ) COMMENT 'Agent 运行记录' COLLATE = utf8mb4_unicode_ci;
 
 -- 应用版本表

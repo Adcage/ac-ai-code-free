@@ -174,7 +174,7 @@ test.describe("Login & App CRUD E2E Flow", () => {
     expect(page.url()).not.toContain("/user/login");
 
     const homeText = (await page.textContent("body")) || "";
-    expect(homeText).toContain("AC AI Code");
+    expect(homeText).toContain("原象");
 
     await page.getByRole("link", { name: "我的作品" }).click();
     await page.waitForLoadState("networkidle");

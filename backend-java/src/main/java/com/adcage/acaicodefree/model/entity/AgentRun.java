@@ -39,13 +39,6 @@ public class AgentRun implements Serializable {
 
     private String runtime;
 
-    @Column("modelConfigId")
-    private Long modelConfigId;
-
-    @Column("configVersion")
-    @Builder.Default
-    private Integer configVersion = 1;
-
     private String status;
 
     @Column("workspacePath")
@@ -60,6 +53,22 @@ public class AgentRun implements Serializable {
 
     @Column("loopStateJson")
     private String loopStateJson;
+
+    @Column("inputTokens")
+    @Builder.Default
+    private Integer inputTokens = 0;
+
+    @Column("outputTokens")
+    @Builder.Default
+    private Integer outputTokens = 0;
+
+    @Column("cacheReadTokens")
+    @Builder.Default
+    private Integer cacheReadTokens = 0;
+
+    @Column("cacheCreationTokens")
+    @Builder.Default
+    private Integer cacheCreationTokens = 0;
 
     @Column("createTime")
     private LocalDateTime createTime;

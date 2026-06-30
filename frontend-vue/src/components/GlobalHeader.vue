@@ -2,18 +2,17 @@
   <a-layout-header class="global-header">
     <div class="header-content">
       <router-link to="/" class="logo-link">
-        <img alt="AC AI Code" class="logo" src="/logo.png" />
-        <span class="site-title">AC AI Code</span>
+        <img alt="原象 Morpha" class="logo" src="/brand/logo-light.svg" />
+        <span class="site-title">原象</span>
       </router-link>
 
       <nav class="header-nav">
         <router-link
-          v-for="item in visibleMenuItems"
+          v-for="item in menuItems"
           :key="item.key"
           :to="item.key"
           class="nav-link"
-          :exact-active-class="item.key === '/' ? 'nav-link-active' : undefined"
-          :active-class="item.key !== '/' ? 'nav-link-active' : undefined"
+          :active-class="'nav-link-active'"
         >
           <component :is="item.icon" :size="18" />
           <span>{{ item.label }}</span>
@@ -21,6 +20,11 @@
       </nav>
 
       <div class="header-right">
+        <nav class="header-right-nav">
+          <router-link to="/pricing" class="nav-link-subtle">价格</router-link>
+          <router-link to="/docs" class="nav-link-subtle">文档</router-link>
+        </nav>
+
         <div v-if="loginUserStore.loginUser.id" class="user-area">
           <a-dropdown>
             <div class="user-trigger">
@@ -33,13 +37,17 @@
                   <Settings :size="16" style="margin-right: 8px" />
                   管理后台
                 </a-menu-item>
-                <a-menu-item key="profile" @click="router.push('/user/profile')">
-                  <User :size="16" style="margin-right: 8px" />
-                  个人中心
-                </a-menu-item>
-                <a-menu-item key="usage" @click="router.push('/user/usage')">
+                <a-menu-item key="dashboard" @click="router.push('/user/usage')">
                   <BarChart3 :size="16" style="margin-right: 8px" />
-                  用量统计
+                  仪表盘
+                </a-menu-item>
+                <a-menu-item key="myapps" @click="router.push('/app/my')">
+                  <FolderOpen :size="16" style="margin-right: 8px" />
+                  我的作品
+                </a-menu-item>
+                <a-menu-item key="settings" @click="router.push('/user/settings')">
+                  <UserCog :size="16" style="margin-right: 8px" />
+                  账号设置
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
@@ -60,7 +68,7 @@
 
     <div v-if="mobileMenuOpen" class="mobile-nav">
       <router-link
-        v-for="item in visibleMenuItems"
+        v-for="item in menuItems"
         :key="item.key"
         :to="item.key"
         class="mobile-nav-link"
@@ -69,15 +77,21 @@
         <component :is="item.icon" :size="18" />
         <span>{{ item.label }}</span>
       </router-link>
+      <router-link to="/pricing" class="mobile-nav-link" @click="mobileMenuOpen = false">
+        <span>价格</span>
+      </router-link>
+      <router-link to="/docs" class="mobile-nav-link" @click="mobileMenuOpen = false">
+        <span>文档</span>
+      </router-link>
     </div>
   </a-layout-header>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLoginUserStore } from '@/stores/LoginUser.ts'
-import { Home, FolderOpen, Settings, User, BarChart3, LogOut, Menu } from '@lucide/vue'
+import { Compass, FolderOpen, Settings, BarChart3, UserCog, LogOut, Menu } from '@lucide/vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 
 const router = useRouter()
@@ -87,11 +101,8 @@ const loginUserStore = useLoginUserStore()
 loginUserStore.fetchLoginUser()
 
 const menuItems = [
-  { key: '/', icon: Home, label: '主页' },
-  { key: '/app/my', icon: FolderOpen, label: '我的作品' },
+  { key: '/explore', icon: Compass, label: '探索广场' },
 ]
-
-const visibleMenuItems = computed(() => menuItems)
 
 const handleLogout = () => {
   loginUserStore.logout()
@@ -100,15 +111,16 @@ const handleLogout = () => {
 
 <style scoped>
 .global-header {
-  background: var(--color-surface);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(28, 45, 61, 0.92) !important;
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--color-border-dark);
   padding: 0;
   position: sticky;
   top: 0;
   z-index: 1000;
   height: 64px;
   line-height: 64px;
+  box-shadow: none !important;
 }
 
 .header-content {
@@ -132,30 +144,30 @@ const handleLogout = () => {
 .logo {
   height: 32px;
   width: auto;
+  filter: brightness(0) invert(1);
 }
 
 .site-title {
   font-family: var(--font-heading);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--color-text);
-  letter-spacing: -0.5px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-on-dark);
+  letter-spacing: -0.3px;
 }
 
 .header-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  margin-left: var(--space-2xl);
-  flex: 1;
+  gap: 2px;
+  margin-left: var(--space-xl);
 }
 
 .nav-link {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px var(--space-md);
-  color: var(--color-text-secondary);
+  padding: 8px var(--space-md);
+  color: var(--color-text-on-dark-secondary);
   font-size: 14px;
   font-weight: 500;
   border-radius: var(--radius-sm);
@@ -163,21 +175,34 @@ const handleLogout = () => {
   text-decoration: none;
   line-height: 1;
   cursor: pointer;
+  position: relative;
 }
 
 .nav-link:hover {
-  color: var(--color-text);
-  background: var(--color-surface-elevated);
+  color: var(--color-text-on-dark);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .nav-link-active {
-  color: var(--color-cta);
-  background: rgba(34, 197, 94, 0.1);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-link-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 2px;
+  background: var(--color-cta);
+  border-radius: 1px;
 }
 
 .nav-link-active:hover {
-  color: var(--color-cta);
-  background: rgba(34, 197, 94, 0.15);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .header-right {
@@ -185,6 +210,29 @@ const handleLogout = () => {
   align-items: center;
   flex-shrink: 0;
   margin-left: auto;
+  gap: var(--space-lg);
+}
+
+.header-right-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.nav-link-subtle {
+  color: var(--color-text-on-dark);
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.6;
+  text-decoration: none;
+  padding: 4px var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.nav-link-subtle:hover {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .user-area {
@@ -202,11 +250,11 @@ const handleLogout = () => {
 }
 
 .user-trigger:hover {
-  background: var(--color-surface-elevated);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .user-name {
-  color: var(--color-text);
+  color: var(--color-text-on-dark);
   font-size: 14px;
   font-weight: 500;
 }
@@ -219,7 +267,7 @@ const handleLogout = () => {
   display: none;
   background: none;
   border: none;
-  color: var(--color-text);
+  color: var(--color-text-on-dark);
   cursor: pointer;
   padding: var(--space-sm);
   border-radius: var(--radius-sm);
@@ -228,15 +276,15 @@ const handleLogout = () => {
 }
 
 .mobile-menu-btn:hover {
-  background: var(--color-surface-elevated);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .mobile-nav {
   display: none;
   flex-direction: column;
   padding: var(--space-sm) var(--space-lg);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(28, 45, 61, 0.96);
+  border-bottom: 1px solid var(--color-border-dark);
 }
 
 .mobile-nav-link {
@@ -244,7 +292,7 @@ const handleLogout = () => {
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-on-dark-secondary);
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
@@ -253,12 +301,16 @@ const handleLogout = () => {
 }
 
 .mobile-nav-link:hover {
-  color: var(--color-text);
-  background: var(--color-surface-elevated);
+  color: var(--color-text-on-dark);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 @media (max-width: 768px) {
   .header-nav {
+    display: none;
+  }
+
+  .header-right-nav {
     display: none;
   }
 

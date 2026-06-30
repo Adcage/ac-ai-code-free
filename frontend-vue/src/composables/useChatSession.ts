@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
+import myAxios from '@/request'
 import {
   createChatSession,
   listChatHistoryByPage,
@@ -7,36 +8,92 @@ import {
   renameSession,
   deleteSession,
 } from '@/api/appController'
+import { isPlanningResumeJson } from '@/utils/planningResume'
+import type { AttachmentInfo } from '@/utils/chatStreamRequest'
+import type { ChatMessage } from '@/types/chat'
+import {
+  buildMessageToolSummary,
+  normalizeToolEvents,
+  parsePlanningFromExtra,
+  parseToolCallsFromHistory,
+} from '@/utils/chatMessageTooling'
 
-export interface ToolEvent {
-  type: 'request' | 'executed' | 'status'
-  text: string
+const parseAttachments = (extra?: string | null): AttachmentInfo[] | undefined => {
+  if (!extra) return undefined
+  try {
+    const parsed = JSON.parse(extra)
+    const atts = parsed.attachments
+    if (!atts || !Array.isArray(atts) || atts.length === 0) return undefined
+    return atts as AttachmentInfo[]
+  } catch {
+    return undefined
+  }
 }
 
-export interface ChatMessage {
-  role: 'user' | 'ai'
-  content: string
-  status?: string
-  toolEvents?: ToolEvent[]
-  planning?: any
+const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => {
+  const toolCalls = parseToolCallsFromHistory(item.extra, item.toolEvents || [])
+  return {
+    role: item.messageType === 'user' ? 'user' : 'ai',
+    content: item.message || '',
+    status: item.status || '',
+    toolEvents: normalizeToolEvents(item.toolEvents || []),
+    toolCalls,
+    toolStatus: buildMessageToolSummary({
+      status: item.status || '',
+      toolCalls,
+    }),
+    planning: parsePlanningFromExtra(toolCalls),
+    attachments: parseAttachments(item.extra),
+  }
 }
 
-const normalizeToolEvents = (events?: API.ToolEventVO[]) => {
-  if (!events || events.length === 0) return []
-  return events
-    .filter((item) => (item.type === 'request' || item.type === 'executed') && !!item.text)
-    .map((item) => ({
-      type: item.type as 'request' | 'executed',
-      text: item.text as string,
-    }))
+/** 后处理：将 planning_resume JSON 消息中的答案注入前一条 AI 消息的 planning.answers，然后移除这些消息。 */
+function injectPlanningAnswers(msgs: ChatMessage[]): ChatMessage[] {
+  const resumeIndices: number[] = []
+  for (let i = 1; i < msgs.length; i++) {
+    const msg = msgs[i]
+    if (msg.role !== 'user') continue
+    if (!msg.content.startsWith('{') || !msg.content.includes('"planning_resume"')) continue
+    try {
+      const data = JSON.parse(msg.content)
+      const answers = data.answers
+      if (!answers || typeof answers !== 'object') continue
+      // 注入前一条 AI 消息
+      for (let j = i - 1; j >= 0; j--) {
+        if (msgs[j].role === 'ai' && msgs[j].planning) {
+          msgs[j].planning!.answers = answers
+          break
+        }
+      }
+      resumeIndices.push(i)
+    } catch { /* skip */ }
+  }
+  return msgs.filter((_, idx) => !resumeIndices.includes(idx))
 }
 
-const toChatMessage = (item: API.ChatHistoryVO): ChatMessage => ({
-  role: item.messageType === 'user' ? 'user' : 'ai',
-  content: item.message || '',
-  status: item.status || '',
-  toolEvents: normalizeToolEvents(item.toolEvents || []),
-})
+export interface ActiveGenerationStatus {
+  active: boolean
+  agentRunId?: number
+  text?: string
+}
+
+/** 检查当前 session 是否有活跃的生成任务 */
+export const checkActiveGeneration = async (sessionId: string): Promise<ActiveGenerationStatus> => {
+  try {
+    const res = await myAxios.get('/app/chat/gen/active', { params: { sessionId } })
+    if (res.data?.code === 0) {
+      const data = res.data.data
+      if (data?.active) {
+        return { active: true, agentRunId: data.agentRunId, text: data.text || '' }
+      }
+      // active=false 但 text 不为空 → gRPC 刚完成，handler 已入库
+      if (data?.text) {
+        return { active: false, text: data.text }
+      }
+    }
+  } catch { /* 忽略错误 */ }
+  return { active: false }
+}
 
 export function useChatSession(appId: string) {
   const sessions = ref<API.ChatSessionVO[]>([])
@@ -114,7 +171,7 @@ export function useChatSession(appId: string) {
       })
       if (loadRes.data?.code === 0) {
         const historyList = loadRes.data.data?.records || []
-        messages.value = historyList.map(toChatMessage)
+        messages.value = injectPlanningAnswers(historyList.map(toChatMessage))
         currentHistoryPage.value = lastPage
       }
     }

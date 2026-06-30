@@ -83,6 +83,7 @@
         @clear-selected-element="clearSelectedElement"
       />
     </div>
+    <ImagePreviewer />
   </div>
 </template>
 
@@ -100,12 +101,15 @@ import {
   looksLikeRiskRejection, buildSelectedElementPrompt,
   extractLatestFailureReason, isTimeoutFailureReason,
 } from '@/utils/appGenerator'
-import ChatSessionPanel from '@/components/ChatSessionPanel.vue'
+import ChatSessionPanel, { type SessionItem } from '@/components/ChatSessionPanel.vue'
 import ChatMessageList from '@/components/ChatMessageList.vue'
 import ChatInputArea from '@/components/ChatInputArea.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
-import { useSSEChat } from '@/composables/useSSEChat'
-import { buildPlanningResumeDisplay, buildPlanningResumePrompt } from '@/utils/planningResume'
+import ImagePreviewer from '@/components/ImagePreviewer.vue'
+import { useAppPreview } from '@/composables/useAppPreview'
+import { checkActiveGeneration } from '@/composables/useChatSession'
+import { buildPlanningResumeJson } from '@/utils/planningResume'
+import type { AttachmentInfo } from '@/utils/chatStreamRequest'
 
 const route = useRoute()
 const router = useRouter()
@@ -124,9 +128,6 @@ const app = ref<API.AppVO>()
 const enhancingInput = ref(false)
 const deployLoading = ref(false)
 const downloadLoading = ref(false)
-const iframeUrl = ref('')
-const previewWarning = ref('')
-const previewStatus = ref<'idle' | 'generating' | 'checking' | 'ready' | 'failed'>('idle')
 const chatPanelWidth = ref(450)
 const resizing = ref(false)
 const resizeStartX = ref(0)
@@ -166,6 +167,23 @@ const loadApp = async () => {
       if (sessions.value.length > 0 && sessions.value[0].id) {
         currentSessionId.value = normalizeId(sessions.value[0].id)
         await loadRemoteHistory(currentSessionId.value)
+        // 检查是否有活跃生成
+        const activeGen = await checkActiveGeneration(currentSessionId.value)
+        if (activeGen.active) {
+          // gRPC 还在跑：立即显示 generating 指示器，展示累积文本，尝试 SSE 重连
+          generating.value = true
+          const msgIdx = messages.value.length
+          messages.value.push({ role: 'ai', content: activeGen.text || '', status: 'running', toolStatus: '', toolCalls: [] })
+          const resumed = await resumeSSE(currentSessionId.value, app.value?.codeGenType, msgIdx)
+          if (!resumed && currentSessionId.value) {
+            generating.value = false
+            await loadRemoteHistory(currentSessionId.value)
+          }
+        } else if (activeGen.text) {
+          // gRPC 刚完成（handler 已入库），展示文本后 reload 刷新历史
+          messages.value.push({ role: 'ai', content: activeGen.text, status: 'success', toolStatus: '', toolCalls: [] })
+          setTimeout(() => handleReloadCurrentSession(), 500)
+        }
         await updatePreview()
       } else {
         const newSessionId = await createSession()
@@ -174,6 +192,8 @@ const loadApp = async () => {
           messages.value.push({ role: 'user', content: app.value.initPrompt, status: 'success', toolEvents: [] })
           startSSE(app.value.initPrompt, currentSessionId.value)
         }
+        // Fork 副本无 initPrompt 但有工作区文件，需要立即显示预览
+        await updatePreview()
       }
     } else {
       message.error('加载应用失败，' + (res.data?.message || '请稍后重试'))
@@ -189,15 +209,16 @@ const handleReloadCurrentSession = async () => {
 }
 
 // --- chat ---
-const doChatWithMessage = async (rawMessage: string) => {
-  if (hasActivePlanning() || generating.value || !rawMessage) return
+const doChatWithMessage = async (rawMessage: string, attachments?: AttachmentInfo[]) => {
+  const attachmentCount = attachments?.length || 0
+  if (hasActivePlanning() || generating.value || (!rawMessage && attachmentCount === 0)) return
   const sessionId = await ensureSessionReady()
   if (!sessionId) { message.warning('会话初始化中，请稍后再试'); return }
   const promptMessage = buildSelectedElementPrompt(rawMessage, selectedElement.value)
-  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [] })
+  messages.value.push({ role: 'user', content: rawMessage, status: 'success', toolEvents: [], attachments })
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(promptMessage, sessionId, app.value?.codeGenType)
+  startSSE(promptMessage, sessionId, app.value?.codeGenType, undefined, attachments)
 }
 
 function hasActivePlanning(): boolean {
@@ -240,17 +261,18 @@ async function handlePlanningSubmit(answers: Record<string, string>) {
       resumeAnswers[q.id] = a
     }
   }
-  const displayPrompt = buildPlanningResumeDisplay(displayAnswers)
-  const prompt = buildPlanningResumePrompt({
+  const jsonPrompt = buildPlanningResumeJson({
     questionSetId: latest.questionSetId,
     answers: resumeAnswers,
   })
   const sessionId = currentSessionId.value
   if (!sessionId) return
-  messages.value.push({ role: 'user', content: displayPrompt, status: 'success', toolEvents: [] })
+  // 不生成用户消息气泡，将答案注入 AI 消息的 planning.answers
+  const aiMsg = messages.value.findLast(m => m.role === 'ai' && m.planning)
+  if (aiMsg) aiMsg.planning!.answers = resumeAnswers
   previewWarning.value = ''
   previewStatus.value = 'generating'
-  startSSE(prompt, sessionId, app.value?.codeGenType, displayPrompt)
+  startSSE(jsonPrompt, sessionId, app.value?.codeGenType, jsonPrompt)
 }
 
 async function handlePlanConfirm(index: number) {
@@ -293,51 +315,23 @@ const doEnhanceInput = async (promptText: string) => {
   finally { enhancingInput.value = false }
 }
 
-// --- preview ---
-const updatePreview = async (refresh = false) => {
-  previewWarning.value = ''
-  selectedElement.value = null
-  const previewUrl = app.value?.previewUrl
-  if (!previewUrl) {
-    if (iframeUrl.value) { previewStatus.value = 'ready'; previewWarning.value = '预览地址暂不可用，显示的是上一次的预览结果' }
-    else { iframeUrl.value = ''; previewStatus.value = 'idle' }
-    return
-  }
-  const nextUrl = refresh ? `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : previewUrl
-  if (!refresh && iframeUrl.value) {
-    const currentBase = iframeUrl.value.split('?')[0]
-    const nextBase = nextUrl.split('?')[0]
-    if (currentBase === nextBase && previewStatus.value === 'ready') return
-  }
-  previewStatus.value = 'checking'
-  const resourceAvailable = await checkPreviewResource(nextUrl)
-  if (resourceAvailable) { previewStatus.value = 'ready'; iframeUrl.value = nextUrl; return }
-  if (iframeUrl.value) { previewStatus.value = 'ready'; previewWarning.value = '预览资源检查失败，显示的是上一次的预览结果' }
-  else { iframeUrl.value = ''; previewStatus.value = 'idle' }
-}
-
-const checkPreviewResource = async (url: string) => {
-  try {
-    const response = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' })
-    if (!response.ok) return false
-    const text = await response.text()
-    return !(text.includes('Whitelabel Error Page') || text.includes('No static resource'))
-  } catch { return false }
-}
-
-// --- SSE composable ---
-const { generating, startSSE, stopSSE, streamWarning } = useSSEChat({
+// --- SSE + 预览 ---
+const {
+  generating, startSSE, stopSSE, resumeSSE, streamWarning,
+  iframeUrl, previewWarning, previewStatus,
+  updatePreview,
+} = useAppPreview(app, {
   appId,
   messages,
-  onPreviewUpdate: () => updatePreview(true),
-  onSessionsUpdate: loadSessions,
+  sessions,
+  loadSessions,
   onAppUpdate: (data) => {
     if (data.codeGenType && app.value) app.value.codeGenType = data.codeGenType
   },
 })
 
 // --- session handlers (delegate to composable + local UI state) ---
-const startRename = (session: API.ChatSessionVO) => {
+const startRename = (session: SessionItem) => {
   editingSessionId.value = normalizeId(session.id)
   editingTitle.value = session.title || ''
   nextTick(() => {
@@ -346,21 +340,21 @@ const startRename = (session: API.ChatSessionVO) => {
   })
 }
 
-const confirmRename = (session: API.ChatSessionVO) => {
+const confirmRename = (session: SessionItem) => {
   if (editingSessionId.value !== normalizeId(session.id)) return
   const newTitle = editingTitle.value.trim()
   editingSessionId.value = ''
-  renameChatSession(session, newTitle)
+  renameChatSession(session as API.ChatSessionVO, newTitle)
 }
 
-const confirmDeleteSession = (session: API.ChatSessionVO) => {
+const confirmDeleteSession = (session: SessionItem) => {
   Modal.confirm({
     title: '确认删除会话',
     content: `确定要删除「${session.title || '未命名会话'}」吗？删除后不可恢复。`,
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => deleteChatSession(session),
+    onOk: () => deleteChatSession(session as API.ChatSessionVO),
   })
 }
 
@@ -426,6 +420,7 @@ const handleIframeLoad = () => { /* handled by PreviewPanel */ }
 // --- navigation & resize ---
 const entryPathStorageKey = `app_generate_entry_${appId}`
 
+// --- 生成结束时触发预览刷新 ---
 onMounted(() => {
   const backPath = (window.history.state?.back as string | undefined) || ''
   const forwardPath = (window.history.state?.forward as string | undefined) || ''
@@ -465,7 +460,16 @@ const startResize = (event: MouseEvent) => {
 }
 
 onUnmounted(() => {
+  stopSSE()
   stopResize()
+})
+
+// 同一路由切换应用时只重置状态，不停 SSE（让生成自然完成以保存历史）
+watch(() => route.params.id, () => {
+  if (generating.value) {
+    // 直接重置 generating 状态，不 abort SSE
+    generating.value = false
+  }
 })
 </script>
 
@@ -474,17 +478,20 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-background);
+  background:
+    linear-gradient(180deg, rgba(253, 249, 245, 0.98), rgba(245, 239, 232, 0.94));
 }
 
 .top-nav {
   height: 56px;
   padding: 0 20px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(220, 207, 196, 0.9);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 250, 247, 0.92));
+  box-shadow: 0 10px 24px rgba(28, 24, 21, 0.04);
 }
 
 .app-name {
@@ -492,38 +499,84 @@ onUnmounted(() => {
   font-size: 16px;
   margin-left: 8px;
   color: var(--color-text);
+  font-family: var(--font-heading);
 }
 
 .main-content {
   flex: 1;
   display: flex;
   overflow: hidden;
+  gap: 12px;
+  padding: 18px;
 }
 
 .chat-panel {
-  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.92);
   min-width: 320px;
   max-width: 70vw;
   flex-shrink: 0;
+  border: 1px solid rgba(220, 207, 196, 0.92);
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: var(--color-panel-shadow);
 }
 
 .panel-splitter {
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
   background: transparent;
   transition: background 0.2s;
   flex-shrink: 0;
+  border-radius: 999px;
+  margin: 10px 0;
 }
 
 .panel-splitter:hover {
-  background: var(--color-border);
+  background: rgba(200, 90, 62, 0.12);
 }
 
 .status-tag {
   display: inline-flex;
   align-items: center;
+}
+
+.download-btn {
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
+}
+
+.download-btn:hover {
+  border-color: var(--color-cta) !important;
+  color: var(--color-cta) !important;
+}
+
+.deploy-btn {
+  box-shadow: var(--shadow-cta) !important;
+}
+
+.deploy-btn:hover {
+  box-shadow: 0 6px 16px rgba(200, 90, 62, 0.35) !important;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .chat-panel {
+    max-width: 100%;
+    width: 100% !important;
+  }
+
+  .panel-splitter {
+    display: none;
+  }
 }
 </style>

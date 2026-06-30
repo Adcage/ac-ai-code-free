@@ -4,7 +4,6 @@ from app.grpc import platform_service_pb2
 from app.grpc import platform_service_pb2_grpc
 from app.grpc import common_pb2
 from app.grpc_client.channel import get_channel, get_internal_metadata
-from app.grpc_client.retry import retry_async
 from app.modeling.roles import ModelRole
 from app.modeling.resolver import ResolvedModelConfig
 
@@ -20,28 +19,6 @@ class GrpcPlatformClient:
             channel = await get_channel()
             self._stub = platform_service_pb2_grpc.PlatformServiceStub(channel)
         return self._stub
-
-    async def get_model_config(self, model_config_id: int, config_version: int) -> dict:
-        async def _call():
-            stub = await self._get_stub()
-            request = platform_service_pb2.GetModelConfigRequest(
-                model_config_id=model_config_id,
-                config_version=config_version,
-            )
-            response = await stub.GetModelConfig(request, metadata=get_internal_metadata())
-            return {
-                "provider": response.provider,
-                "modelName": response.model_name,
-                "baseUrl": response.base_url,
-                "apiKey": response.api_key,
-            }
-
-        return await retry_async(
-            _call,
-            max_retries=2,
-            delay_seconds=1.0,
-            label=f"get_model_config(id={model_config_id}, version={config_version})",
-        )
 
     async def build_vue_project(self, app_id: int) -> dict:
         stub = await self._get_stub()
@@ -69,6 +46,10 @@ class GrpcPlatformClient:
         latency_ms: int = 0,
         error_message: str = "",
         loop_state_json: str = "",
+        total_input_tokens: int = 0,
+        total_output_tokens: int = 0,
+        total_cache_read_tokens: int = 0,
+        total_cache_creation_tokens: int = 0,
     ) -> bool:
         stub = await self._get_stub()
         request = platform_service_pb2.CompleteAgentRunRequest(
@@ -78,6 +59,10 @@ class GrpcPlatformClient:
             latency_ms=latency_ms,
             error_message=error_message,
             loop_state_json=loop_state_json,
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            total_cache_read_tokens=total_cache_read_tokens,
+            total_cache_creation_tokens=total_cache_creation_tokens,
         )
         response = await stub.CompleteAgentRun(request, metadata=get_internal_metadata())
         return response.ok
@@ -99,7 +84,7 @@ class GrpcPlatformClient:
         stub = await self._get_stub()
         request = platform_service_pb2.GetChatHistoryRequest(session_id=session_id, limit=limit)
         response = await stub.GetChatHistory(request, metadata=get_internal_metadata())
-        return [{"id": e.id, "role": e.role, "content": e.content} for e in response.entries]
+        return [{"id": e.id, "role": e.role, "content": e.content, "attachments_json": e.attachments_json} for e in response.entries]
 
     async def get_app_detail(self, app_id: int) -> dict:
         stub = await self._get_stub()
@@ -142,8 +127,6 @@ class GrpcPlatformClient:
                 model_name=config.model_name,
                 base_url=config.base_url,
                 api_key=config.api_key,
-                model_config_id=config.model_config_id,
-                config_version=config.config_version,
                 source=config.source,
                 billing_mode=config.billing_mode,
             )
@@ -156,4 +139,4 @@ def _map_code_gen_type(code_gen_type: str) -> int:
         "multi-file": common_pb2.MULTI_FILE,
         "vue_project": common_pb2.VUE_PROJECT,
     }
-    return mapping.get(code_gen_type, common_pb2.VUE_PROJECT)
+    return mapping.get(code_gen_type, common_pb2.SINGLE_FILE)

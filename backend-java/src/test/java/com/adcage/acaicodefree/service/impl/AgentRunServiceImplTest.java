@@ -45,9 +45,8 @@ class AgentRunServiceImplTest {
     }
 
     @Test
-    void createAgentRun_WithNewParams_SavesAllFields() {
-        Long id = agentRunService.createAgentRun(100L, 200L, 300L, "python",
-                10L, 2, "/workspace/run-1");
+    void createAgentRun_SavesAllFields() {
+        Long id = agentRunService.createAgentRun(100L, 200L, 300L, "python");
 
         assertNotNull(id);
         assertNotNull(capturedAgentRun);
@@ -55,22 +54,6 @@ class AgentRunServiceImplTest {
         assertEquals(200L, capturedAgentRun.getSessionId());
         assertEquals(300L, capturedAgentRun.getUserId());
         assertEquals("python", capturedAgentRun.getRuntime());
-        assertEquals(10L, capturedAgentRun.getModelConfigId());
-        assertEquals(2, capturedAgentRun.getConfigVersion());
-        assertEquals("/workspace/run-1", capturedAgentRun.getWorkspacePath());
-        assertEquals("running", capturedAgentRun.getStatus());
-    }
-
-    @Test
-    void createAgentRun_OldMethod_DelegatesWithNullParams() {
-        Long id = agentRunService.createAgentRun(100L, 200L, 300L, "java");
-
-        assertNotNull(id);
-        assertNotNull(capturedAgentRun);
-        assertEquals(100L, capturedAgentRun.getAppId());
-        assertEquals("java", capturedAgentRun.getRuntime());
-        assertNull(capturedAgentRun.getModelConfigId());
-        assertNull(capturedAgentRun.getWorkspacePath());
         assertEquals("running", capturedAgentRun.getStatus());
     }
 
@@ -94,12 +77,27 @@ class AgentRunServiceImplTest {
     }
 
     @Test
-    void completeAgentRun_ClearsCheckpoint() {
-        agentRunService.completeAgentRun(1L, "/workspace", 10);
+    void completeAgentRun_ClearsCheckpoint_AndSavesTokens() {
+        agentRunService.completeAgentRun(1L, "/workspace", 10, 100, 200, 30, 20);
 
         assertNotNull(capturedUpdate);
         assertEquals("completed", capturedUpdate.getStatus());
         assertEquals("", capturedUpdate.getLoopStateJson());
+        assertEquals(100, capturedUpdate.getInputTokens());
+        assertEquals(200, capturedUpdate.getOutputTokens());
+        assertEquals(30, capturedUpdate.getCacheReadTokens());
+        assertEquals(20, capturedUpdate.getCacheCreationTokens());
+    }
+
+    @Test
+    void completeAgentRun_NullTokens_UsesZero() {
+        agentRunService.completeAgentRun(1L, "/workspace", 10, null, null, null, null);
+
+        assertNotNull(capturedUpdate);
+        assertEquals(0, capturedUpdate.getInputTokens());
+        assertEquals(0, capturedUpdate.getOutputTokens());
+        assertEquals(0, capturedUpdate.getCacheReadTokens());
+        assertEquals(0, capturedUpdate.getCacheCreationTokens());
     }
 
     @Test
@@ -117,11 +115,13 @@ class AgentRunServiceImplTest {
                 "appId", "appId",
                 "sessionId", "sessionId",
                 "userId", "userId",
-                "modelConfigId", "modelConfigId",
-                "configVersion", "configVersion",
                 "workspacePath", "workspacePath",
                 "errorMessage", "errorMessage",
-                "latencyMs", "latencyMs"
+                "latencyMs", "latencyMs",
+                "inputTokens", "inputTokens",
+                "outputTokens", "outputTokens",
+                "cacheReadTokens", "cacheReadTokens",
+                "cacheCreationTokens", "cacheCreationTokens"
         );
 
         for (Map.Entry<String, String> entry : expectedColumns.entrySet()) {

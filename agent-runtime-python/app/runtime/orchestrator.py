@@ -10,9 +10,8 @@ from app.modeling.policy import ModelPolicy
 from app.modeling.resolver import ModelResolver
 from app.artifacts.writer import ArtifactWriter
 from app.quality.structure_checker import StructureChecker
-from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext, _CODE_GEN_TYPE_TO_GENERATION_MODE
+from app.runtime.context import CodeGenType, ExecutionContext, RunMode, ChatHistoryEntry, AppContext, AttachmentInfo, _CODE_GEN_TYPE_TO_GENERATION_MODE
 from app.runtime.event_bus import EventBus
-from app.runtime.event_mapper import ProtoEventMapper
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.services import RuntimeServices
 from app.services.chat_model_factory import ChatModelFactory
@@ -21,13 +20,36 @@ from app.grpc_client.platform_client import GrpcPlatformClient
 logger = logging.getLogger("app.runtime.orchestrator")
 
 
+def _parse_attachments_json(attachments_json: str | None) -> tuple[AttachmentInfo, ...]:
+    """从 JSON 字符串解析附件元数据列表。"""
+    if not attachments_json:
+        return ()
+    try:
+        import json
+        items = json.loads(attachments_json)
+        return tuple(
+            AttachmentInfo(
+                id=item.get("id", ""),
+                file_name=item.get("fileName", ""),
+                file_size=item.get("fileSize", 0),
+                mime_type=item.get("mimeType", ""),
+                storage_type=item.get("storageType", "local"),
+                storage_path=item.get("storagePath", ""),
+                url=item.get("url", ""),
+            )
+            for item in items
+        )
+    except Exception:
+        return ()
+
+
 def _map_code_gen_type(proto_value: int) -> CodeGenType:
     mapping = {
         1: CodeGenType.SINGLE_FILE,
         2: CodeGenType.MULTI_FILE,
         3: CodeGenType.VUE_PROJECT,
     }
-    return mapping.get(proto_value, CodeGenType.VUE_PROJECT)
+    return mapping.get(proto_value, CodeGenType.SINGLE_FILE)
 
 
 class RuntimeOrchestrator:
@@ -39,7 +61,19 @@ class RuntimeOrchestrator:
         self._asset_manager = create_default_asset_manager()
         self._quality_checker = StructureChecker()
         self._artifact_writer = ArtifactWriter()
-        self._event_mapper = ProtoEventMapper()
+        self._event_mapper = None  # 延迟初始化，见 _get_mapper()
+
+    def _get_mapper(self):
+        """按引擎配置返回对应的 ProtoEventMapper 子类。"""
+        if self._event_mapper is not None:
+            return self._event_mapper
+        if settings.agent_loop_engine == "vnext":
+            from app.agent_loop_vnext.event_mapper import VNextEventMapper
+            self._event_mapper = VNextEventMapper()
+        else:
+            from app.agent_loop.event_mapper import LegacyEventMapper
+            self._event_mapper = LegacyEventMapper()
+        return self._event_mapper
 
     def _build_services(self, event_bus: EventBus) -> RuntimeServices:
         from app.prompts.registry import PromptModuleRegistry
@@ -154,8 +188,6 @@ class RuntimeOrchestrator:
         if not generation_mode:
             generation_mode = _CODE_GEN_TYPE_TO_GENERATION_MODE.get(code_gen_type.value if hasattr(code_gen_type, "value") else str(code_gen_type), "application")
         original_content = getattr(request, "original_content", "")
-        model_config_id = getattr(request, "model_config_id", 0)
-        config_version = getattr(request, "config_version", 0)
 
         app: AppContext | None = None
         if request.app_id > 0:
@@ -176,11 +208,32 @@ class RuntimeOrchestrator:
             try:
                 history = await self._platform_client.get_chat_history(request.session_id)
                 chat_history = tuple(
-                    ChatHistoryEntry(id=h["id"], role=h["role"], content=h["content"])
+                    ChatHistoryEntry(
+                        id=h["id"],
+                        role=h["role"],
+                        content=h["content"],
+                        attachments=_parse_attachments_json(h.get("attachments_json")),
+                    )
                     for h in history
                 )
             except Exception as e:
                 logger.warning("failed to load chat history: %s", e)
+
+        # 解析当前请求的附件
+        request_attachments: tuple[AttachmentInfo, ...] = ()
+        if hasattr(request, "attachments") and request.attachments:
+            request_attachments = tuple(
+                AttachmentInfo(
+                    id=a.id,
+                    file_name=a.file_name,
+                    file_size=a.file_size,
+                    mime_type=a.mime_type,
+                    storage_type=a.storage_type,
+                    storage_path=a.storage_path,
+                    url=a.url,
+                )
+                for a in request.attachments
+            )
 
         return ExecutionContext(
             agent_run_id=int(request.agent_run_id),
@@ -194,18 +247,26 @@ class RuntimeOrchestrator:
             app=app,
             chat_history=chat_history,
             original_content=original_content,
-            runtime_options={
-                "model_config_id": model_config_id,
-                "config_version": config_version,
-            },
+            runtime_options={},
             is_test=getattr(request, "is_test", False),
             is_resume=is_resume,
             generation_mode=generation_mode,
+            attachments=request_attachments,
         )
 
     async def stream_generate(self, request):
-        async for event in self._run_agent_loop(request, RunMode.GENERATE):
-            yield event
+        engine = settings.agent_loop_engine
+        if engine == "vnext":
+            async for event in self._run_single_implement_vnext(request, RunMode.GENERATE):
+                yield event
+        elif engine == "legacy":
+            async for event in self._run_agent_loop(request, RunMode.GENERATE):
+                yield event
+        else:
+            raise AgentRuntimeError(
+                f"不支持的 agent_loop_engine 配置: {engine}",
+                code=AgentErrorCode.STATE_ERROR,
+            )
 
     async def stream_modify(self, request):
         async for event in self._run_agent_loop(request, RunMode.MODIFY):
@@ -337,7 +398,7 @@ class RuntimeOrchestrator:
         workflow_task = asyncio.create_task(_execute())
 
         async for seq_event in self._drain_events(event_bus):
-            for proto_event in self._event_mapper.map_event(seq_event):
+            for proto_event in self._get_mapper().map_event(seq_event):
                 yield proto_event
 
         await workflow_task
@@ -348,3 +409,86 @@ class RuntimeOrchestrator:
             if seq_event is None:
                 break
             yield seq_event
+
+    async def _run_single_implement_vnext(self, request, run_mode: RunMode):
+        """vNext 单实现链路：模型流式对话 → SSE 传输。"""
+        from app.agent_loop_vnext.runner import SingleImplementLoopRunner
+
+        agent_run_id = int(request.agent_run_id)
+        event_bus = EventBus(agent_run_id=agent_run_id)
+        services = self._build_services(event_bus)
+        start_time = time.monotonic()
+
+        context = await self._build_context(request, run_mode)
+
+        # 根据上下文配置 mapper（如 is_test、脱敏策略等）
+        mapper = self._get_mapper()
+        if hasattr(mapper, 'set_is_test'):
+            mapper.set_is_test(context.is_test)
+
+        async def _execute():
+            try:
+                runner = SingleImplementLoopRunner(context, services)
+                await runner.run()
+
+                latency_ms = int((time.monotonic() - start_time) * 1000)
+                # 根据 runner 状态决定完成还是暂停
+                loop_state_json = ""
+                success = runner.state.status == "completed"
+                if runner.state.status == "waiting_for_user":
+                    # 最小非空 JSON 触发 Java pauseAgentRun 逻辑
+                    loop_state_json = '{"status":"waiting_for_user"}'
+
+                await self._platform_client.complete_agent_run(
+                    agent_run_id=agent_run_id,
+                    success=success,
+                    workspace_path=context.workspace_path,
+                    latency_ms=latency_ms,
+                    error_message="",
+                    loop_state_json=loop_state_json,
+                )
+            except AgentRuntimeError as e:
+                logger.error("vNext runner error | agentRunId=%s error=%s", agent_run_id, e)
+                await event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.RUNTIME_ERROR,
+                    {"message": str(e), "code": int(e.code)},
+                ))
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"失败: {e}"}))
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(
+                    "vNext unexpected error | agentRunId=%s error=%s",
+                    agent_run_id, e, exc_info=True,
+                )
+                await event_bus.emit(RuntimeEvent(
+                    RuntimeEventType.RUNTIME_ERROR,
+                    {"message": str(e), "code": AgentErrorCode.INTERNAL_ERROR},
+                ))
+                await event_bus.emit(RuntimeEvent(RuntimeEventType.DONE, {"message": f"异常: {e}"}))
+                try:
+                    await self._platform_client.complete_agent_run(
+                        agent_run_id=agent_run_id,
+                        success=False,
+                        error_message=str(e),
+                        latency_ms=int((time.monotonic() - start_time) * 1000),
+                    )
+                except Exception:
+                    pass
+            finally:
+                await event_bus.close()
+
+        workflow_task = asyncio.create_task(_execute())
+
+        async for seq_event in self._drain_events(event_bus):
+            for proto_event in self._get_mapper().map_event(seq_event):
+                yield proto_event
+
+        await workflow_task

@@ -18,7 +18,6 @@ import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
 import com.adcage.acaicodefree.config.properties.WorkspaceProperties;
 import com.adcage.acaicodefree.service.AgentRunService;
-import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.legacy.workflow.config.WorkflowProperties;
 import com.adcage.acaicodefree.legacy.workflow.service.WorkflowCodeGeneratorService;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -85,9 +84,6 @@ class AppServiceImplWorkflowTest {
     @MockBean
     private AgentRunService agentRunService;
 
-    @MockBean
-    private ModelConfigService modelConfigService;
-
     private User loginUser;
     private App testApp;
     private ChatSession testSession;
@@ -101,8 +97,6 @@ class AppServiceImplWorkflowTest {
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimes",
                 List.of(new StubRuntime("python-agent", Flux.just("python_start", "python_completed"))));
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
-        when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
-        when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
         when(streamHandlerExecutor.handle(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
         String suffix = String.valueOf(System.nanoTime());
@@ -160,7 +154,7 @@ class AppServiceImplWorkflowTest {
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "java-agent");
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个官网", "帮我做一个官网", loginUser));
+                () -> appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个官网", "帮我做一个官网", null, loginUser));
 
         org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("Java AI runtime 已禁用"));
         verify(workflowCodeGeneratorService, never()).executeWorkflowWithFlux(anyLong(), anyString());
@@ -170,7 +164,7 @@ class AppServiceImplWorkflowTest {
     void chatToGenCodeWhenPythonAgentShouldNotUseWorkflowService() {
         ReflectionTestUtils.setField(codeGenerationRuntimeRouter, "runtimeName", "python-agent");
 
-        List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个单页", "帮我做一个单页", loginUser)
+        List<String> result = appService.chatToGenCode(testApp.getId(), testSession.getId(), "帮我做一个单页", "帮我做一个单页", null, loginUser)
                 .collectList()
                 .block();
 
@@ -216,8 +210,6 @@ class AppServiceImplWorkflowTest {
                   appId BIGINT NOT NULL,
                   userId BIGINT NOT NULL,
                   modelName VARCHAR(128) NULL,
-                  inputTokens INT NOT NULL DEFAULT 0,
-                  outputTokens INT NOT NULL DEFAULT 0,
                   latencyMs INT NULL,
                   requestId VARCHAR(64) NULL,
                   extra JSON NULL,

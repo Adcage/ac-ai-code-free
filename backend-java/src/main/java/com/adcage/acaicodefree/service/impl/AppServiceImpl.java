@@ -16,20 +16,29 @@ import com.adcage.acaicodefree.constant.UserConstant;
 import com.adcage.acaicodefree.core.artifact.ArtifactManifestReader;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService.BuildResult;
+import com.adcage.acaicodefree.core.generation.ActiveGeneration;
+import com.adcage.acaicodefree.core.generation.ActiveGenerationManager;
 import com.adcage.acaicodefree.core.handler.StreamHandlerExecutor;
 import com.adcage.acaicodefree.exception.BusinessException;
 import com.adcage.acaicodefree.exception.ThrowUtils;
+import com.adcage.acaicodefree.mapper.AgentRunMapper;
+import com.adcage.acaicodefree.mapper.AppCategoryMapper;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.model.dto.app.AppAddRequest;
+import com.adcage.acaicodefree.model.dto.app.MarketplaceQueryRequest;
+import com.adcage.acaicodefree.model.dto.chat.ChatAttachmentInfo;
 import com.adcage.acaicodefree.model.dto.chat.ChatHistoryQueryRequest;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.dto.app.AppQueryRequest;
+import com.adcage.acaicodefree.model.entity.AgentRun;
+import com.adcage.acaicodefree.model.entity.AppCategory;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
 import com.adcage.acaicodefree.model.entity.ChatSession;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.vo.app.AppVO;
 import com.adcage.acaicodefree.model.vo.app.ArtifactManifestVO;
+import com.adcage.acaicodefree.model.vo.app.MarketplaceAppVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatHistoryVO;
 import com.adcage.acaicodefree.model.vo.chat.ChatSessionVO;
 import com.adcage.acaicodefree.model.vo.chat.ToolEventVO;
@@ -37,13 +46,12 @@ import com.adcage.acaicodefree.model.vo.user.UserVO;
 import com.adcage.acaicodefree.runtime.CodeGenerationRequest;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntime;
 import com.adcage.acaicodefree.runtime.CodeGenerationRuntimeRouter;
-import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.service.AgentRunService;
-import com.adcage.acaicodefree.model.entity.AgentRun;
-import com.adcage.acaicodefree.service.ModelConfigService;
+import com.adcage.acaicodefree.service.PythonTitleGenerationService;
 import com.mybatisflex.core.paginate.Page;
 import com.adcage.acaicodefree.service.UserService;
 import com.adcage.acaicodefree.service.ScreenshotService;
+import com.adcage.acaicodefree.utils.AiTitleUtils;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.adcage.acaicodefree.model.entity.App;
@@ -59,14 +67,16 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -79,6 +89,15 @@ import java.util.stream.Collectors;
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     private static final Logger log = LoggerFactory.getLogger(AppServiceImpl.class);
+
+    private static final List<String> ALLOWED_CATEGORIES = List.of("工具", "游戏", "社交", "教育", "商业", "创意");
+
+    private static final Set<String> FORK_EXCLUDED_DIRS = Set.of(
+            "node_modules", ".git", "dist", "build", "target", ".mvn", ".idea", ".vscode", ".cache");
+
+    private static final Set<String> FORK_EXCLUDED_FILE_NAMES = Set.of(".ds_store", ".env");
+
+    private static final Set<String> FORK_EXCLUDED_FILE_EXTENSIONS = Set.of(".log", ".tmp", ".cache");
 
     @Resource
     private UserService userService;
@@ -99,13 +118,13 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private ScreenshotService screenshotService;
 
     @Resource
+    private ActiveGenerationManager activeGenerationManager;
+
+    @Resource
     private CodeGenerationRuntimeRouter codeGenerationRuntimeRouter;
 
     @Resource
     private AgentRunService agentRunService;
-
-    @Resource
-    private ModelConfigService modelConfigService;
 
     @Resource
     private WorkspaceProperties workspaceProperties;
@@ -113,11 +132,23 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private ArtifactManifestReader artifactManifestReader;
 
+    @Resource
+    private AppCategoryMapper appCategoryMapper;
+
+    @Resource
+    private AgentRunMapper agentRunMapper;
+
+    @Resource
+    private PythonTitleGenerationService pythonTitleGenerationService;
+
     @Value("${server.port:8700}")
     private String serverPort;
 
     @Value("${server.servlet.context-path:/api}")
     private String contextPath;
+
+    @Value("${langchain4j.open-ai.chat-model.model-name:}")
+    private String defaultModelName;
 
     @Override
     public Long createApp(AppAddRequest appAddRequest, User loginUser) {
@@ -127,7 +158,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
         CodeGenTypeEnum codeGenTypeEnum = resolveCodeGenType(appAddRequest.getCodeGenType(), initPrompt);
         App app = new App();
-        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));//TODO 后续优化成AI生成应用名称
+        app.setAppName(resolveAppName(initPrompt, loginUser.getId()));
         app.setInitPrompt(initPrompt);
         app.setCodeGenType(codeGenTypeEnum.getValue());
         app.setGenerationMode(StrUtil.blankToDefault(appAddRequest.getGenerationMode(), "application"));
@@ -263,7 +294,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
-    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage, User loginUser) {
+    public Flux<String> chatToGenCode(Long appId, Long sessionId, String message, String displayMessage,
+                                        List<ChatAttachmentInfo> attachments, User loginUser) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(sessionId == null || sessionId <= 0, ErrorCode.PARAMS_ERROR, "会话 ID 不能为空");
@@ -287,15 +319,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 appId, sessionId, loginUser.getId());
 
         Long agentRunId;
-        Long modelConfigId;
-        Integer configVersion;
         String loopStateJson;
         String workspacePath;
 
         if (resumedRun != null) {
             agentRunId = resumedRun.getId();
-            modelConfigId = resumedRun.getModelConfigId();
-            configVersion = resumedRun.getConfigVersion();
             loopStateJson = resumedRun.getLoopStateJson();
             workspacePath = StrUtil.blankToDefault(
                     resumedRun.getWorkspacePath(),
@@ -314,12 +342,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, ex);
                 }
             }
-            ModelConfig modelConfig = modelConfigService.getDefaultEnabledModelConfig(loginUser.getId());
-            modelConfigId = modelConfig == null ? null : modelConfig.getId();
-            configVersion = modelConfig == null ? null : modelConfig.getConfigVersion();
             agentRunId = agentRunService.createAgentRun(
-                    appId, sessionId, loginUser.getId(), runtime.getName(),
-                    modelConfigId, configVersion, null
+                    appId, sessionId, loginUser.getId(), runtime.getName()
             );
             loopStateJson = "";
             workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" +
@@ -328,9 +352,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
 
         // 6. 运行准备完成后再保存用户消息；同步失败时事务会回滚 AgentRun 认领/创建
+        String userMessageExtra = null;
+        if (attachments != null && !attachments.isEmpty()) {
+            userMessageExtra = JSONUtil.toJsonStr(Map.of("attachments", attachments));
+        }
         saveHistoryMessage(sessionId, appId, loginUser.getId(), persistedUserMessage, "user", "success",
-                app.getCodeGenType(), 0, null);
+                app.getCodeGenType(), 0, userMessageExtra);
         updateSessionSummary(sessionId);
+        tryAutoRenameSessionTitle(sessionId, app, persistedUserMessage, loginUser.getId());
 
         CodeGenerationRequest runtimeRequest = CodeGenerationRequest.builder()
                 .agentRunId(agentRunId)
@@ -341,17 +370,39 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .loginUser(loginUser)
                 .codeGenTypeEnum(codeGenTypeEnum)
                 .generationMode(app.getGenerationMode())
-                .modelConfigId(modelConfigId)
-                .configVersion(configVersion)
                 .workspacePath(workspacePath)
                 .loopStateJson(loopStateJson)
                 .isTest(UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole()))
+                .attachments(attachments)
                 .build();
         // 7. 获取源流并根据运行时类型决定是否需要流处理器
         StringBuilder readableAssistantMessageBuilder = new StringBuilder();
         AtomicReference<String> workflowCodeGenTypeRef = new AtomicReference<>();
         AtomicReference<String> workflowGeneratedDirRef = new AtomicReference<>();
+        AtomicBoolean historySaved = new AtomicBoolean(false);
         long startTime = System.currentTimeMillis();
+
+        // 7a. 注册活跃生成状态 + 完成回调
+        // 内部订阅者（GrpcPythonAgentRuntime 中的 sink.asFlux().subscribe()）
+        // 会在 gRPC onComplete/onError → sink.tryEmitComplete() 后触发此回调，
+        // 确保 SSE 断开后 AI 回复仍能入库。
+        ActiveGeneration activeGen = activeGenerationManager.register(sessionId, agentRunId);
+        activeGen.setOnGenerationCompleted(finalText -> {
+            log.info("[Handler] onGenerationCompleted fired, sessionId={}, agentRunId={}, historySaved={}, textLen={}",
+                    sessionId, agentRunId, historySaved.get(), finalText != null ? finalText.length() : 0);
+            if (historySaved.compareAndSet(false, true)) {
+                int latencyMs = (int) (System.currentTimeMillis() - startTime);
+                String msg = StrUtil.blankToDefault(finalText, "");
+                saveHistoryMessage(sessionId, appId, loginUser.getId(), msg, "ai", "success", codeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, "{\"completed_by\": \"handler\"}"));
+                updateSessionSummary(sessionId);
+                log.info("[Handler] Saved to DB, sessionId={}, length={}", sessionId, msg.length());
+            } else {
+                log.info("[Handler] CAS skipped (doOnComplete already saved), sessionId={}", sessionId);
+            }
+            activeGenerationManager.remove(sessionId);
+            log.info("[Handler] Removed ActiveGeneration, sessionId={}", sessionId);
+        });
+
         Flux<String> sourceStream = runtime.stream(runtimeRequest);
         Flux<String> handledStream = streamHandlerExecutor.handle(codeGenTypeEnum, sourceStream, readableAssistantMessageBuilder);
         return handledStream
@@ -367,6 +418,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                         App updateApp = new App();
                         updateApp.setId(appId);
                         updateApp.setCodeGenType(actualCodeGenTypeStr);
+                        updateApp.setIsPublic(app.getIsPublic()); // 保持原有的 isPublic
+                        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount
                         boolean updated = updateById(updateApp);
                         if (updated) {
                             app.setCodeGenType(actualCodeGenTypeStr);
@@ -418,9 +471,17 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                             }
                         }
                     }
-                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, extra);
-                    updateSessionSummary(sessionId);
-                    // Agent 运行结束后触发封面截图
+                    // doOnComplete 正常保存（SSE 连接状态下）。
+                    // 若 handler 已通过内部订阅者保存（SSE 断开后 gRPC 完成），CAS 跳过。
+                    if (historySaved.compareAndSet(false, true)) {
+                        log.info("[doOnComplete] Saving to DB, sessionId={}, status={}, textLen={}",
+                                sessionId, status, aiMessage != null ? aiMessage.length() : 0);
+                        saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", status, actualCodeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, extra));
+                        updateSessionSummary(sessionId);
+                    } else {
+                        log.info("[doOnComplete] CAS skipped (handler already saved), sessionId={}", sessionId);
+                    }
+                    // Agent 运行结束后触发封面截图（无论谁保存、何种方式完成）
                     try {
                         screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
                     } catch (Exception e) {
@@ -432,18 +493,25 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     Map<String, String> extraInfo = new HashMap<>();
                     extraInfo.put("error", error.getMessage());
                     extraInfo.put("errorType", error.getClass().getSimpleName());
-                    log.error("代码生成流程异常, appId={}, sessionId={}, codeGenType={}, userId={}, message={}",
-                            appId, sessionId, codeGenTypeStr, loginUser.getId(), message, error);
                     String aiMessage = StrUtil.isBlank(readableAssistantMessageBuilder.toString())
                             ? "生成失败：" + error.getMessage()
                             : readableAssistantMessageBuilder.toString();
-                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, JSONUtil.toJsonStr(extraInfo));
+                    saveHistoryMessage(sessionId, appId, loginUser.getId(), aiMessage, "ai", "failed", codeGenTypeStr, latencyMs, buildExtraJsonWithToolCalls(sessionId, JSONUtil.toJsonStr(extraInfo)));
+                    historySaved.set(true);
                     updateSessionSummary(sessionId);
                     // Agent 运行异常结束后也触发封面截图
                     try {
                         screenshotService.triggerCoverGenerationIfNeeded(appId, agentRunId);
                     } catch (Exception e) {
                         log.warn("触发封面截图失败（不影响主流程）, appId={}", appId, e);
+                    }
+                })
+                .doFinally(signalType -> {
+                    log.info("[doFinally] signalType={}, historySaved={}, sessionId={}",
+                            signalType, historySaved.get(), sessionId);
+                    if (historySaved.get()) {
+                        activeGenerationManager.remove(sessionId);
+                        log.info("[doFinally] Removed ActiveGeneration, sessionId={}", sessionId);
                     }
                 });
     }
@@ -455,8 +523,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         long sessionCount = chatSessionMapper.selectCountByQuery(QueryWrapper.create()
                 .eq("appId", appId)
                 .eq("userId", loginUser.getId()));
-        String sessionTitle = "新会话 " + (sessionCount + 1);
-        String resolvedModelName = resolveModelName(loginUser.getId());
+        String sessionTitle = AiTitleUtils.buildDefaultSessionTitle(sessionCount + 1);
+        String resolvedModelName = resolveModelName();
         ChatSession chatSession = ChatSession.builder()
                 .appId(appId)
                 .userId(loginUser.getId())
@@ -538,6 +606,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
             BeanUtil.copyProperties(history, chatHistoryVO);
             chatHistoryVO.setToolEvents(extractToolEvents(history));
+            chatHistoryVO.setAttachments(extractAttachments(history));
             return chatHistoryVO;
         }).collect(Collectors.toList());
         Page<ChatHistoryVO> resultPage = new Page<>(pageNum, pageSize, chatHistoryPage.getTotalRow());
@@ -629,6 +698,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
+        updateApp.setIsPublic(app.getIsPublic()); // 保持原有的 isPublic 不被 @Builder.Default 覆盖
+        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount 不被 @Builder.Default 覆盖
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
         screenshotService.triggerCoverGenerationIfNeeded(appId, null);
@@ -641,6 +712,191 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     public Page<App> listGoodAppPage(long pageNum, long pageSize, AppQueryRequest appQueryRequest) {
         QueryWrapper queryWrapper = getQueryWrapper(appQueryRequest);
         return page(Page.of(pageNum, pageSize), queryWrapper);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean publishApp(Long appId, List<String> categories, User loginUser) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        App app = this.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        ThrowUtils.throwIf(!app.getUserId().equals(loginUser.getId()), ErrorCode.NO_AUTH_ERROR, "无权限操作该应用");
+        // 校验分类
+        if (CollUtil.isNotEmpty(categories)) {
+            for (String category : categories) {
+                ThrowUtils.throwIf(!ALLOWED_CATEGORIES.contains(category), ErrorCode.PARAMS_ERROR,
+                        "不支持的分类：" + category);
+            }
+        }
+        // 更新为公开
+        App updateApp = new App();
+        updateApp.setId(appId);
+        updateApp.setIsPublic(1);
+        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount 不被 @Builder.Default 覆盖
+        boolean updated = this.updateById(updateApp);
+        ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "发布应用失败");
+        // 处理分类：先删除旧分类，再批量插入新分类
+        appCategoryMapper.deleteByQuery(QueryWrapper.create().eq("appId", appId));
+        if (CollUtil.isNotEmpty(categories)) {
+            for (String category : categories) {
+                AppCategory appCategory = AppCategory.builder()
+                        .appId(appId)
+                        .category(category)
+                        .build();
+                appCategoryMapper.insert(appCategory);
+            }
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean unpublishApp(Long appId, User loginUser) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        App app = this.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        ThrowUtils.throwIf(!app.getUserId().equals(loginUser.getId()), ErrorCode.NO_AUTH_ERROR, "无权限操作该应用");
+        // 更新为不公开
+        App updateApp = new App();
+        updateApp.setId(appId);
+        updateApp.setIsPublic(0);
+        updateApp.setForkCount(app.getForkCount()); // 保持原有的 forkCount 不被 @Builder.Default 覆盖
+        boolean updated = this.updateById(updateApp);
+        ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "取消发布应用失败");
+        // 清理分类
+        appCategoryMapper.deleteByQuery(QueryWrapper.create().eq("appId", appId));
+        return true;
+    }
+
+    @Override
+    public List<String> listCategories() {
+        return ALLOWED_CATEGORIES;
+    }
+
+    @Override
+    public Page<MarketplaceAppVO> listMarketplaceAppVOByPage(MarketplaceQueryRequest request) {
+        ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR, "请求参数不能为空");
+        int pageNum = Math.max(request.getPageNum(), 1);
+        int pageSize = Math.min(Math.max(request.getPageSize(), 1), 50);
+        String category = request.getCategory();
+        String sortField = request.getSortField();
+
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .eq("isPublic", 1);
+
+        // 分类筛选
+        if (StrUtil.isNotBlank(category)) {
+            List<AppCategory> appCategories = appCategoryMapper.selectListByQuery(
+                    QueryWrapper.create().eq("category", category));
+            if (CollUtil.isEmpty(appCategories)) {
+                // 无匹配分类，返回空页
+                return new Page<>(pageNum, pageSize, 0);
+            }
+            List<Long> appIds = appCategories.stream()
+                    .map(AppCategory::getAppId)
+                    .distinct()
+                    .collect(Collectors.toList());
+            queryWrapper.in("id", appIds);
+        }
+
+        // 排序
+        if ("popular".equals(sortField)) {
+            queryWrapper.orderBy("forkCount", false);
+            queryWrapper.orderBy("createTime", false);
+        } else {
+            queryWrapper.orderBy("createTime", false);
+        }
+
+        Page<App> appPage = page(Page.of(pageNum, pageSize), queryWrapper);
+        List<MarketplaceAppVO> records = appPage.getRecords().stream().map(app -> {
+            MarketplaceAppVO vo = new MarketplaceAppVO();
+            vo.setId(app.getId());
+            vo.setAppName(app.getAppName());
+            vo.setCover(app.getCover());
+            vo.setInitPrompt(app.getInitPrompt());
+            vo.setCodeGenType(app.getCodeGenType());
+            vo.setForkCount(app.getForkCount());
+            vo.setCreateTime(app.getCreateTime());
+            // 查询分类
+            List<AppCategory> appCategories = appCategoryMapper.selectListByQuery(
+                    QueryWrapper.create().eq("appId", app.getId()));
+            vo.setCategories(appCategories.stream()
+                    .map(AppCategory::getCategory)
+                    .collect(Collectors.toList()));
+            // 查询用户
+            if (app.getUserId() != null) {
+                User user = userService.getById(app.getUserId());
+                vo.setUser(userService.getUserVO(user));
+            }
+            return vo;
+        }).collect(Collectors.toList());
+
+        Page<MarketplaceAppVO> resultPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
+        resultPage.setRecords(records);
+        return resultPage;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long forkApp(Long appId, User loginUser) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+        // 1. 查源 App
+        App sourceApp = this.getById(appId);
+        ThrowUtils.throwIf(sourceApp == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        ThrowUtils.throwIf(sourceApp.getIsPublic() == null || sourceApp.getIsPublic() != 1,
+                ErrorCode.NO_AUTH_ERROR, "该应用未公开，无法 Fork");
+        // 2. 查源 App 最近 completed 的 AgentRun
+        AgentRun latestRun = agentRunMapper.selectOneByQuery(
+                QueryWrapper.create()
+                        .eq("appId", appId)
+                        .eq("status", "completed")
+                        .orderBy("createTime", false)
+                        .limit(1));
+        // 3. 检查工作区目录是否存在
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(sourceApp.getCodeGenType());
+        String workspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" +
+                getCodeGenOutputPrefix(codeGenTypeEnum != null ? codeGenTypeEnum : CodeGenTypeEnum.SINGLE_FILE) + "/" + appId;
+        Path sourceWorkspacePath = Path.of(workspacePath).toAbsolutePath().normalize();
+        ThrowUtils.throwIf(!Files.exists(sourceWorkspacePath), ErrorCode.NOT_FOUND_ERROR, "源应用工作区不存在，资源丢失");
+        // 4. 创建新 App 记录
+        App newApp = new App();
+        newApp.setAppName(sourceApp.getAppName() + " [副本]");
+        // Fork 副本已有完整工作区，不再自动触发 initPrompt 生成
+        newApp.setInitPrompt(null);
+        newApp.setCover(sourceApp.getCover());
+        newApp.setCodeGenType(sourceApp.getCodeGenType());
+        newApp.setGenerationMode(sourceApp.getGenerationMode());
+        newApp.setStyleTemplate(sourceApp.getStyleTemplate());
+        newApp.setUserId(loginUser.getId());
+        newApp.setIsPublic(0);
+        newApp.setForkCount(0);
+        newApp.setSourceAppId(appId);
+        newApp.setPriority(AppConstant.DEFAULT_APP_PRIORITY);
+        boolean saveResult = this.save(newApp);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "Fork 应用失败");
+        // 5. 复制工作区文件到新目录
+        String newWorkspacePath = workspaceProperties.getAgentWorkspaceDir() + "/" +
+                getCodeGenOutputPrefix(codeGenTypeEnum != null ? codeGenTypeEnum : CodeGenTypeEnum.SINGLE_FILE) + "/" + newApp.getId();
+        Path targetPath = Path.of(newWorkspacePath).toAbsolutePath().normalize();
+        try {
+            copyWorkspaceDir(sourceWorkspacePath, targetPath);
+        } catch (IOException e) {
+            log.error("Fork 工作区复制失败, sourceAppId={}, newAppId={}", appId, newApp.getId(), e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Fork 工作区复制失败：" + e.getMessage());
+        }
+        // 6. 更新源 App forkCount
+        // 注意：不能用 new App() + updateById，因为 @Builder.Default 会让 isPublic=0 被一起写入
+        long newForkCount = (sourceApp.getForkCount() != null ? sourceApp.getForkCount() : 0) + 1;
+        App updateSourceApp = new App();
+        updateSourceApp.setId(appId);
+        updateSourceApp.setForkCount((int) newForkCount);
+        updateSourceApp.setIsPublic(sourceApp.getIsPublic()); // 保持原有的 isPublic 不被覆盖
+        this.updateById(updateSourceApp);
+        // 7. 返回新应用 ID
+        return newApp.getId();
     }
 
     private void enrichFromManifest(AppVO appVO, App app) {
@@ -683,7 +939,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "代码生成类型错误");
             return codeGenTypeEnum;
         }
-        return CodeGenTypeEnum.MULTI_FILE;
+        return CodeGenTypeEnum.SINGLE_FILE;
     }
 
     private CodeGenTypeEnum parseCodeGenType(String valueOrName) {
@@ -699,6 +955,41 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    private void copyWorkspaceDir(Path source, Path target) throws IOException {
+        Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                String dirName = dir.getFileName().toString().toLowerCase();
+                if (FORK_EXCLUDED_DIRS.contains(dirName)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                Path targetDir = target.resolve(source.relativize(dir));
+                try {
+                    Files.createDirectories(targetDir);
+                } catch (IOException e) {
+                    throw new RuntimeException("创建目录失败：" + targetDir, e);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                String fileName = file.getFileName().toString().toLowerCase();
+                if (FORK_EXCLUDED_FILE_NAMES.contains(fileName)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                for (String ext : FORK_EXCLUDED_FILE_EXTENSIONS) {
+                    if (fileName.endsWith(ext)) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                }
+                Path targetFile = target.resolve(source.relativize(file));
+                Files.copy(file, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private String buildDeployUrl(String deployKey) {
@@ -760,8 +1051,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 .appId(appId)
                 .userId(userId)
                 .modelName(modelName)
-                .inputTokens(0)
-                .outputTokens(0)
                 .latencyMs(latencyMs)
                 .extra(extra)
                 .build();
@@ -791,6 +1080,59 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         chatSessionMapper.update(chatSession);
     }
 
+    private String resolveAppName(String initPrompt, Long userId) {
+        String fallbackTitle = AiTitleUtils.fallbackAppTitle(initPrompt);
+        if (pythonTitleGenerationService == null) {
+            return fallbackTitle;
+        }
+        try {
+            String generatedTitle = pythonTitleGenerationService.generateAppTitle(initPrompt, userId);
+            String sanitizedTitle = AiTitleUtils.sanitizeAppTitle(generatedTitle);
+            return StrUtil.blankToDefault(sanitizedTitle, fallbackTitle);
+        } catch (Exception e) {
+            log.warn("应用自动命名失败，使用兜底标题, userId={}", userId, e);
+            return fallbackTitle;
+        }
+    }
+
+    private void tryAutoRenameSessionTitle(Long sessionId, App app, String userMessage, Long userId) {
+        if (app == null || userId == null || userId <= 0) {
+            return;
+        }
+        String trimmedMessage = StrUtil.trim(userMessage);
+        if (StrUtil.isBlank(trimmedMessage)
+                || "[附件消息]".equals(trimmedMessage)
+                || pythonTitleGenerationService == null) {
+            return;
+        }
+        try {
+            ChatSession chatSession = chatSessionMapper.selectOneByQuery(QueryWrapper.create().eq("id", sessionId));
+            if (chatSession == null) {
+                return;
+            }
+            if (!AiTitleUtils.isDefaultSessionTitle(chatSession.getTitle())) {
+                return;
+            }
+            if (!ObjUtil.equal(chatSession.getMessageCount(), 1)) {
+                return;
+            }
+            String generatedTitle = pythonTitleGenerationService.generateSessionTitle(
+                    app.getAppName(),
+                    app.getInitPrompt(),
+                    trimmedMessage,
+                    userId
+            );
+            String sanitizedTitle = AiTitleUtils.sanitizeSessionTitle(generatedTitle);
+            if (StrUtil.isBlank(sanitizedTitle) || StrUtil.equals(sanitizedTitle, chatSession.getTitle())) {
+                return;
+            }
+            chatSession.setTitle(sanitizedTitle);
+            chatSessionMapper.update(chatSession);
+        } catch (Exception e) {
+            log.warn("会话自动命名失败，保留默认标题, sessionId={}, userId={}", sessionId, userId, e);
+        }
+    }
+
     private List<ToolEventVO> extractToolEvents(ChatHistory history) {
         if (history == null) {
             return new ArrayList<>();
@@ -802,13 +1144,49 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return extractToolEventsFromMessage(history.getMessage());
     }
 
+    private List<ChatAttachmentInfo> extractAttachments(ChatHistory history) {
+        if (history == null || StrUtil.isBlank(history.getExtra())) {
+            return null;
+        }
+        try {
+            JSONObject extraJson = JSONUtil.parseObj(history.getExtra());
+            JSONArray attachmentsArray = extraJson.getJSONArray("attachments");
+            if (attachmentsArray == null || attachmentsArray.isEmpty()) {
+                return null;
+            }
+            List<ChatAttachmentInfo> attachments = new ArrayList<>();
+            for (Object item : attachmentsArray) {
+                if (!(item instanceof JSONObject attObj)) {
+                    continue;
+                }
+                ChatAttachmentInfo info = new ChatAttachmentInfo();
+                info.setId(attObj.getStr("id"));
+                info.setFileName(attObj.getStr("fileName"));
+                info.setFileSize(attObj.getLong("fileSize"));
+                info.setMimeType(attObj.getStr("mimeType"));
+                info.setStorageType(attObj.getStr("storageType"));
+                info.setStoragePath(attObj.getStr("storagePath"));
+                info.setUrl(attObj.getStr("url"));
+                attachments.add(info);
+            }
+            return attachments;
+        } catch (Exception e) {
+            log.warn("解析 chat_history.extra 附件数据失败, id={}", history.getId(), e);
+            return null;
+        }
+    }
+
     private List<ToolEventVO> extractToolEventsFromExtra(String extra) {
         if (StrUtil.isBlank(extra)) {
             return new ArrayList<>();
         }
         try {
             JSONObject extraJson = JSONUtil.parseObj(extra);
-            JSONArray toolEventArray = extraJson.getJSONArray("toolEvents");
+            // 优先新格式 toolCalls，兼容旧格式 toolEvents
+            JSONArray toolEventArray = extraJson.getJSONArray("toolCalls");
+            if (toolEventArray == null || toolEventArray.isEmpty()) {
+                toolEventArray = extraJson.getJSONArray("toolEvents");
+            }
             if (toolEventArray == null || toolEventArray.isEmpty()) {
                 return new ArrayList<>();
             }
@@ -818,7 +1196,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                     continue;
                 }
                 String type = normalizeToolEventType(eventObj.getStr("type"));
-                String text = eventObj.getStr("text", "");
+                // 新格式用 name 作为 text，旧格式直接用 text
+                String text = eventObj.getStr("text");
+                if (StrUtil.isBlank(text)) {
+                    text = eventObj.getStr("name", "");
+                }
                 if (StrUtil.isNotBlank(type) && StrUtil.isNotBlank(text)) {
                     toolEvents.add(new ToolEventVO(type, text));
                 }
@@ -887,16 +1269,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成部署标识失败，请重试");
     }
 
-    private String resolveModelName(Long userId) {
-        try {
-            ModelConfig config = modelConfigService.getDefaultEnabledModelConfig(userId);
-            if (config != null && StrUtil.isNotBlank(config.getModelName())) {
-                return config.getModelName();
-            }
-        } catch (Exception e) {
-            log.debug("获取默认模型名称失败, userId={}", userId, e);
-        }
-        return "";
+    private String resolveModelName() {
+        return StrUtil.blankToDefault(defaultModelName, "");
     }
 
     private String getCodeGenOutputPrefix(CodeGenTypeEnum codeGenType) {
@@ -905,6 +1279,26 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             case MULTI_FILE -> AppConstant.MULTI_FILE_OUTPUT_PREFIX;
             case VUE_PROJECT -> AppConstant.VUE_PROJECT_OUTPUT_PREFIX;
         };
+    }
+
+    /** 构造入库 extra JSON：合并已有 extra + toolCalls。 */
+    private String buildExtraJsonWithToolCalls(Long sessionId, String existingExtra) {
+        ActiveGeneration activeGen = activeGenerationManager.get(sessionId);
+        if (activeGen == null || activeGen.getToolCalls().isEmpty()) {
+            return existingExtra;
+        }
+        JSONObject extraJson;
+        if (StrUtil.isNotBlank(existingExtra)) {
+            try {
+                extraJson = JSONUtil.parseObj(existingExtra);
+            } catch (Exception e) {
+                extraJson = new JSONObject();
+            }
+        } else {
+            extraJson = new JSONObject();
+        }
+        extraJson.put("toolCalls", new JSONArray(activeGen.getToolCalls()));
+        return extraJson.toString();
     }
 
 }

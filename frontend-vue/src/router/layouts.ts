@@ -30,11 +30,17 @@ export default {
       path: 'user/register',
       name: '注册',
       component: () => import('@/pages/user/UserRegisterPage.vue'),
+      meta: {
+        hideGlobalChrome: true,
+      },
     },
     {
       path: 'user/login',
       name: '登录',
       component: () => import('@/pages/user/UserLoginPage.vue'),
+      meta: {
+        hideGlobalChrome: true,
+      },
     },
     {
       path: 'user/profile',
@@ -44,15 +50,12 @@ export default {
     {
       path: 'user/usage',
       name: '用量统计',
-      component: () => import('@/pages/user/UsageStatsPage.vue'),
+      component: () => import('@/pages/user/TokenDashboardPage.vue'),
     },
     {
-      path: 'model/config',
-      name: 'model_config',
-      component: () => import('@/pages/model/ModelConfigPage.vue'),
-      meta: {
-        name: '模型配置',
-      },
+      path: 'user/settings',
+      name: '账号设置',
+      component: () => import('@/pages/user/UserSettingsPage.vue'),
     },
   ],
 } as RouteRecordRaw

@@ -1,17 +1,21 @@
 <template>
   <a-layout class="basic-layout">
-    <GlobalHeader />
-    <a-layout-content class="layout-content">
+    <GlobalHeader v-if="showGlobalChrome" />
+    <a-layout-content class="layout-content" :class="{ 'layout-content-auth': !showGlobalChrome }">
       <RouterView />
     </a-layout-content>
-    <GlobalFooter />
+    <GlobalFooter v-if="showGlobalChrome" />
   </a-layout>
 </template>
 
 <script lang="ts" setup>
-import { RouterView } from 'vue-router'
+import { computed } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import GlobalHeader from '@/components/GlobalHeader.vue'
 import GlobalFooter from '@/components/GlobalFooter.vue'
+
+const route = useRoute()
+const showGlobalChrome = computed(() => route.meta.hideGlobalChrome !== true)
 </script>
 
 <style scoped>
@@ -25,5 +29,9 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   flex: 1;
   background: var(--color-background);
   overflow-y: auto;
+}
+
+.layout-content-auth {
+  overflow: hidden;
 }
 </style>

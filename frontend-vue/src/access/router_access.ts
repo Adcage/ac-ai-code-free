@@ -4,13 +4,17 @@ import router from '@/router'
 
 let firstFetchLoginUser = true
 
-const needLoginPaths = ['/app/my', '/app/generate', '/user/profile', '/user/usage', '/model/config']
+const needLoginPaths = ['/app/my', '/app/generate', '/user/profile', '/user/usage', '/user/settings']
 
 router.beforeEach(async (to, from, next) => {
   const loginUserStore = useLoginUserStore()
   let loginUser = loginUserStore.loginUser
   if (firstFetchLoginUser) {
-    await loginUserStore.fetchLoginUser()
+    try {
+      await loginUserStore.fetchLoginUser()
+    } catch {
+      // 后端不可用时不阻塞导航，按未登录态处理
+    }
     loginUser = loginUserStore.loginUser
     firstFetchLoginUser = false
   }

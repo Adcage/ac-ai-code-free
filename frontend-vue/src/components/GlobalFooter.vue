@@ -1,7 +1,7 @@
 <template>
   <a-layout-footer class="global-footer">
     <div class="footer-content">
-      <span class="copyright">&copy; 2026 AC AI Code Free</span>
+      <span class="copyright">&copy; 2026 原象 Morpha</span>
       <a href="https://github.com/Adcage" target="_blank" rel="noopener noreferrer" class="github-link">
         <ExternalLink :size="18" />
       </a>
@@ -45,6 +45,6 @@ import { ExternalLink } from '@lucide/vue'
 }
 
 .github-link:hover {
-  color: var(--color-text);
+  color: var(--color-cta);
 }
 </style>

@@ -59,7 +59,7 @@ from app.prompts.route_modules import (
 )
 from app.prompts.test_modules import TestModeInfoModule, ProductionSecurityModule
 from app.runtime.context import CodeGenType, ExecutionContext, RunMode
-from app.runtime.event_mapper import ProtoEventMapper
+from app.agent_loop.event_mapper import LegacyEventMapper
 from app.runtime.events import RuntimeEvent, RuntimeEventType
 from app.runtime.services import RuntimeServices
 
@@ -891,8 +891,8 @@ class TestNoUnclassifiedEventWarning:
             state = AgentLoopState(is_test=True)
             await graph.ainvoke(state)
 
-            # Map all events through ProtoEventMapper and capture warnings
-            mapper = ProtoEventMapper()
+            # Map all events through LegacyEventMapper and capture warnings
+            mapper = LegacyEventMapper()
             unclassified_warnings = []
 
             # Capture warnings from logging

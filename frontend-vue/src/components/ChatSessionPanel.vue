@@ -86,15 +86,17 @@ const formatSessionTime = (time?: string) => {
 
 <style scoped>
 .chat-session-panel {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(220, 207, 196, 0.9);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 250, 247, 0.92));
 }
 
 .session-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 13px;
   color: var(--color-text-secondary);
 }
@@ -103,29 +105,32 @@ const formatSessionTime = (time?: string) => {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 4px;
 }
 
 .session-item {
   min-width: 140px;
   max-width: 180px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 8px 10px;
+  border: 1px solid rgba(220, 207, 196, 0.92);
+  border-radius: 14px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: all var(--transition-normal);
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.92);
   position: relative;
   flex-shrink: 0;
+  box-shadow: 0 8px 18px rgba(28, 24, 21, 0.04);
 }
 
 .session-item:hover {
-  border-color: var(--color-primary);
+  border-color: rgba(200, 90, 62, 0.34);
+  transform: translateY(-1px);
 }
 
 .session-item.active {
-  border-color: var(--color-primary);
+  border-color: rgba(200, 90, 62, 0.34);
   background: var(--color-primary-bg);
+  box-shadow: 0 12px 24px rgba(28, 24, 21, 0.06);
 }
 
 .session-title {
@@ -140,8 +145,8 @@ const formatSessionTime = (time?: string) => {
 .session-edit-input {
   width: 100%;
   font-size: 12px;
-  border: 1px solid var(--color-primary);
-  border-radius: 4px;
+  border: 1px solid var(--color-cta);
+  border-radius: 8px;
   padding: 2px 6px;
   outline: none;
   background: var(--color-background);

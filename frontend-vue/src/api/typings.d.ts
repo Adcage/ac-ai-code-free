@@ -16,6 +16,9 @@ declare namespace API {
     updateTime?: string
     isDelete?: number
     isTestApp?: number
+    isPublic?: number
+    forkCount?: number
+    sourceAppId?: number
   }
 
   type AppAddRequest = {
@@ -84,6 +87,10 @@ declare namespace API {
     createTime?: string
     updateTime?: string
     isTestApp?: number
+    isPublic?: number
+    forkCount?: number
+    sourceAppId?: number
+    categories?: string[]
     user?: UserVO
     coverTaskStatus?: string
     coverRetryCount?: number
@@ -114,9 +121,21 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseListChatAttachmentInfo = {
+    code?: number
+    data?: ChatAttachmentInfo[]
+    message?: string
+  }
+
   type BaseResponseListChatSessionVO = {
     code?: number
     data?: ChatSessionVO[]
+    message?: string
+  }
+
+  type BaseResponseListString = {
+    code?: number
+    data?: string[]
     message?: string
   }
 
@@ -132,15 +151,9 @@ declare namespace API {
     message?: string
   }
 
-  type BaseResponseModelConfigRuntimeVO = {
+  type BaseResponseMapStringObject = {
     code?: number
-    data?: ModelConfigRuntimeVO
-    message?: string
-  }
-
-  type BaseResponseModelConfigVO = {
-    code?: number
-    data?: ModelConfigVO
+    data?: Record<string, any>
     message?: string
   }
 
@@ -162,9 +175,9 @@ declare namespace API {
     message?: string
   }
 
-  type BaseResponsePageModelConfigVO = {
+  type BaseResponsePageMarketplaceAppVO = {
     code?: number
-    data?: PageModelConfigVO
+    data?: PageMarketplaceAppVO
     message?: string
   }
 
@@ -186,6 +199,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseTokenUsageStatsVO = {
+    code?: number
+    data?: TokenUsageStatsVO
+    message?: string
+  }
+
   type BaseResponseUsageStatsVO = {
     code?: number
     data?: UsageStatsVO
@@ -202,6 +221,24 @@ declare namespace API {
     code?: number
     data?: UserVO
     message?: string
+  }
+
+  type ChatAttachmentInfo = {
+    id?: string
+    fileName?: string
+    fileSize?: number
+    mimeType?: string
+    storageType?: string
+    storagePath?: string
+    url?: string
+  }
+
+  type ChatCodeGenRequest = {
+    appId?: number
+    sessionId?: number
+    message?: string
+    displayMessage?: string
+    attachments?: ChatAttachmentInfo[]
   }
 
   type ChatHistoryQueryRequest = {
@@ -223,12 +260,11 @@ declare namespace API {
     appId?: number
     userId?: number
     modelName?: string
-    inputTokens?: number
-    outputTokens?: number
     latencyMs?: number
     requestId?: string
     extra?: string
     toolEvents?: ToolEventVO[]
+    attachments?: ChatAttachmentInfo[]
     createTime?: string
   }
 
@@ -253,16 +289,17 @@ declare namespace API {
     updateTime?: string
   }
 
-  type chatToGenCodeParams = {
-    appId: number
-    sessionId?: number
-    message: string
+  type DailyTokenUsageVO = {
+    date?: string
+    inputTokens?: number
+    outputTokens?: number
+    cacheReadTokens?: number
+    cacheCreationTokens?: number
+    runs?: number
   }
 
   type DailyUsageVO = {
     date?: string
-    inputTokens?: number
-    outputTokens?: number
     messages?: number
   }
 
@@ -279,6 +316,10 @@ declare namespace API {
     message: string
   }
 
+  type getActiveGenerationParams = {
+    sessionId: number
+  }
+
   type getAppByIdParams = {
     id: number
   }
@@ -291,13 +332,8 @@ declare namespace API {
     id: number
   }
 
-  type getModelConfigVOByIdParams = {
-    id: number
-  }
-
-  type getRuntimeConfigParams = {
-    id: number
-    configVersion: number
+  type getTokenUsageStatsParams = {
+    days?: number
   }
 
   type getUserByIdParams = {
@@ -328,57 +364,24 @@ declare namespace API {
     updateTime?: string
   }
 
-  type ModelConfigAddRequest = {
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    apiKeyCipher?: string
-    temperature?: number
-    maxTokens?: number
-  }
-
-  type ModelConfigEditRequest = {
+  type MarketplaceAppVO = {
     id?: number
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    apiKeyCipher?: string
-    temperature?: number
-    maxTokens?: number
-    enabled?: number
-    isDefault?: number
+    appName?: string
+    cover?: string
+    initPrompt?: string
+    codeGenType?: string
+    forkCount?: number
+    categories?: string[]
+    user?: UserVO
+    createTime?: string
   }
 
-  type ModelConfigQueryRequest = {
+  type MarketplaceQueryRequest = {
     pageNum?: number
     pageSize?: number
     sortField?: string
     sortOrder?: string
-    provider?: string
-    modelName?: string
-    enabled?: number
-  }
-
-  type ModelConfigRuntimeVO = {
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    apiKey?: string
-  }
-
-  type ModelConfigVO = {
-    id?: number
-    userId?: number
-    provider?: string
-    modelName?: string
-    baseUrl?: string
-    temperature?: number
-    maxTokens?: number
-    configVersion?: number
-    enabled?: number
-    isDefault?: number
-    createTime?: string
-    updateTime?: string
+    category?: string
   }
 
   type PageApp = {
@@ -408,8 +411,8 @@ declare namespace API {
     optimizeCountQuery?: boolean
   }
 
-  type PageModelConfigVO = {
-    records?: ModelConfigVO[]
+  type PageMarketplaceAppVO = {
+    records?: MarketplaceAppVO[]
     pageNumber?: number
     pageSize?: number
     totalPage?: number
@@ -437,14 +440,27 @@ declare namespace API {
 
   type ServerSentEventString = true
 
+  type TokenUsageStatsVO = {
+    totalInputTokens?: number
+    totalOutputTokens?: number
+    totalCacheReadTokens?: number
+    totalCacheCreationTokens?: number
+    totalRuns?: number
+    avgLatencyMs?: number
+    cacheHitRate?: number
+    dailyTokenUsage?: DailyTokenUsageVO[]
+  }
+
   type ToolEventVO = {
     type?: string
     text?: string
   }
 
+  type uploadChatAttachmentParams = {
+    files?: string[]
+  }
+
   type UsageStatsVO = {
-    totalInputTokens?: number
-    totalOutputTokens?: number
     totalMessages?: number
     totalApps?: number
     totalSessions?: number

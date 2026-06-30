@@ -14,7 +14,6 @@ import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.mapper.ChatSessionMapper;
 import com.adcage.acaicodefree.mapper.UserMapper;
 import com.adcage.acaicodefree.service.AgentRunService;
-import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
@@ -82,9 +81,6 @@ class AppChatE2ETest {
     private AgentRunService agentRunService;
 
     @MockBean
-    private ModelConfigService modelConfigService;
-
-    @MockBean
     private UserService userService;
 
     private User loginUser;
@@ -95,8 +91,6 @@ class AppChatE2ETest {
     void setUp() {
         ensureChatSchema();
         when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(999L);
-        when(agentRunService.createAgentRun(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any())).thenReturn(999L);
-        when(modelConfigService.getDefaultEnabledModelConfig(anyLong())).thenReturn(null);
         String suffix = String.valueOf(System.nanoTime());
         User user = User.builder()
                 .userAccount("e2e_user_" + suffix)
@@ -170,8 +164,6 @@ class AppChatE2ETest {
                   appId BIGINT NOT NULL,
                   userId BIGINT NOT NULL,
                   modelName VARCHAR(128) NULL,
-                  inputTokens INT NOT NULL DEFAULT 0,
-                  outputTokens INT NOT NULL DEFAULT 0,
                   latencyMs INT NULL,
                   requestId VARCHAR(64) NULL,
                   extra JSON NULL,
@@ -188,8 +180,6 @@ class AppChatE2ETest {
         ensureHistoryColumn("seqNo", "ALTER TABLE chat_history ADD COLUMN seqNo INT NOT NULL DEFAULT 0");
         ensureHistoryColumn("status", "ALTER TABLE chat_history ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'success'");
         ensureHistoryColumn("modelName", "ALTER TABLE chat_history ADD COLUMN modelName VARCHAR(128) NULL");
-        ensureHistoryColumn("inputTokens", "ALTER TABLE chat_history ADD COLUMN inputTokens INT NOT NULL DEFAULT 0");
-        ensureHistoryColumn("outputTokens", "ALTER TABLE chat_history ADD COLUMN outputTokens INT NOT NULL DEFAULT 0");
         ensureHistoryColumn("latencyMs", "ALTER TABLE chat_history ADD COLUMN latencyMs INT NULL");
         ensureHistoryColumn("requestId", "ALTER TABLE chat_history ADD COLUMN requestId VARCHAR(64) NULL");
         ensureHistoryColumn("extra", "ALTER TABLE chat_history ADD COLUMN extra JSON NULL");

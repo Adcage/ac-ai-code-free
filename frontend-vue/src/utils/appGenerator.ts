@@ -45,14 +45,37 @@ export const looksLikeGenerationFailure = (content: string) => {
   )
 }
 
-export const hasFileWriteSignal = (messageItem: { toolEvents?: { type: string; text: string }[]; content?: string }) => {
+export const hasFileWriteSignal = (messageItem: {
+  toolEvents?: { type: string; text: string }[]
+  toolCalls?: { name?: string; description?: string; status?: string }[]
+  content?: string
+}) => {
+  if (messageItem.toolCalls?.some((toolCall) => {
+    return (
+      toolCall.status === 'completed' &&
+      (
+        toolCall.name === 'Write' ||
+        toolCall.name === 'write_file' ||
+        toolCall.name === 'writeFile' ||
+        toolCall.description?.includes('写入')
+      )
+    )
+  })) {
+    return true
+  }
   if (messageItem.toolEvents?.some((eventItem) => eventItem.type === 'executed' && eventItem.text.includes('写入文件'))) {
     return true
   }
   return (messageItem.content ?? '').includes('[工具完成]') || (messageItem.content ?? '').includes('已写入文件')
 }
 
-export const hasPreviewCandidate = (messages: { role: string; status?: string; content?: string; toolEvents?: { type: string; text: string }[] }[]) => {
+export const hasPreviewCandidate = (messages: {
+  role: string
+  status?: string
+  content?: string
+  toolEvents?: { type: string; text: string }[]
+  toolCalls?: { name?: string; description?: string; status?: string }[]
+}[]) => {
   const latestAiMessage = [...messages].reverse().find((item) => item.role === 'ai')
   if (!latestAiMessage || latestAiMessage.status === 'failed' || looksLikeGenerationFailure(latestAiMessage.content ?? '')) {
     return false

@@ -1,23 +1,27 @@
 package com.adcage.acaicodefree.grpc.server;
 
+import java.util.ArrayList;
 import java.util.List;
 
+import cn.hutool.core.util.StrUtil;
+import com.adcage.acaicodefree.config.properties.RuntimeModelProperties;
 import com.adcage.acaicodefree.core.build.VueProjectBuildService;
+import cn.hutool.json.JSONUtil;
 import com.adcage.acaicodefree.grpc.common.CodeGenType;
 import com.adcage.acaicodefree.grpc.platform.*;
 import com.adcage.acaicodefree.mapper.ChatHistoryMapper;
 import com.adcage.acaicodefree.model.entity.AgentRun;
 import com.adcage.acaicodefree.model.entity.App;
 import com.adcage.acaicodefree.model.entity.ChatHistory;
-import com.adcage.acaicodefree.model.entity.ModelConfig;
 import com.adcage.acaicodefree.model.entity.User;
 import com.adcage.acaicodefree.model.enums.CodeGenTypeEnum;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelBundle;
 import com.adcage.acaicodefree.model.runtime.RuntimeModelConfig;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelRole;
+import com.adcage.acaicodefree.model.runtime.RuntimeModelUrlNormalizer;
 import com.adcage.acaicodefree.service.AgentRunService;
 import com.adcage.acaicodefree.service.AppService;
 import com.adcage.acaicodefree.service.AppVersionService;
-import com.adcage.acaicodefree.service.ModelConfigService;
 import com.adcage.acaicodefree.service.ScreenshotService;
 import com.adcage.acaicodefree.service.UserService;
 
@@ -25,13 +29,24 @@ import io.grpc.stub.StreamObserver;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.beans.factory.annotation.Value;
 
 @Slf4j
 @GrpcService
 public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImplBase {
 
+    @Value("${langchain4j.open-ai.chat-model.base-url:}")
+    private String defaultBaseUrl;
+
+    @Value("${langchain4j.open-ai.chat-model.api-key:}")
+    private String defaultApiKey;
+
+    @Value("${langchain4j.open-ai.chat-model.model-name:}")
+    private String defaultModelName;
+
     @Resource
-    private ModelConfigService modelConfigService;
+    private RuntimeModelProperties runtimeModelProperties;
+
     @Resource
     private AgentRunService agentRunService;
     @Resource
@@ -51,13 +66,32 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
     public void resolveRuntimeModelBundle(ResolveRuntimeModelBundleRequest request,
                                           StreamObserver<ResolveRuntimeModelBundleResponse> responseObserver) {
         try {
-            String codeGenTypeStr = mapGrpcCodeGenTypeToString(request.getCodeGenType());
-            RuntimeModelBundle bundle = modelConfigService.resolveRuntimeModelBundle(
-                    request.getUserId(),
-                    request.getAppId(),
-                    request.getAgentRunId(),
-                    codeGenTypeStr
-            );
+            RuntimeModelConfig primaryConfig = resolvePrimaryRuntimeModelConfig();
+            if (primaryConfig == null) {
+                log.warn("系统运行时模型配置不完整，无法解析模型包");
+                responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
+                        .setSuccess(false)
+                        .setErrorMessage("系统模型配置未设置，请在 application-local.yml 或 application.yml 中配置 app.ai.runtime-models.primary 或 langchain4j.open-ai.chat-model")
+                        .build());
+                responseObserver.onCompleted();
+                return;
+            }
+
+            List<RuntimeModelConfig> configs = new ArrayList<>();
+            for (RuntimeModelRole role : RuntimeModelRole.values()) {
+                RuntimeModelConfig resolved = resolveRuntimeModelConfig(role, primaryConfig);
+                if (resolved != null) {
+                    configs.add(resolved);
+                }
+            }
+
+            RuntimeModelBundle bundle = RuntimeModelBundle.builder()
+                    .success(true)
+                    .errorMessage("")
+                    .configs(configs)
+                    .policyVersion("v1")
+                    .billingContext("")
+                    .build();
 
             ResolveRuntimeModelBundleResponse.Builder builder = ResolveRuntimeModelBundleResponse.newBuilder()
                     .setSuccess(bundle.isSuccess())
@@ -91,64 +125,6 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             responseObserver.onNext(ResolveRuntimeModelBundleResponse.newBuilder()
                     .setSuccess(false)
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "unknown error")
-                    .build());
-            responseObserver.onCompleted();
-        }
-    }
-
-    @Override
-    public void getModelConfig(GetModelConfigRequest request, StreamObserver<GetModelConfigResponse> responseObserver) {
-        try {
-            long configId = request.getModelConfigId();
-            ModelConfig modelConfig = configId > 0 ? modelConfigService.getById(configId) : null;
-            if (modelConfig == null) {
-                modelConfig = modelConfigService.getServerDefaultConfig();
-            }
-            if (modelConfig == null) {
-                responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                        .setProvider("")
-                        .setModelName("")
-                        .setBaseUrl("")
-                        .setApiKey("")
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-            if (modelConfig.getEnabled() == null || modelConfig.getEnabled() != 1) {
-                responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                        .setProvider("")
-                        .setModelName("")
-                        .setBaseUrl("")
-                        .setApiKey("")
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-            if (modelConfig.getConfigVersion() != null && request.getConfigVersion() > 0
-                    && !modelConfig.getConfigVersion().equals(request.getConfigVersion())) {
-                responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                        .setProvider("")
-                        .setModelName("")
-                        .setBaseUrl("")
-                        .setApiKey("")
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-            responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                    .setProvider(modelConfig.getProvider() != null ? modelConfig.getProvider() : "")
-                    .setModelName(modelConfig.getModelName() != null ? modelConfig.getModelName() : "")
-                    .setBaseUrl(modelConfig.getBaseUrl() != null ? modelConfig.getBaseUrl() : "")
-                    .setApiKey(modelConfig.getApiKeyCipher() != null ? modelConfig.getApiKeyCipher() : "")
-                    .build());
-            responseObserver.onCompleted();
-        } catch (Exception e) {
-            log.error("gRPC getModelConfig failed", e);
-            responseObserver.onNext(GetModelConfigResponse.newBuilder()
-                    .setProvider("")
-                    .setModelName("")
-                    .setBaseUrl("")
-                    .setApiKey("")
                     .build());
             responseObserver.onCompleted();
         }
@@ -216,7 +192,11 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
                 agentRunService.completeAgentRun(
                         agentRunId,
                         request.getWorkspacePath(),
-                        request.getLatencyMs()
+                        request.getLatencyMs(),
+                        (int) request.getTotalInputTokens(),
+                        (int) request.getTotalOutputTokens(),
+                        (int) request.getTotalCacheReadTokens(),
+                        (int) request.getTotalCacheCreationTokens()
                 );
             } else {
                 agentRunService.failAgentRun(
@@ -283,15 +263,26 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             List<ChatHistory> historyList = chatHistoryMapper.selectListByQuery(queryWrapper);
             GetChatHistoryResponse.Builder builder = GetChatHistoryResponse.newBuilder();
             for (ChatHistory record : historyList) {
-                ChatHistoryEntry entry = ChatHistoryEntry.newBuilder()
+                ChatHistoryEntry.Builder entryBuilder = ChatHistoryEntry.newBuilder()
                         .setId(record.getId() != null ? record.getId() : 0L)
                         .setRole(record.getMessageType() != null ? record.getMessageType() : "")
                         .setContent(record.getMessage() != null ? record.getMessage() : "")
                         .setCreatedAt(record.getCreateTime() != null
                                 ? record.getCreateTime().atZone(java.time.ZoneId.systemDefault()).toEpochSecond()
-                                : 0L)
-                        .build();
-                builder.addEntries(entry);
+                                : 0L);
+                // 从 extra JSON 中提取附件元数据
+                String extra = record.getExtra();
+                if (extra != null && !extra.isBlank() && extra.contains("attachments")) {
+                    try {
+                        cn.hutool.json.JSONObject extraJson = JSONUtil.parseObj(extra);
+                        if (extraJson.containsKey("attachments")) {
+                            entryBuilder.setAttachmentsJson(extraJson.getJSONArray("attachments").toString());
+                        }
+                    } catch (Exception e) {
+                        log.warn("解析 chat_history.extra 附件数据失败, id={}", record.getId(), e);
+                    }
+                }
+                builder.addEntries(entryBuilder.build());
             }
             responseObserver.onNext(builder.build());
             responseObserver.onCompleted();
@@ -417,18 +408,115 @@ public class GrpcPlatformService extends PlatformServiceGrpc.PlatformServiceImpl
             case SINGLE_FILE -> "single_file";
             case MULTI_FILE -> "multi-file";
             case VUE_PROJECT -> "vue_project";
-            default -> "vue_project";
+            default -> "single_file";
         };
     }
 
     private CodeGenType mapJavaCodeGenType(String javaType) {
-        if (javaType == null) return CodeGenType.VUE_PROJECT;
+        if (javaType == null) return CodeGenType.SINGLE_FILE;
         CodeGenTypeEnum enumValue = CodeGenTypeEnum.getEnumByValue(javaType);
-        if (enumValue == null) return CodeGenType.VUE_PROJECT;
+        if (enumValue == null) return CodeGenType.SINGLE_FILE;
         return switch (enumValue) {
             case SINGLE_FILE -> CodeGenType.SINGLE_FILE;
             case MULTI_FILE -> CodeGenType.MULTI_FILE;
             case VUE_PROJECT -> CodeGenType.VUE_PROJECT;
         };
+    }
+
+    private RuntimeModelConfig resolvePrimaryRuntimeModelConfig() {
+        RuntimeModelProperties.ModelConfig primary = runtimeModelProperties.getPrimary();
+        String resolvedBaseUrl = pickBaseUrl(primary.getBaseUrl(), defaultBaseUrl, RuntimeModelRole.PRIMARY);
+        return buildRuntimeModelConfig(
+                RuntimeModelRole.PRIMARY,
+                firstNonBlank(primary.getProvider(), "openai"),
+                resolvedBaseUrl,
+                firstNonBlank(primary.getApiKey(), defaultApiKey),
+                firstNonBlank(primary.getModelName(), defaultModelName),
+                hasConfiguredValue(primary) ? "APP_AI_RUNTIME_MODELS" : "LANGCHAIN4J_DEFAULT",
+                "SYSTEM_FREE_FALLBACK"
+        );
+    }
+
+    private RuntimeModelConfig resolveRuntimeModelConfig(RuntimeModelRole role, RuntimeModelConfig primaryConfig) {
+        return switch (role) {
+            case LIGHT -> resolveRoleWithFallback(role, runtimeModelProperties.getLight(), primaryConfig);
+            case PRIMARY -> primaryConfig;
+            case CRITIC -> resolveRoleWithFallback(role, runtimeModelProperties.getCritic(), primaryConfig);
+            case REPAIR -> resolveRoleWithFallback(role, runtimeModelProperties.getRepair(), primaryConfig);
+        };
+    }
+
+    private RuntimeModelConfig resolveRoleWithFallback(RuntimeModelRole role,
+                                                       RuntimeModelProperties.ModelConfig roleConfig,
+                                                       RuntimeModelConfig fallbackConfig) {
+        if (fallbackConfig == null) {
+            return null;
+        }
+        String resolvedBaseUrl = pickBaseUrl(roleConfig.getBaseUrl(), fallbackConfig.getBaseUrl(), role);
+        return buildRuntimeModelConfig(
+                role,
+                firstNonBlank(roleConfig.getProvider(), fallbackConfig.getProvider(), "openai"),
+                resolvedBaseUrl,
+                firstNonBlank(roleConfig.getApiKey(), fallbackConfig.getApiKey()),
+                firstNonBlank(roleConfig.getModelName(), fallbackConfig.getModelName()),
+                hasConfiguredValue(roleConfig) ? "APP_AI_RUNTIME_MODELS" : fallbackConfig.getSource(),
+                fallbackConfig.getBillingMode()
+        );
+    }
+
+    private RuntimeModelConfig buildRuntimeModelConfig(RuntimeModelRole role,
+                                                       String provider,
+                                                       String baseUrl,
+                                                       String apiKey,
+                                                       String modelName,
+                                                       String source,
+                                                       String billingMode) {
+        if (StrUtil.hasBlank(baseUrl, apiKey, modelName)) {
+            return null;
+        }
+        if (!RuntimeModelUrlNormalizer.isSupportedHttpUrl(baseUrl)) {
+            log.warn("运行时模型 baseUrl 非法，已跳过该角色配置, role={}, baseUrl={}", role.getValue(), baseUrl);
+            return null;
+        }
+        String normalizedBaseUrl = RuntimeModelUrlNormalizer.normalize(baseUrl);
+        return RuntimeModelConfig.builder()
+                .role(role.getValue())
+                .modelConfigId(0L)
+                .configVersion(0)
+                .provider(StrUtil.blankToDefault(provider, "openai"))
+                .modelName(modelName)
+                .baseUrl(normalizedBaseUrl)
+                .apiKey(apiKey)
+                .source(StrUtil.blankToDefault(source, "SYSTEM"))
+                .billingMode(StrUtil.blankToDefault(billingMode, "SYSTEM_FREE_FALLBACK"))
+                .build();
+    }
+
+    private boolean hasConfiguredValue(RuntimeModelProperties.ModelConfig modelConfig) {
+        return modelConfig != null && StrUtil.isNotBlank(
+                firstNonBlank(modelConfig.getProvider(), modelConfig.getBaseUrl(), modelConfig.getApiKey(), modelConfig.getModelName())
+        );
+    }
+
+    private String pickBaseUrl(String preferredBaseUrl, String fallbackBaseUrl, RuntimeModelRole role) {
+        if (StrUtil.isNotBlank(preferredBaseUrl)) {
+            if (RuntimeModelUrlNormalizer.isSupportedHttpUrl(preferredBaseUrl)) {
+                return preferredBaseUrl;
+            }
+            log.warn("运行时模型 baseUrl 非法，已回退到备用配置, role={}, baseUrl={}", role.getValue(), preferredBaseUrl);
+        }
+        return fallbackBaseUrl;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 }

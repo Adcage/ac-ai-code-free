@@ -1,46 +1,10 @@
 import { ref, unref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { ssePost } from '@/utils/sseRequest'
 import { extractBusinessChunk, splitConcatenatedJsonObjects } from './sseParser'
-import { buildChatStreamRequestBody } from '@/utils/chatStreamRequest'
-
-export interface ToolEvent {
-  type: 'request' | 'executed' | 'status'
-  text: string
-}
-
-export interface PlanningOption {
-  id?: string
-  value?: string
-  label: string
-  description?: string
-  recommended?: boolean
-}
-
-export interface PlanningQuestion {
-  id: string
-  prompt?: string
-  question?: string
-  inputType: 'single_select' | 'multi_select'
-  required: boolean
-  options?: PlanningOption[]
-  reason?: string
-  placeholder?: string
-}
-
-export interface PlanningQuestionSet {
-  questionSetId: string
-  stage?: string
-  protocolVersion?: number
-  questions: PlanningQuestion[]
-}
-
-export interface ChatMessage {
-  role: 'user' | 'ai'
-  content: string
-  status?: string
-  toolEvents?: ToolEvent[]
-  planning?: PlanningQuestionSet
-}
+import { buildChatStreamRequestBody, type AttachmentInfo } from '@/utils/chatStreamRequest'
+import type { ChatMessage, PlanningQuestion, PlanningQuestionSet, ToolCallRecord } from '@/types/chat'
+import { formatToolCallDescription } from '@/utils/chatMessageTooling'
 
 export interface SSEChatOptions {
   appId: string | Ref<string>
@@ -61,6 +25,8 @@ export function useSSEChat(options: SSEChatOptions) {
   const streamWarning = ref('')
   let currentAbortController: AbortController | null = null
   let previewUpdateTimer: ReturnType<typeof setTimeout> | null = null
+
+
 
   const finalizeGeneration = (aiMsgIndex: number, streamCompleted: boolean, delayPreviewRefresh = false) => {
     currentAbortController = null
@@ -147,50 +113,44 @@ export function useSSEChat(options: SSEChatOptions) {
     sessionId: string,
     codeGenType?: string,
     displayMessage?: string,
+    attachments?: AttachmentInfo[],
   ) => {
     generating.value = true
     streamWarning.value = ''
     let streamCompleted = false
     let hasBusinessError = false
+
+    // 标记用户消息中的附件（前端展示用）
+    if (attachments && attachments.length > 0) {
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.role === 'user') {
+        lastMsg.attachments = attachments
+      }
+    }
+
     const aiMsgIndex = messages.value.length
-    messages.value.push({ role: 'ai', content: '', status: 'running' })
+    messages.value.push({ role: 'ai', content: '', status: 'running', toolStatus: '', toolCalls: [] })
 
     const isStructuredToolMode =
       codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL
     const controller = new AbortController()
     currentAbortController = controller
 
     void (async () => {
       try {
-        const response = await fetch(`${baseUrl}/app/chat/gen/code/stream`, {
-          method: 'POST',
-          credentials: 'include',
-          cache: 'no-store',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(
-            buildChatStreamRequestBody({
-              appId: unref(appId),
-              sessionId,
-              message: userMsg,
-              displayMessage,
-            }),
-          ),
+        const requestBody = buildChatStreamRequestBody({
+          appId: unref(appId),
+          sessionId,
+          message: userMsg,
+          displayMessage,
+          attachments,
         })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(errorText || `HTTP ${response.status}`)
-        }
-        const contentType = response.headers.get('content-type') || ''
-        if (!contentType.includes('text/event-stream')) {
-          const abnormalBody = await response.text()
-          throw new Error(abnormalBody || 'SSE 响应类型错误')
-        }
+        const response = await ssePost({
+          path: '/app/chat/gen/code/stream',
+          body: requestBody,
+          signal: controller.signal,
+        })
 
         await readSseStream(response, (eventName, data) => {
           if (eventName === 'meta') {
@@ -273,24 +233,95 @@ export function useSSEChat(options: SSEChatOptions) {
     generating.value = false
   }
 
-  const appendStreamChunk = (aiMsgIndex: number, chunk: string, structuredToolMode: boolean) => {
-    if (!chunk) return
-    if (!structuredToolMode) {
-      messages.value[aiMsgIndex].content += chunk
-      return
-    }
+  /**
+   * 重连到活跃生成：前端切走再回来时，续收后续实时事件。
+   * POST /resume 从 Sink 订阅新事件，追加到现有的 AI message。
+   * @param sessionId   会话 ID
+   * @param codeGenType 代码生成类型（决定是否 JSON 解析）
+   * @param aiMsgIndex  已存在的 AI message 的索引
+   */
+  const resumeSSE = async (sessionId: string, codeGenType?: string, aiMsgIndex?: number): Promise<boolean> => {
+    const msgIndex = aiMsgIndex ?? messages.value.length - 1
+    if (msgIndex < 0 || msgIndex >= messages.value.length) return false
+    generating.value = true
 
-    // 解析业务 JSON；如果是多个 JSON 拼接（多 SSE 事件合并到一次 onmessage），
-    // 逐个 JSON 提取并处理。
+    const controller = new AbortController()
+    currentAbortController = controller
+
+    const isStructuredToolMode =
+      codeGenType === 'vue_project' || codeGenType === 'multi-file' || codeGenType === 'single_file'
+
+    try {
+      const response = await ssePost({
+        path: '/app/chat/gen/code/stream/resume',
+        body: { sessionId },
+        signal: controller.signal,
+      })
+
+      await readSseStream(response, (eventName, data) => {
+        if (eventName === 'business-error') {
+          finalizeGeneration(msgIndex, false)
+          return true
+        }
+        if (eventName === 'done') {
+          finalizeGeneration(msgIndex, true, true)
+          return true
+        }
+        if (eventName === 'meta') return false
+
+        const rawData = data
+        if (rawData === '[DONE]') {
+          finalizeGeneration(msgIndex, true, true)
+          return true
+        }
+
+        const fragments = extractBusinessChunk(rawData)
+        for (const fragment of fragments) {
+          if (fragment === '[DONE]') {
+            finalizeGeneration(msgIndex, true, true)
+            return true
+          }
+          if (fragment) appendStreamChunk(msgIndex, fragment, isStructuredToolMode)
+        }
+        return false
+      })
+
+      finalizeGeneration(msgIndex, true, true)
+      return true
+    } catch (error) {
+      if (controller.signal.aborted) return false
+      finalizeGeneration(msgIndex, false)
+      return false
+    }
+  }
+
+  const appendStreamChunk = (aiMsgIndex: number, chunk: string, _structuredToolMode: boolean) => {
+    if (!chunk) return
+
     const processJson = (jsonStr: string): boolean => {
       try {
         const messageObj = JSON.parse(jsonStr)
-        return dispatchMessageEvent(messageObj, aiMsgIndex)
+        if (messageObj && typeof messageObj === 'object') {
+          // ai_response → 追加到消息文本
+          if (messageObj.type === 'ai_response' && typeof messageObj.data === 'string') {
+            const data = messageObj.data
+            if (data && data !== 'waiting_for_user' && messages.value[aiMsgIndex]) {
+              messages.value[aiMsgIndex].content += data
+            }
+            return true
+          }
+          // 工具调用/状态 → 走 dispatchMessageEvent
+          if (typeof messageObj.type === 'string') {
+            return dispatchMessageEvent(messageObj, aiMsgIndex)
+          }
+        }
+        return false
       } catch {
         return false
       }
     }
 
+    // 始终优先尝试 JSON 解析（工具事件、状态事件等）
     if (processJson(chunk)) {
       return
     }
@@ -309,27 +340,22 @@ export function useSSEChat(options: SSEChatOptions) {
       }
     }
 
-    // 仍无法解析：不再把原始 JSON 写入 content 显示给用户；
-    // 退化到静默忽略，避免原始 JSON 刷屏（避免 bug 引起的数据污染）。
-    // 错误仍记录到控制台便于排查。
-    console.warn('[SSE] 收到无法解析的 chunk，已忽略:', chunk.slice(0, 200))
+    // 非结构化模式：纯文本追加到消息
+    messages.value[aiMsgIndex].content += chunk
   }
 
-  const appendToolEvent = (aiMsgIndex: number, eventItem: ToolEvent) => {
+  const ensureToolState = (
+    aiMsgIndex: number,
+  ): (ChatMessage & { toolCalls: ToolCallRecord[]; toolStatus: string }) | null => {
     const targetMessage = messages.value[aiMsgIndex]
-    if (!targetMessage) return
-    if (!targetMessage.toolEvents) {
-      targetMessage.toolEvents = []
+    if (!targetMessage) return null
+    if (!targetMessage.toolCalls) {
+      targetMessage.toolCalls = []
     }
-    targetMessage.toolEvents.push(eventItem)
-    // 工具执行完成 → 文件可能已变化，防抖触发预览检查
-    if (eventItem.type === 'executed') {
-      if (previewUpdateTimer) clearTimeout(previewUpdateTimer)
-      previewUpdateTimer = setTimeout(() => {
-        onPreviewUpdate()
-        previewUpdateTimer = null
-      }, 2000)
+    if (!targetMessage.toolStatus) {
+      targetMessage.toolStatus = ''
     }
+    return targetMessage as ChatMessage & { toolCalls: ToolCallRecord[]; toolStatus: string }
   }
 
   const dispatchMessageEvent = (messageObj: Record<string, unknown>, aiMsgIndex: number): boolean => {
@@ -353,45 +379,83 @@ export function useSSEChat(options: SSEChatOptions) {
           targetMessage.planning.questionSetId !== payload.questionSetId
         ) {
           targetMessage.planning = payload
-          // 同步生成一段简短说明文本，保持旧 <planning> 标签的兼容
-          targetMessage.content += `\n<planning type="clarification">${JSON.stringify({
-            questions: payload.questions.map((q) => ({
-              id: q.id,
-              question: q.prompt,
-              inputType: q.inputType,
-              required: q.required,
-              options: (q.options || []).map((o) => ({
-                value: o.id,
-                label: o.label,
-                recommended: o.recommended,
-              })),
-            })),
-          })}</planning>\n`
         }
         return true
       }
-      const text = formatToolText(
-        messageObj.name as string | undefined,
-        messageObj.arguments as string | undefined,
-        'request',
-      )
-      appendToolEvent(aiMsgIndex, { type: 'request', text })
+      const targetMessage = ensureToolState(aiMsgIndex)
+      if (!targetMessage) return true
+      const id = (messageObj.id as string) || ''
+      const name = (messageObj.name as string) || ''
+      const args = (messageObj.arguments as string) || ''
+      const agentName = (messageObj.agentName as string) || ''
+      const description = formatToolCallDescription(name, args, 'request', undefined)
+      targetMessage.toolCalls.push({
+        type: 'request',
+        id,
+        name,
+        description,
+        arguments: args,
+        status: 'running',
+        timestamp: Date.now(),
+        agentName,
+      })
+      targetMessage.toolStatus = description
+      if (agentName) targetMessage.agentName = agentName
       return true
     }
     if (type === 'tool_executed') {
       if (messageObj.name === 'ask_user') return true
-      const executedText = formatToolText(
-        messageObj.name as string | undefined,
-        messageObj.arguments as string | undefined,
-        'executed',
-        messageObj.result as string | undefined,
-      )
-      appendToolEvent(aiMsgIndex, { type: 'executed', text: executedText })
+      const targetMessage = ensureToolState(aiMsgIndex)
+      if (!targetMessage) return true
+      const toolId = (messageObj.id as string) || ''
+      const name = (messageObj.name as string) || ''
+      const args = (messageObj.arguments as string) || ''
+      const result = (messageObj.result as string) || ''
+      const agentName = (messageObj.agentName as string) || ''
+      const existing = targetMessage.toolCalls.find((tc) => tc.id === toolId)
+      if (existing) {
+        existing.type = 'executed'
+        existing.result = result
+        existing.status = 'completed'
+      } else {
+        targetMessage.toolCalls.push({
+          type: 'executed',
+          id: toolId,
+          name,
+          description: formatToolCallDescription(name, args, 'executed', result),
+          arguments: args,
+          result,
+          status: 'completed',
+          timestamp: Date.now(),
+          agentName,
+        })
+      }
+      // 工具执行完成 → 文件可能已变化，防抖触发预览检查
+      if (previewUpdateTimer) clearTimeout(previewUpdateTimer)
+      previewUpdateTimer = setTimeout(() => {
+        onPreviewUpdate()
+        previewUpdateTimer = null
+      }, 2000)
       return true
     }
     if (type === 'status') {
-      const statusText = (messageObj.message as string) || '处理中...'
-      appendToolEvent(aiMsgIndex, { type: 'status', text: statusText })
+      const statusText = (messageObj.message as string) || ''
+      if (statusText) {
+        const targetMessage = ensureToolState(aiMsgIndex)
+        if (targetMessage) {
+          targetMessage.toolStatus = statusText
+        }
+      }
+      return true
+    }
+    if (type === 'agent_start') {
+      const agentName = (messageObj.agentName as string) || ''
+      if (agentName) {
+        const targetMessage = ensureToolState(aiMsgIndex)
+        if (targetMessage) {
+          targetMessage.currentAgent = agentName
+        }
+      }
       return true
     }
     if (type === 'workflow_event') {
@@ -481,66 +545,11 @@ export function useSSEChat(options: SSEChatOptions) {
     }
   }
 
-  const parsePathFromArguments = (argumentsText?: string) => {
-    if (!argumentsText) return ''
-    try {
-      const argsObj = JSON.parse(argumentsText)
-      return argsObj.relative_path || argsObj.relativeFilePath || argsObj.relative_dir_path || argsObj.relativeDirPath || ''
-    } catch {
-      return ''
-    }
-  }
-
-  const formatToolText = (
-    toolName?: string,
-    argumentsText?: string,
-    stage: 'request' | 'executed' = 'request',
-    result?: string,
-  ) => {
-    const path = parsePathFromArguments(argumentsText)
-    const requestMap: Record<string, string> = {
-      write_file: path ? `准备写入文件 ${path}` : '准备写入文件',
-      writeFile: path ? `准备写入文件 ${path}` : '准备写入文件',
-      read_file: path ? `准备读取文件 ${path}` : '准备读取文件',
-      readFile: path ? `准备读取文件 ${path}` : '准备读取文件',
-      modify_file: path ? `准备修改文件 ${path}` : '准备修改文件',
-      modifyFile: path ? `准备修改文件 ${path}` : '准备修改文件',
-      delete_file: path ? `准备删除文件 ${path}` : '准备删除文件',
-      deleteFile: path ? `准备删除文件 ${path}` : '准备删除文件',
-      read_dir: path ? `准备读取目录 ${path}` : '准备读取目录结构',
-      readDir: path ? `准备读取目录 ${path}` : '准备读取目录结构',
-      read_asset: '准备读取资源文件',
-      run_command: '正在执行终端命令',
-    }
-    const executedMap: Record<string, string> = {
-      write_file: path ? `已写入文件 ${path}` : '文件写入成功',
-      writeFile: path ? `已写入文件 ${path}` : '文件写入成功',
-      read_file: path ? `已读取文件 ${path}` : '文件读取成功',
-      readFile: path ? `已读取文件 ${path}` : '文件读取成功',
-      modify_file: path ? `已修改文件 ${path}` : '文件修改成功',
-      modifyFile: path ? `已修改文件 ${path}` : '文件修改成功',
-      delete_file: path ? `已删除文件 ${path}` : '文件删除成功',
-      deleteFile: path ? `已删除文件 ${path}` : '文件删除成功',
-      read_dir: path ? `目录结构读取完成 ${path}` : '目录结构读取完成',
-      readDir: path ? `目录结构读取完成 ${path}` : '目录结构读取完成',
-      read_asset: '资源文件读取完成',
-      run_command: '终端命令执行完成',
-    }
-    if (stage === 'request') {
-      return requestMap[toolName || ''] || `正在执行 ${toolName || '工具'}`
-    }
-    // 已知错误消息原样展示
-    if (result && (String(result).startsWith('文件修改失败') || String(result).startsWith('禁止删除关键文件'))) {
-      return result
-    }
-    // 优先用映射，否则显示简短摘要（不展示原始 result，避免文件内容刷屏）
-    return executedMap[toolName || ''] || `已执行 ${toolName || '工具'}`
-  }
-
   return {
     generating,
     streamWarning,
     startSSE,
     stopSSE,
+    resumeSSE,
   }
 }

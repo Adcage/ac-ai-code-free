@@ -1,5 +1,6 @@
 package com.adcage.acaicodefree.model.vo.chat;
 
+import com.adcage.acaicodefree.model.dto.chat.ChatAttachmentInfo;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -30,10 +31,6 @@ public class ChatHistoryVO implements Serializable {
 
     private String modelName;
 
-    private Integer inputTokens;
-
-    private Integer outputTokens;
-
     private Integer latencyMs;
 
     private String requestId;
@@ -41,6 +38,11 @@ public class ChatHistoryVO implements Serializable {
     private String extra;
 
     private List<ToolEventVO> toolEvents;
+
+    /**
+     * 附件列表（从 extra JSON 解析）
+     */
+    private List<ChatAttachmentInfo> attachments;
 
     private LocalDateTime createTime;
 

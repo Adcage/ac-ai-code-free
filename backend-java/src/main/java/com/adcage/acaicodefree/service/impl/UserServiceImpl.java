@@ -220,13 +220,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         Map<String, Object> usageMap = chatHistoryMapper.selectUsageStatsByUserId(userId);
         if (usageMap != null) {
-            statsVO.setTotalInputTokens(toLong(usageMap.get("totalInputTokens")));
-            statsVO.setTotalOutputTokens(toLong(usageMap.get("totalOutputTokens")));
             statsVO.setTotalMessages(toLong(usageMap.get("totalMessages")));
             statsVO.setAvgLatencyMs(toDouble(usageMap.get("avgLatencyMs")));
         } else {
-            statsVO.setTotalInputTokens(0L);
-            statsVO.setTotalOutputTokens(0L);
             statsVO.setTotalMessages(0L);
             statsVO.setAvgLatencyMs(0.0);
         }

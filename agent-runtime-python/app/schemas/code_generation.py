@@ -9,5 +9,3 @@ class CodeGenerationRequest(BaseModel):
     prompt: str
     codeGenType: str
     workspacePath: str | None = None
-    modelConfigId: int | None = None
-    configVersion: int | None = None

@@ -8,6 +8,7 @@ class RuntimeEventType(str, Enum):
     TEXT_DELTA = "text_delta"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
+    AGENT_START = "agent_start"
     NODE_STARTED = "node_started"
     NODE_COMPLETED = "node_completed"
     CAPABILITY_SELECTED = "capability_selected"

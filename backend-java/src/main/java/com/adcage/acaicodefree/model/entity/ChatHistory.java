@@ -52,12 +52,6 @@ public class ChatHistory implements Serializable {
     @Column("modelName")
     private String modelName;
 
-    @Column("inputTokens")
-    private Integer inputTokens;
-
-    @Column("outputTokens")
-    private Integer outputTokens;
-
     @Column("latencyMs")
     private Integer latencyMs;
 
