@@ -4,10 +4,8 @@ from app.core.error_codes import AgentErrorCode
 from app.grpc import code_generation_pb2
 from app.grpc import code_generation_pb2_grpc
 from app.grpc import common_pb2
-from app.grpc_client.platform_client import GrpcPlatformClient
 from app.runtime.orchestrator import RuntimeOrchestrator
-from app.services.chat_model_factory import ChatModelFactory
-from app.services.prompt_enhancer import PromptEnhancerService
+from app.services.lightweight_ai_service import LightweightAiService
 
 logger = logging.getLogger("app.grpc_server.code_generation_servicer")
 
@@ -71,20 +69,20 @@ def _detect_prompt_injection(prompt: str) -> str:
 
     for pattern in _EN_INJECTION_PATTERNS:
         if pattern in normalized or pattern in stripped:
-            return f"提示词包含不允许的内容"
+            return "提示词包含不允许的内容"
 
     for pattern in _CN_INJECTION_PATTERNS:
         if pattern in prompt or pattern in stripped:
-            return f"提示词包含不允许的内容"
+            return "提示词包含不允许的内容"
 
     for trick in _ENCODING_TRICKS:
         if trick in prompt:
-            return f"提示词包含不允许的字符"
+            return "提示词包含不允许的字符"
 
     role_patterns = ["<|im_start|>", "<|system|>", "[system]", "### system", "=== system"]
     for rp in role_patterns:
         if rp in normalized:
-            return f"提示词包含不允许的内容"
+            return "提示词包含不允许的内容"
 
     return ""
 
@@ -163,31 +161,8 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
             )
 
         try:
-            platform_client = GrpcPlatformClient()
-            # 使用系统级模型配置解析 bundle
-            bundle = await platform_client.resolve_runtime_model_bundle(
-                user_id=0, app_id=0, agent_run_id=0, code_gen_type="single_file"
-            )
-            from app.modeling.roles import ModelRole
-            resolved = bundle.get(ModelRole.PRIMARY) or bundle.get(ModelRole.LIGHT)
-            if resolved is None:
-                return code_generation_pb2.EnhancePromptResponse(
-                    success=False, error_message="没有可用的模型配置"
-                )
-            model_config = {
-                "provider": resolved.provider,
-                "modelName": resolved.model_name,
-                "baseUrl": resolved.base_url,
-                "apiKey": resolved.api_key,
-            }
-            logger.info(
-                "EnhancePrompt using system model, provider=%s, modelName=%s",
-                resolved.provider,
-                resolved.model_name,
-            )
-            chat_model_factory = ChatModelFactory()
-            enhancer = PromptEnhancerService(chat_model_factory)
-            enhanced = await enhancer.enhance(prompt, model_config)
+            lightweight_service = LightweightAiService()
+            enhanced = await lightweight_service.enhance_prompt(prompt)
             logger.info(
                 "EnhancePrompt success, enhancedLength=%d", len(enhanced) if enhanced else 0
             )
@@ -195,3 +170,42 @@ class CodeGenerationServicer(code_generation_pb2_grpc.CodeGenerationServiceServi
         except Exception as e:
             logger.error("EnhancePrompt failed: %s", e, exc_info=True)
             return code_generation_pb2.EnhancePromptResponse(success=False, error_message=str(e))
+
+    async def GenerateAppTitle(self, request, context):
+        init_prompt = request.init_prompt
+        logger.info("GenerateAppTitle called, promptLength=%d", len(init_prompt) if init_prompt else 0)
+
+        if not init_prompt or not init_prompt.strip():
+            return code_generation_pb2.GenerateTitleResponse(
+                success=False, error_message=f"[{AgentErrorCode.PROMPT_EMPTY}] 初始化提示词不能为空"
+            )
+
+        try:
+            lightweight_service = LightweightAiService()
+            title = await lightweight_service.generate_app_title(init_prompt)
+            return code_generation_pb2.GenerateTitleResponse(success=True, title=title)
+        except Exception as e:
+            logger.error("GenerateAppTitle failed: %s", e, exc_info=True)
+            return code_generation_pb2.GenerateTitleResponse(success=False, error_message=str(e))
+
+    async def GenerateSessionTitle(self, request, context):
+        first_user_message = request.first_user_message
+        logger.info(
+            "GenerateSessionTitle called, messageLength=%d",
+            len(first_user_message) if first_user_message else 0,
+        )
+
+        if not first_user_message or not first_user_message.strip():
+            return code_generation_pb2.GenerateTitleResponse(
+                success=False, error_message=f"[{AgentErrorCode.PROMPT_EMPTY}] 会话消息不能为空"
+            )
+
+        try:
+            lightweight_service = LightweightAiService()
+            title = await lightweight_service.generate_session_title(
+                request.app_name, request.app_init_prompt, first_user_message
+            )
+            return code_generation_pb2.GenerateTitleResponse(success=True, title=title)
+        except Exception as e:
+            logger.error("GenerateSessionTitle failed: %s", e, exc_info=True)
+            return code_generation_pb2.GenerateTitleResponse(success=False, error_message=str(e))
