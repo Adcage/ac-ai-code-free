@@ -70,29 +70,43 @@ class SingleImplementLoopRunner:
         rag_service = self._services.rag_service
         rag_enabled = rag_service is not None and rag_service.enabled
 
-        # 4. 创建工具集（注入 file_tools + skill_registry + state + rag_service）
-        from app.agent_loop_vnext.agents.implementor.tools import create_implementor_tools
+        # 4. 创建工具集（通过 LoopStrategy，ImplementorLoop 创建全量，PlaygroundLoop 可自带过滤）
         skill_registry = None
         if self._services.asset_manager is not None:
             skill_registry = self._services.asset_manager.get_index().skill_registry
-        tools = create_implementor_tools(
-            file_tools, skill_registry=skill_registry, state=self._state,
+
+        from app.agent_loop_vnext.loops import get_loop_strategy
+        strategy = get_loop_strategy(
+            self._context.generation_mode,
+            is_test=self._context.is_test,
+        )
+        tools = strategy.create_tools(
+            file_tools=file_tools,
+            skill_registry=skill_registry,
+            state=self._state,
             rag_service=rag_service if rag_enabled else None,
         )
+
+        # Playground 模式：根据 enabled_tools 过滤工具
+        enabled_tools = self._context.runtime_options.get("enabled_tools")
+        if enabled_tools is not None:
+            tool_name_set = set(enabled_tools)
+            tools = [t for t in tools if t.name in tool_name_set]
+            logger.info("playground tool filter | enabled=%s | filtered_count=%d", enabled_tools, len(tools))
 
         # 将 event_bus 注入需要它的工具（如 AskUserTool）
         for tool in tools:
             if hasattr(tool, 'event_bus') and tool.event_bus is None:
                 tool.event_bus = self._event_bus
 
-        # 5. 构建系统提示词（使用 PromptBuilder，注入 skill_registry + rag_service）
-        from app.agent_loop_vnext.agents.implementor.prompt import ImplementorPromptBuilder
-        prompt_builder = ImplementorPromptBuilder(
-            self._context, self._state,
+        # 5. 构建系统提示词（通过同一个 LoopStrategy 策略）
+        system_prompt = strategy.build_system_prompt(
+            context=self._context,
+            state=self._state,
+            tools=tools,
             skill_registry=skill_registry,
             rag_service=rag_service if rag_enabled else None,
         )
-        system_prompt = prompt_builder.build_system_prompt()
 
         # 5. 构建消息列表（使用 HistoryBuilder，支持附件多模态）
         from app.agent_loop_vnext.shared.history import HistoryBuilder
