@@ -35,6 +35,10 @@
           <template #icon><LayoutGrid :size="18" /></template>
           <span>应用管理</span>
         </a-menu-item>
+        <a-menu-item key="/admin/knowledge">
+          <template #icon><BookOpen :size="18" /></template>
+          <span>知识库管理</span>
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
 
@@ -86,7 +90,7 @@
 import { computed, ref } from 'vue'
 import { useRouter, useRoute, RouterView } from 'vue-router'
 import { useLoginUserStore } from '@/stores/LoginUser.ts'
-import { MessageSquare, Users, LayoutGrid, Home, User, LogOut } from '@lucide/vue'
+import { MessageSquare, Users, LayoutGrid, BookOpen, Home, User, LogOut } from '@lucide/vue'
 import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 
@@ -101,11 +105,13 @@ const menuItems = [
   { key: '/admin/test-chat', label: 'AI 测试对话' },
   { key: '/admin/userManage', label: '用户管理' },
   { key: '/admin/appManage', label: '应用管理' },
+  { key: '/admin/knowledge', label: '知识库管理' },
 ]
 
 const selectedKeys = computed(() => {
   const path = route.path
   if (path.startsWith('/admin/test-chat')) return ['/admin/test-chat']
+  if (path.startsWith('/admin/knowledge')) return ['/admin/knowledge']
   return [path]
 })
 

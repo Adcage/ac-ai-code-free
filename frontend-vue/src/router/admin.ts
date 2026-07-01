@@ -42,5 +42,13 @@ export default {
         name: '应用管理',
       },
     },
+    {
+      path: 'knowledge',
+      name: 'admin_knowledge',
+      component: () => import('@/pages/admin/KnowledgeManagePage.vue'),
+      meta: {
+        name: '知识库管理',
+      },
+    },
   ],
 } as RouteRecordRaw
