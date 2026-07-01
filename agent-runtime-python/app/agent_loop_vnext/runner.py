@@ -2,11 +2,12 @@
 
 核心职责：
 1. 创建 Workspace/FileTools
-2. 构建系统提示词（ImplementorPromptBuilder）
-3. 构建消息列表（HistoryBuilder）
-4. 绑定工具到模型
-5. 迭代循环：流式调用模型 → 文本实时发射 → 收集 tool_calls → 执行工具 → 结果反馈模型 → 继续循环
-6. 退出条件：模型无 tool_calls（纯文本收尾）
+2. 解析模型配置、初始化 RAG
+3. 构建系统提示词（ImplementorPromptBuilder）
+4. 构建消息列表（HistoryBuilder）
+5. 绑定工具到模型
+6. 迭代循环：流式调用模型 → 文本实时发射 → 收集 tool_calls → 执行工具 → 结果反馈模型 → 继续循环
+7. 退出条件：模型无 tool_calls（纯文本收尾）
 """
 
 import logging
@@ -53,19 +54,7 @@ class SingleImplementLoopRunner:
         workspace = Workspace(self._context.workspace_path)
         file_tools = FileTools(workspace)
 
-        # 2. 创建工具集（注入 file_tools + skill_registry + state）
-        from app.agent_loop_vnext.agents.implementor.tools import create_implementor_tools
-        skill_registry = None
-        if self._services.asset_manager is not None:
-            skill_registry = self._services.asset_manager.get_index().skill_registry
-        tools = create_implementor_tools(file_tools, skill_registry=skill_registry, state=self._state)
-
-        # 将 event_bus 注入需要它的工具（如 AskUserTool）
-        for tool in tools:
-            if hasattr(tool, 'event_bus') and tool.event_bus is None:
-                tool.event_bus = self._event_bus
-
-        # 3. 解析模型配置
+        # 2. 解析模型配置（必须先于 RAG 初始化和工具创建）
         await self._services.model_resolver.load_bundle(self._context)
         from app.modeling.roles import ModelRole
         resolved = self._services.model_resolver.resolve(ModelRole.PRIMARY)
@@ -77,9 +66,32 @@ class SingleImplementLoopRunner:
             "timeout": settings.model_request_timeout,
         })
 
-        # 4. 构建系统提示词（使用 PromptBuilder，注入 skill_registry）
+        # 3. RAG 服务（启动时已初始化，直接使用）
+        rag_service = self._services.rag_service
+        rag_enabled = rag_service is not None and rag_service.enabled
+
+        # 4. 创建工具集（注入 file_tools + skill_registry + state + rag_service）
+        from app.agent_loop_vnext.agents.implementor.tools import create_implementor_tools
+        skill_registry = None
+        if self._services.asset_manager is not None:
+            skill_registry = self._services.asset_manager.get_index().skill_registry
+        tools = create_implementor_tools(
+            file_tools, skill_registry=skill_registry, state=self._state,
+            rag_service=rag_service if rag_enabled else None,
+        )
+
+        # 将 event_bus 注入需要它的工具（如 AskUserTool）
+        for tool in tools:
+            if hasattr(tool, 'event_bus') and tool.event_bus is None:
+                tool.event_bus = self._event_bus
+
+        # 5. 构建系统提示词（使用 PromptBuilder，注入 skill_registry + rag_service）
         from app.agent_loop_vnext.agents.implementor.prompt import ImplementorPromptBuilder
-        prompt_builder = ImplementorPromptBuilder(self._context, self._state, skill_registry=skill_registry)
+        prompt_builder = ImplementorPromptBuilder(
+            self._context, self._state,
+            skill_registry=skill_registry,
+            rag_service=rag_service if rag_enabled else None,
+        )
         system_prompt = prompt_builder.build_system_prompt()
 
         # 5. 构建消息列表（使用 HistoryBuilder，支持附件多模态）

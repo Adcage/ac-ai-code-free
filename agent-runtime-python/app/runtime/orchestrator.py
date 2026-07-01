@@ -21,6 +21,54 @@ from app.grpc_client.platform_client import GrpcPlatformClient
 
 logger = logging.getLogger("app.runtime.orchestrator")
 
+# 全局 RAG 服务单例（跨请求共享连接池，由 shutdown 时清理）
+_global_rag_service: object | None = None
+
+
+def _get_rag_service() -> object | None:
+    """获取全局 RAG 服务实例。"""
+    return _global_rag_service
+
+
+async def init_rag_service() -> None:
+    """启动时初始化 RAG 服务（连接 PG、解析 Embedding 配置、索引文档）。"""
+    global _global_rag_service
+    try:
+        from app.rag.service import RAGService
+        from app.modeling.resolver import ModelResolver
+        from app.grpc_client.platform_client import GrpcPlatformClient
+
+        rag = RAGService()
+        platform_client = GrpcPlatformClient()
+        model_resolver = ModelResolver(platform_client)
+
+        bundle = await platform_client.resolve_runtime_model_bundle(
+            user_id=0, app_id=0, agent_run_id=0, code_gen_type=0,
+        )
+        model_resolver._bundle = bundle
+        await rag.initialize(model_resolver)
+
+        _global_rag_service = rag
+        if rag.enabled:
+            logger.info("RAG 服务启动初始化成功")
+        else:
+            logger.info("RAG 服务已初始化但未启用（Embedding 模型未配置）")
+    except Exception as e:
+        logger.warning("RAG 服务启动初始化失败（不影响核心功能）: %s", e)
+        _global_rag_service = None
+
+
+async def close_rag_service() -> None:
+    """关闭全局 RAG 服务（应用 shutdown 时调用）。"""
+    global _global_rag_service
+    if _global_rag_service is not None:
+        try:
+            await _global_rag_service.close()  # type: ignore[union-attr]
+            logger.info("RAG 服务已关闭")
+        except Exception as e:
+            logger.warning("RAG 服务关闭异常: %s", e)
+        _global_rag_service = None
+
 
 def _parse_attachments_json(attachments_json: str | None) -> tuple[AttachmentInfo, ...]:
     """从 JSON 字符串解析附件元数据列表。"""
@@ -176,6 +224,7 @@ class RuntimeOrchestrator:
             quality_checker=self._quality_checker,
             artifact_writer=self._artifact_writer,
             generation_mode_registry=gen_mode_registry,
+            rag_service=_get_rag_service(),
         )
 
     async def _build_context(
